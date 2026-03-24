@@ -1,0 +1,12 @@
+__pycache__
+*.egg-info
+.git
+.env
+.scaffold
+.ruff_cache
+.pytest_cache
+.venv
+web/node_modules
+web/.yarn
+web/.pnp.*
+web/tsconfig.tsbuildinfo
