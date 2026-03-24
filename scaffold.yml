@@ -1,0 +1,24 @@
+project: magpie
+region: us-west1
+
+services:
+  server:
+    provider: railway
+    runtime: python
+    source: .
+    start: "magpie serve"
+    health_check: /health
+    env:
+      MAGPIE_DATABASE_URL: "${{postgres.url}}"
+      MAGPIE_OPENAI_API_KEY: "${{env.OPENAI_API_KEY}}"
+      MAGPIE_API_KEY: "${{env.MAGPIE_API_KEY}}"
+
+databases:
+  postgres:
+    provider: railway
+    plugin: postgres
+    extensions: [pgvector]
+
+domain:
+  server:
+    host: magpie.erdo.ai

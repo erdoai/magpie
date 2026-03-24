@@ -1,0 +1,24 @@
+{
+  "project": "magpie",
+  "provisioned_at": "2026-03-24T18:58:37.941902+00:00",
+  "resources": {
+    "server": {
+      "provider": "railway",
+      "railway_project_id": "9fa82a28-002f-4af7-89f9-6165100e44eb",
+      "railway_service_id": "099eab52-d1e2-435f-bb04-2e90c9242658",
+      "railway_environment_id": "af9f7354-f7fd-4039-91f8-97f06e9bd7cd",
+      "url": "https://server-production-3634.up.railway.app"
+    },
+    "postgres": {
+      "provider": "railway",
+      "railway_project_id": "9fa82a28-002f-4af7-89f9-6165100e44eb",
+      "railway_service_id": "3435dcf1-ea3d-4459-a3d1-006026df3bf3",
+      "railway_environment_id": "af9f7354-f7fd-4039-91f8-97f06e9bd7cd",
+      "url": "postgresql://scaffold:InSh2EpvhcLGbRL7D5h8BhTI@mainline.proxy.rlwy.net.:14439/scaffold",
+      "plugin": "postgres",
+      "extensions": [
+        "pgvector"
+      ]
+    }
+  }
+}

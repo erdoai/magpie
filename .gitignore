@@ -1,0 +1,12 @@
+__pycache__/
+*.egg-info/
+dist/
+build/
+.env
+*.pyc
+.ruff_cache/
+.pytest_cache/
+.venv/
+
+# scaffold secrets
+.scaffold/.env
