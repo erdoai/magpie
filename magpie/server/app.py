@@ -2,8 +2,11 @@
 
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from magpie.config.settings import Settings
 from magpie.db.database import Database
@@ -11,7 +14,7 @@ from magpie.embeddings.base import EmbeddingProvider
 from magpie.embeddings.openai import OpenAIEmbeddings
 from magpie.mcp.server import init_mcp, mcp_server
 from magpie.server.auth import AuthMiddleware
-from magpie.server.routes import entries, health
+from magpie.server.routes import entries, health, keys
 
 logger = logging.getLogger(__name__)
 
@@ -59,11 +62,25 @@ def create_app() -> FastAPI:
     # API routes
     app.include_router(health.router)
     app.include_router(entries.router)
+    app.include_router(keys.router)
 
     # Mount MCP server at /mcp
     app.mount("/mcp", mcp_server.streamable_http_app())
 
     # Auth middleware
     app.add_middleware(AuthMiddleware)
+
+    # Serve web UI from built assets (if available)
+    web_dist = Path(__file__).parent.parent.parent / "web" / "dist"
+    if web_dist.exists():
+        app.mount("/assets", StaticFiles(directory=web_dist / "assets"), name="assets")
+
+        @app.get("/{path:path}")
+        async def spa_fallback(path: str):
+            """Serve index.html for all non-API routes (SPA routing)."""
+            file = web_dist / path
+            if file.is_file():
+                return FileResponse(file)
+            return FileResponse(web_dist / "index.html")
 
     return app

@@ -4,6 +4,7 @@ WORKDIR /app
 
 COPY pyproject.toml README.md ./
 COPY magpie/ magpie/
+COPY web/dist/ web/dist/
 
 RUN pip install --no-cache-dir .
 

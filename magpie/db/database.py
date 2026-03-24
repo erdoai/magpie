@@ -297,3 +297,54 @@ class Database:
         )
         rows = await self._pool.fetch(sql, *params)
         return [dict(r) for r in rows]
+
+    # -- API Keys --
+
+    async def create_api_key(
+        self,
+        name: str,
+        key_hash: str,
+        key_prefix: str,
+        user_id: str | None = None,
+        org_id: str | None = None,
+    ) -> str:
+        key_id = uuid4().hex
+        await self._pool.execute(
+            "INSERT INTO api_keys (id, name, key_hash, key_prefix, user_id, org_id)"
+            " VALUES ($1, $2, $3, $4, $5, $6)",
+            key_id, name, key_hash, key_prefix, user_id, org_id,
+        )
+        return key_id
+
+    async def get_api_key(self, key_id: str) -> dict | None:
+        row = await self._pool.fetchrow(
+            "SELECT id, name, key_prefix, user_id, org_id, created_at, last_used_at"
+            " FROM api_keys WHERE id = $1",
+            key_id,
+        )
+        return dict(row) if row else None
+
+    async def get_api_key_by_hash(self, key_hash: str) -> dict | None:
+        row = await self._pool.fetchrow(
+            "SELECT id, name, key_prefix, user_id, org_id, created_at, last_used_at"
+            " FROM api_keys WHERE key_hash = $1",
+            key_hash,
+        )
+        return dict(row) if row else None
+
+    async def touch_api_key(self, key_id: str) -> None:
+        await self._pool.execute(
+            "UPDATE api_keys SET last_used_at = $1 WHERE id = $2",
+            datetime.now(UTC), key_id,
+        )
+
+    async def list_api_keys(self) -> list[dict]:
+        rows = await self._pool.fetch(
+            "SELECT id, name, key_prefix, user_id, org_id, created_at, last_used_at"
+            " FROM api_keys ORDER BY created_at DESC"
+        )
+        return [dict(r) for r in rows]
+
+    async def delete_api_key(self, key_id: str) -> bool:
+        result = await self._pool.execute("DELETE FROM api_keys WHERE id = $1", key_id)
+        return result == "DELETE 1"

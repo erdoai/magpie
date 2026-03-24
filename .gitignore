@@ -10,3 +10,10 @@ build/
 
 # scaffold secrets
 .scaffold/.env
+
+# web
+web/node_modules/
+web/.yarn/
+web/.pnp.*
+web/dist/
+web/tsconfig.tsbuildinfo
