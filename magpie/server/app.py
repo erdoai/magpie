@@ -71,8 +71,16 @@ def create_app() -> FastAPI:
     app.add_middleware(AuthMiddleware)
 
     # Serve web UI from built assets (if available)
-    web_dist = Path(__file__).parent.parent.parent / "web" / "dist"
-    if web_dist.exists():
+    # Check multiple locations: relative to working dir (Docker), or relative to package
+    web_dist = None
+    for candidate in [
+        Path("web/dist"),  # Docker working dir /app
+        Path(__file__).parent.parent.parent / "web" / "dist",  # relative to package
+    ]:
+        if candidate.exists() and (candidate / "index.html").exists():
+            web_dist = candidate
+            break
+    if web_dist:
         app.mount("/assets", StaticFiles(directory=web_dist / "assets"), name="assets")
 
         @app.get("/{path:path}")
