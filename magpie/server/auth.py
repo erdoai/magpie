@@ -32,6 +32,11 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if request.url.path.startswith("/mcp"):
             return await call_next(request)
 
+        # Only protect /api/ routes — UI and static assets are public
+        # (the UI uses localStorage API key for its own API calls)
+        if not request.url.path.startswith("/api"):
+            return await call_next(request)
+
         auth_header = request.headers.get("authorization", "")
         if not auth_header.startswith("Bearer "):
             return JSONResponse(status_code=401, content={"error": "Unauthorized"})
