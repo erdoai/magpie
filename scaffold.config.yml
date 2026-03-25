@@ -2,8 +2,16 @@ auto:
   MAGPIE_API_KEY:
     type: secret
     length: 32
+  MAGPIE_SESSION_SECRET:
+    type: secret
+    length: 48
 
 required:
   OPENAI_API_KEY:
     description: "OpenAI API key (for embeddings)"
     url: https://platform.openai.com/api-keys
+
+optional:
+  RESEND_API_KEY:
+    description: "Resend API key (for email OTP sign-in)"
+    url: https://resend.com/api-keys

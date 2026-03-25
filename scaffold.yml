@@ -12,6 +12,8 @@ services:
       MAGPIE_DATABASE_URL: "${{postgres.url}}"
       MAGPIE_OPENAI_API_KEY: "${{env.OPENAI_API_KEY}}"
       MAGPIE_API_KEY: "${{env.MAGPIE_API_KEY}}"
+      MAGPIE_RESEND_API_KEY: "${{env.RESEND_API_KEY}}"
+      MAGPIE_SESSION_SECRET: "${{env.MAGPIE_SESSION_SECRET}}"
 
 databases:
   postgres:
