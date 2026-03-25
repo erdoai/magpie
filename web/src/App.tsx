@@ -45,7 +45,11 @@ export function App() {
             variant="ghost"
             size="sm"
             className="w-full justify-start gap-2.5 text-muted-foreground"
-            onClick={() => { localStorage.removeItem('magpie_api_key'); window.location.reload(); }}
+            onClick={async () => {
+              localStorage.removeItem('magpie_api_key');
+              try { await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }); } catch {}
+              window.location.reload();
+            }}
           >
             <LogOut size={16} />
             Sign out

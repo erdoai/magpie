@@ -28,6 +28,7 @@ async def magpie_search(
     query: str,
     category: str | None = None,
     tags: list[str] | None = None,
+    workspace: str | None = None,
     limit: int = 10,
 ) -> str:
     """Search knowledge entries using semantic + keyword search.
@@ -36,6 +37,7 @@ async def magpie_search(
         query: The search query text.
         category: Filter by PARA category (project, area, resource, archive).
         tags: Filter by tags (entries matching any tag are included).
+        workspace: Filter by workspace (e.g. "devbot", "crow", "shared").
         limit: Max results to return (default 10).
     """
     if not _db:
@@ -50,6 +52,9 @@ async def magpie_search(
         limit=limit,
     )
 
+    if workspace:
+        results = [r for r in results if r.get("workspace") == workspace]
+
     if not results:
         return "No entries found."
 
@@ -57,8 +62,9 @@ async def magpie_search(
     for entry in results:
         score = entry.get("score", "")
         score_str = f" (score: {score})" if score else ""
+        ws = f" [{entry.get('workspace')}]" if entry.get("workspace") else ""
         parts.append(
-            f"## [{entry['category']}] {entry['title']}{score_str}\n"
+            f"## [{entry['category']}] {entry['title']}{ws}{score_str}\n"
             f"ID: {entry['id']}\n"
             f"Tags: {', '.join(entry.get('tags', []))}\n\n"
             f"{entry['content']}"
@@ -73,6 +79,7 @@ async def magpie_write(
     category: str = "resource",
     tags: list[str] | None = None,
     source: str | None = None,
+    workspace: str | None = None,
 ) -> str:
     """Create a new knowledge entry.
 
@@ -82,6 +89,7 @@ async def magpie_write(
         category: PARA category — one of: project, area, resource (default: resource).
         tags: Optional list of tags for filtering.
         source: Optional source identifier (e.g. "crow", "devbot", "manual").
+        workspace: Optional workspace to scope this entry to.
     """
     if not _db:
         return "Error: database not initialized"
@@ -100,6 +108,7 @@ async def magpie_write(
         tags=tags,
         source=source,
         embedding=embedding,
+        workspace=workspace,
     )
     return f"Created entry {entry_id}: {title}"
 
@@ -118,8 +127,9 @@ async def magpie_read(id: str) -> str:
     if not entry:
         return f"Entry {id} not found."
 
+    ws = f" [{entry.get('workspace')}]" if entry.get("workspace") else ""
     return (
-        f"# [{entry['category']}] {entry['title']}\n"
+        f"# [{entry['category']}] {entry['title']}{ws}\n"
         f"ID: {entry['id']}\n"
         f"Tags: {', '.join(entry.get('tags', []))}\n"
         f"Source: {entry.get('source', 'unknown')}\n"
@@ -132,6 +142,7 @@ async def magpie_read(id: str) -> str:
 async def magpie_list(
     category: str | None = None,
     tags: list[str] | None = None,
+    workspace: str | None = None,
     limit: int = 20,
 ) -> str:
     """List knowledge entries, optionally filtered.
@@ -139,12 +150,15 @@ async def magpie_list(
     Args:
         category: Filter by PARA category (project, area, resource, archive).
         tags: Filter by tags.
+        workspace: Filter by workspace.
         limit: Max results (default 20).
     """
     if not _db:
         return "Error: database not initialized"
 
-    entries = await _db.list_entries(category=category, tags=tags, limit=limit)
+    entries = await _db.list_entries(
+        category=category, tags=tags, workspace=workspace, limit=limit
+    )
     if not entries:
         return "No entries found."
 
@@ -152,7 +166,11 @@ async def magpie_list(
     for entry in entries:
         tags_str = ", ".join(entry.get("tags", []))
         short_id = entry["id"][:8]
-        lines.append(f"- **{entry['title']}** [{entry['category']}] ({short_id}…) {tags_str}")
+        ws = f" [{entry.get('workspace')}]" if entry.get("workspace") else ""
+        lines.append(
+            f"- **{entry['title']}** [{entry['category']}]{ws}"
+            f" ({short_id}…) {tags_str}"
+        )
     return "\n".join(lines)
 
 

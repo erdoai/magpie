@@ -14,7 +14,7 @@ from magpie.embeddings.base import EmbeddingProvider
 from magpie.embeddings.openai import OpenAIEmbeddings
 from magpie.mcp.server import init_mcp, mcp_server
 from magpie.server.auth import AuthMiddleware
-from magpie.server.routes import entries, health, keys
+from magpie.server.routes import auth, entries, health, keys, orgs
 
 logger = logging.getLogger(__name__)
 
@@ -61,8 +61,10 @@ def create_app() -> FastAPI:
 
     # API routes
     app.include_router(health.router)
+    app.include_router(auth.router)
     app.include_router(entries.router)
     app.include_router(keys.router)
+    app.include_router(orgs.router)
 
     # Mount MCP server at /mcp
     app.mount("/mcp", mcp_server.streamable_http_app())

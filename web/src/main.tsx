@@ -15,12 +15,22 @@ function Root() {
   const [authed, setAuthed] = useState<boolean | null>(null);
 
   useEffect(() => {
-    const key = localStorage.getItem('magpie_api_key');
-    if (!key) {
+    // Check session cookie first, then API key
+    api.getMe().then(res => {
+      if (res.user) {
+        setAuthed(true);
+        return;
+      }
+      // No session — check if there's an API key
+      const key = localStorage.getItem('magpie_api_key');
+      if (key) {
+        api.checkAuth().then(ok => setAuthed(ok));
+      } else {
+        setAuthed(false);
+      }
+    }).catch(() => {
       setAuthed(false);
-      return;
-    }
-    api.checkAuth().then(ok => setAuthed(ok));
+    });
   }, []);
 
   if (authed === null) return null;

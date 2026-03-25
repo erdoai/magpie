@@ -402,3 +402,155 @@ class Database:
     async def delete_api_key(self, key_id: str) -> bool:
         result = await self._pool.execute("DELETE FROM api_keys WHERE id = $1", key_id)
         return result == "DELETE 1"
+
+    async def list_api_keys_for_user(self, user_id: str) -> list[dict]:
+        rows = await self._pool.fetch(
+            "SELECT id, name, key_prefix, user_id, org_id, created_at, last_used_at"
+            " FROM api_keys WHERE user_id = $1 ORDER BY created_at DESC",
+            user_id,
+        )
+        return [dict(r) for r in rows]
+
+    # -- Users --
+
+    async def get_or_create_user(self, email: str) -> dict:
+        row = await self._pool.fetchrow("SELECT * FROM users WHERE email = $1", email)
+        if row:
+            return dict(row)
+        user_id = uuid4().hex
+        await self._pool.execute(
+            "INSERT INTO users (id, email) VALUES ($1, $2)", user_id, email
+        )
+        return {"id": user_id, "email": email, "display_name": None,
+                "created_at": datetime.now(UTC)}
+
+    async def get_user(self, user_id: str) -> dict | None:
+        row = await self._pool.fetchrow("SELECT * FROM users WHERE id = $1", user_id)
+        return dict(row) if row else None
+
+    async def update_user(self, user_id: str, display_name: str) -> None:
+        await self._pool.execute(
+            "UPDATE users SET display_name = $1 WHERE id = $2", display_name, user_id
+        )
+
+    # -- Orgs --
+
+    async def create_org(self, name: str, slug: str, creator_id: str) -> str:
+        org_id = uuid4().hex
+        await self._pool.execute(
+            "INSERT INTO orgs (id, name, slug) VALUES ($1, $2, $3)",
+            org_id, name, slug,
+        )
+        await self._pool.execute(
+            "INSERT INTO org_members (org_id, user_id, role) VALUES ($1, $2, 'owner')",
+            org_id, creator_id,
+        )
+        return org_id
+
+    async def get_org(self, org_id: str) -> dict | None:
+        row = await self._pool.fetchrow("SELECT * FROM orgs WHERE id = $1", org_id)
+        return dict(row) if row else None
+
+    async def get_org_by_slug(self, slug: str) -> dict | None:
+        row = await self._pool.fetchrow("SELECT * FROM orgs WHERE slug = $1", slug)
+        return dict(row) if row else None
+
+    async def list_user_orgs(self, user_id: str) -> list[dict]:
+        rows = await self._pool.fetch(
+            "SELECT o.*, om.role FROM orgs o"
+            " JOIN org_members om ON o.id = om.org_id"
+            " WHERE om.user_id = $1 ORDER BY o.name",
+            user_id,
+        )
+        return [dict(r) for r in rows]
+
+    async def add_org_member(self, org_id: str, user_id: str, role: str = "member") -> None:
+        await self._pool.execute(
+            "INSERT INTO org_members (org_id, user_id, role) VALUES ($1, $2, $3)"
+            " ON CONFLICT (org_id, user_id) DO NOTHING",
+            org_id, user_id, role,
+        )
+
+    async def list_org_members(self, org_id: str) -> list[dict]:
+        rows = await self._pool.fetch(
+            "SELECT u.id, u.email, u.display_name, om.role, om.joined_at"
+            " FROM org_members om JOIN users u ON om.user_id = u.id"
+            " WHERE om.org_id = $1 ORDER BY om.joined_at",
+            org_id,
+        )
+        return [dict(r) for r in rows]
+
+    async def remove_org_member(self, org_id: str, user_id: str) -> bool:
+        result = await self._pool.execute(
+            "DELETE FROM org_members WHERE org_id = $1 AND user_id = $2",
+            org_id, user_id,
+        )
+        return result == "DELETE 1"
+
+    # -- Workspaces --
+
+    async def create_workspace(self, org_id: str, name: str, slug: str) -> str:
+        ws_id = uuid4().hex
+        await self._pool.execute(
+            "INSERT INTO workspaces (id, org_id, name, slug) VALUES ($1, $2, $3, $4)",
+            ws_id, org_id, name, slug,
+        )
+        return ws_id
+
+    async def list_workspaces(self, org_id: str) -> list[dict]:
+        rows = await self._pool.fetch(
+            "SELECT * FROM workspaces WHERE org_id = $1 ORDER BY name", org_id
+        )
+        return [dict(r) for r in rows]
+
+    async def delete_workspace(self, ws_id: str) -> bool:
+        result = await self._pool.execute("DELETE FROM workspaces WHERE id = $1", ws_id)
+        return result == "DELETE 1"
+
+    # -- Email OTP --
+
+    async def create_email_token(self, email: str, code: str, ttl_minutes: int = 10) -> str:
+        token_id = uuid4().hex
+        expires = datetime.now(UTC) + __import__("datetime").timedelta(minutes=ttl_minutes)
+        await self._pool.execute(
+            "INSERT INTO email_tokens (id, email, code, expires_at) VALUES ($1, $2, $3, $4)",
+            token_id, email, code, expires,
+        )
+        return token_id
+
+    async def verify_email_token(self, email: str, code: str) -> bool:
+        row = await self._pool.fetchrow(
+            "SELECT id FROM email_tokens"
+            " WHERE email = $1 AND code = $2 AND used = FALSE AND expires_at > NOW()"
+            " ORDER BY created_at DESC LIMIT 1",
+            email, code,
+        )
+        if not row:
+            return False
+        await self._pool.execute(
+            "UPDATE email_tokens SET used = TRUE WHERE id = $1", row["id"]
+        )
+        return True
+
+    # -- Sessions --
+
+    async def create_session(self, user_id: str, ttl_hours: int = 720) -> str:
+        session_id = uuid4().hex
+        expires = datetime.now(UTC) + __import__("datetime").timedelta(hours=ttl_hours)
+        await self._pool.execute(
+            "INSERT INTO sessions (id, user_id, expires_at) VALUES ($1, $2, $3)",
+            session_id, user_id, expires,
+        )
+        return session_id
+
+    async def get_session(self, session_id: str) -> dict | None:
+        row = await self._pool.fetchrow(
+            "SELECT s.*, u.email, u.display_name FROM sessions s"
+            " JOIN users u ON s.user_id = u.id"
+            " WHERE s.id = $1 AND s.expires_at > NOW()",
+            session_id,
+        )
+        return dict(row) if row else None
+
+    async def delete_session(self, session_id: str) -> None:
+        await self._pool.execute("DELETE FROM sessions WHERE id = $1", session_id)

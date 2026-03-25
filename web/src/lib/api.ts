@@ -8,9 +8,13 @@ function headers(): HeadersInit {
 }
 
 async function request<T>(path: string, opts?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, { ...opts, headers: headers() });
-  if (res.status === 401) {
-    // Clear invalid key and reload to show login
+  const res = await fetch(`${BASE}${path}`, {
+    ...opts,
+    headers: { ...headers(), ...opts?.headers },
+    credentials: 'include',
+  });
+  if (res.status === 401 && !path.includes('/auth/')) {
+    // Try clearing API key and redirecting
     localStorage.removeItem('magpie_api_key');
     window.location.reload();
     throw new Error('Unauthorized');
@@ -29,6 +33,7 @@ export interface Entry {
   user_id: string | null;
   project_id: string | null;
   org_id: string | null;
+  workspace: string | null;
   score?: number;
   created_at: string;
   updated_at: string;
@@ -45,11 +50,50 @@ export interface ApiKey {
   last_used_at: string | null;
 }
 
+export interface User {
+  id: string;
+  email: string;
+  display_name: string | null;
+}
+
+export interface Org {
+  id: string;
+  name: string;
+  slug: string;
+  role: string;
+  created_at: string;
+}
+
+export interface Workspace {
+  id: string;
+  org_id: string;
+  name: string;
+  slug: string;
+  created_at: string;
+}
+
 export const api = {
   // Auth
+  sendCode: (email: string) =>
+    request<{ ok: boolean }>('/api/auth/send-code', {
+      method: 'POST', body: JSON.stringify({ email }),
+    }),
+  verifyCode: (email: string, code: string) =>
+    request<{ user: User; orgs: Org[] }>('/api/auth/verify-code', {
+      method: 'POST', body: JSON.stringify({ email, code }),
+    }),
+  getMe: () => request<{ user: User | null; orgs: Org[] }>('/api/auth/me'),
+  logout: () => request<{ ok: boolean }>('/api/auth/logout', { method: 'POST' }),
+  updateProfile: (display_name: string) =>
+    request<{ ok: boolean }>('/api/auth/profile', {
+      method: 'PUT', body: JSON.stringify({ display_name }),
+    }),
   checkAuth: async (): Promise<boolean> => {
     try {
-      const res = await fetch('/api/auth/check', { headers: headers() });
+      const res = await fetch('/api/auth/check', {
+        headers: headers(),
+        credentials: 'include',
+      });
       return res.ok;
     } catch {
       return false;
@@ -70,7 +114,9 @@ export const api = {
     request<{ ok: boolean }>(`/api/entries/${id}`, { method: 'DELETE' }),
   archiveEntry: (id: string) =>
     request<{ ok: boolean }>(`/api/entries/${id}/archive`, { method: 'POST' }),
-  search: (query: string, opts?: { category?: string; tags?: string[]; limit?: number }) =>
+  search: (query: string, opts?: {
+    category?: string; tags?: string[]; workspace?: string; limit?: number;
+  }) =>
     request<Entry[]>('/api/search', {
       method: 'POST',
       body: JSON.stringify({ query, ...opts }),
@@ -82,4 +128,33 @@ export const api = {
     request<ApiKey>('/api/keys', { method: 'POST', body: JSON.stringify({ name }) }),
   deleteKey: (id: string) =>
     request<{ ok: boolean }>(`/api/keys/${id}`, { method: 'DELETE' }),
+
+  // Orgs
+  listOrgs: () => request<Org[]>('/api/orgs'),
+  createOrg: (name: string, slug?: string) =>
+    request<Org>('/api/orgs', {
+      method: 'POST', body: JSON.stringify({ name, slug }),
+    }),
+  listMembers: (orgId: string) =>
+    request<{ id: string; email: string; display_name: string | null; role: string }[]>(
+      `/api/orgs/${orgId}/members`
+    ),
+  inviteMember: (orgId: string, email: string) =>
+    request<{ ok: boolean }>(`/api/orgs/${orgId}/members`, {
+      method: 'POST', body: JSON.stringify({ email }),
+    }),
+  removeMember: (orgId: string, memberId: string) =>
+    request<{ ok: boolean }>(`/api/orgs/${orgId}/members/${memberId}`, {
+      method: 'DELETE',
+    }),
+
+  // Workspaces
+  listWorkspaces: (orgId: string) =>
+    request<Workspace[]>(`/api/orgs/${orgId}/workspaces`),
+  createWorkspace: (orgId: string, name: string) =>
+    request<Workspace>(`/api/orgs/${orgId}/workspaces`, {
+      method: 'POST', body: JSON.stringify({ name }),
+    }),
+  deleteWorkspace: (wsId: string) =>
+    request<{ ok: boolean }>(`/api/workspaces/${wsId}`, { method: 'DELETE' }),
 };

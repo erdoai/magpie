@@ -16,5 +16,10 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8200
 
-    # Auth — static API key (empty = no auth)
+    # Auth — static API key (empty = no auth for API routes)
     api_key: str = ""
+    session_secret: str = ""
+
+    # Email OTP via Resend
+    resend_api_key: str = ""
+    resend_from: str = "magpie <noreply@erdo.ai>"
