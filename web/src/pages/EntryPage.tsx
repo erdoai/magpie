@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { api, Entry } from '../lib/api';
+import { api, Entry } from '@/lib/api';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ArrowLeft, Pencil, Trash2 } from 'lucide-react';
 
 export function EntryPage() {
   const { id } = useParams<{ id: string }>();
@@ -47,71 +54,76 @@ export function EntryPage() {
     navigate('/');
   };
 
-  if (!entry) return <p style={{ color: 'var(--text-muted)' }}>Loading...</p>;
+  if (!entry) return <p className="text-muted-foreground text-sm">Loading...</p>;
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <button className="btn-ghost" onClick={() => navigate('/')}>Back</button>
-        <div style={{ display: 'flex', gap: 8 }}>
+      <div className="flex items-center justify-between mb-5">
+        <Button variant="ghost" size="sm" onClick={() => navigate('/')}>
+          <ArrowLeft size={14} className="mr-1.5" /> Back
+        </Button>
+        <div className="flex gap-2">
           {editing ? (
             <>
-              <button className="btn-ghost" onClick={() => setEditing(false)}>Cancel</button>
-              <button className="btn-primary" onClick={handleSave} disabled={saving}>
+              <Button variant="outline" size="sm" onClick={() => setEditing(false)}>Cancel</Button>
+              <Button size="sm" onClick={handleSave} disabled={saving}>
                 {saving ? 'Saving...' : 'Save'}
-              </button>
+              </Button>
             </>
           ) : (
             <>
-              <button className="btn-ghost" onClick={() => setEditing(true)}>Edit</button>
-              <button className="btn-danger" onClick={handleDelete}>Delete</button>
+              <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+                <Pencil size={14} className="mr-1.5" /> Edit
+              </Button>
+              <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={handleDelete}>
+                <Trash2 size={14} className="mr-1.5" /> Delete
+              </Button>
             </>
           )}
         </div>
       </div>
 
       {editing ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="Title" />
-          <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>
-            <option value="project">Project</option>
-            <option value="area">Area</option>
-            <option value="resource">Resource</option>
-            <option value="archive">Archive</option>
-          </select>
-          <input value={form.tags} onChange={e => setForm({ ...form, tags: e.target.value })} placeholder="Tags (comma separated)" />
-          <textarea
+        <div className="flex flex-col gap-3 max-w-2xl">
+          <Input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="Title" />
+          <Select value={form.category} onValueChange={(v) => v && setForm({ ...form, category: v })}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="project">Project</SelectItem>
+              <SelectItem value="area">Area</SelectItem>
+              <SelectItem value="resource">Resource</SelectItem>
+              <SelectItem value="archive">Archive</SelectItem>
+            </SelectContent>
+          </Select>
+          <Input value={form.tags} onChange={e => setForm({ ...form, tags: e.target.value })} placeholder="Tags (comma separated)" />
+          <Textarea
             value={form.content}
             onChange={e => setForm({ ...form, content: e.target.value })}
             rows={16}
-            style={{ fontFamily: 'monospace', fontSize: 13, lineHeight: 1.6 }}
+            className="font-mono text-sm"
           />
         </div>
       ) : (
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-            <h1 style={{ fontSize: 22, fontWeight: 600 }}>{entry.title}</h1>
-            <span className={`tag category-${entry.category}`}>{entry.category}</span>
+          <div className="flex items-center gap-2.5 mb-3">
+            <h1 className="text-xl font-semibold">{entry.title}</h1>
+            <Badge variant="outline">{entry.category}</Badge>
           </div>
           {entry.tags.length > 0 && (
-            <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
-              {entry.tags.map(t => <span key={t} className="tag">{t}</span>)}
+            <div className="flex gap-1 mb-4">
+              {entry.tags.map(t => <Badge key={t} variant="secondary">{t}</Badge>)}
             </div>
           )}
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
-            ID: {entry.id} | Source: {entry.source || 'manual'} | Updated: {new Date(entry.updated_at).toLocaleString()}
-          </div>
-          <div style={{
-            whiteSpace: 'pre-wrap',
-            lineHeight: 1.6,
-            fontSize: 14,
-            background: 'var(--bg-surface)',
-            padding: 16,
-            borderRadius: 8,
-            border: '1px solid var(--border)',
-          }}>
-            {entry.content}
-          </div>
+          <p className="text-xs text-muted-foreground mb-4">
+            ID: {entry.id} &middot; Source: {entry.source || 'manual'} &middot; Updated: {new Date(entry.updated_at).toLocaleString()}
+          </p>
+          <Card>
+            <CardContent className="pt-5">
+              <div className="whitespace-pre-wrap text-sm leading-relaxed">
+                {entry.content}
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
     </div>

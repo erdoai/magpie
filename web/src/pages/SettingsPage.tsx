@@ -1,26 +1,21 @@
 import { useEffect, useState } from 'react';
-import { api, ApiKey } from '../lib/api';
+import { api, ApiKey } from '@/lib/api';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 import { Copy, Trash2 } from 'lucide-react';
 
 export function SettingsPage() {
-  const [apiKeyInput, setApiKeyInput] = useState(localStorage.getItem('magpie_api_key') || '');
-  const [saved, setSaved] = useState(false);
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [newKeyName, setNewKeyName] = useState('');
   const [newKey, setNewKey] = useState<string | null>(null);
 
-  const saveApiKey = () => {
-    localStorage.setItem('magpie_api_key', apiKeyInput);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  };
-
   const loadKeys = async () => {
     try {
       setKeys(await api.listKeys());
-    } catch {
-      // Keys endpoint might fail if not authed
-    }
+    } catch { /* may fail if not authed */ }
   };
 
   useEffect(() => { loadKeys(); }, []);
@@ -43,100 +38,78 @@ export function SettingsPage() {
     loadKeys();
   };
 
-  const copyKey = (key: string) => {
-    navigator.clipboard.writeText(key);
-  };
-
   return (
-    <div>
-      <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 20 }}>Settings</h1>
+    <div className="max-w-xl">
+      <h1 className="text-xl font-semibold mb-5">Settings</h1>
 
-      <section style={{ marginBottom: 32 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 500, marginBottom: 12 }}>API Key (for this browser)</h2>
-        <div style={{ display: 'flex', gap: 8, maxWidth: 480 }}>
-          <input
-            type="password"
-            value={apiKeyInput}
-            onChange={e => setApiKeyInput(e.target.value)}
-            placeholder="Paste your magpie API key..."
-          />
-          <button className="btn-primary" onClick={saveApiKey}>
-            {saved ? 'Saved!' : 'Save'}
-          </button>
-        </div>
-        <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>
-          Stored in localStorage. Required to access the API.
-        </p>
-      </section>
-
-      <section>
-        <h2 style={{ fontSize: 16, fontWeight: 500, marginBottom: 12 }}>API Keys</h2>
-
-        {newKey && (
-          <div style={{
-            background: 'var(--bg-surface)',
-            border: '1px solid var(--green)',
-            borderRadius: 8,
-            padding: 12,
-            marginBottom: 16,
-          }}>
-            <p style={{ fontSize: 13, marginBottom: 6, color: 'var(--green)' }}>
-              New key created — copy it now, it won't be shown again:
-            </p>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <code style={{ fontSize: 13, flex: 1 }}>{newKey}</code>
-              <button className="btn-ghost" onClick={() => copyKey(newKey)} style={{ padding: '4px 8px' }}>
-                <Copy size={14} />
-              </button>
-            </div>
-          </div>
-        )}
-
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16, maxWidth: 480 }}>
-          <input
-            value={newKeyName}
-            onChange={e => setNewKeyName(e.target.value)}
-            placeholder="Key name (e.g. crow-production)"
-            onKeyDown={e => e.key === 'Enter' && handleCreateKey()}
-          />
-          <button className="btn-primary" onClick={handleCreateKey}>Create</button>
-        </div>
-
-        {keys.length === 0 ? (
-          <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>No API keys created yet.</p>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            {keys.map(key => (
-              <div
-                key={key.id}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: '10px 12px',
-                  background: 'var(--bg-surface)',
-                  borderBottom: '1px solid var(--border)',
-                }}
-              >
-                <div>
-                  <span style={{ fontWeight: 500, fontSize: 14 }}>{key.name}</span>
-                  <span style={{ color: 'var(--text-muted)', fontSize: 12, marginLeft: 8 }}>
-                    {key.key_prefix}...
-                  </span>
-                  {key.last_used_at && (
-                    <span style={{ color: 'var(--text-muted)', fontSize: 12, marginLeft: 12 }}>
-                      Last used: {new Date(key.last_used_at).toLocaleDateString()}
-                    </span>
-                  )}
-                </div>
-                <button className="btn-danger" onClick={() => handleDeleteKey(key.id)} style={{ padding: '4px 8px' }}>
-                  <Trash2 size={14} />
-                </button>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">API Keys</CardTitle>
+          <CardDescription>Create keys for agents and integrations.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {newKey && (
+            <div className="mb-4 p-3 rounded-md border border-[oklch(0.65_0.17_145)] bg-[oklch(0.65_0.17_145)]/10">
+              <p className="text-xs text-[oklch(0.65_0.17_145)] mb-1.5 font-medium">
+                Copy this key now — it won't be shown again:
+              </p>
+              <div className="flex items-center gap-2">
+                <code className="text-xs flex-1 break-all">{newKey}</code>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 shrink-0"
+                  onClick={() => navigator.clipboard.writeText(newKey)}
+                >
+                  <Copy size={14} />
+                </Button>
               </div>
-            ))}
+            </div>
+          )}
+
+          <div className="flex gap-2 mb-4">
+            <Input
+              value={newKeyName}
+              onChange={e => setNewKeyName(e.target.value)}
+              placeholder="Key name (e.g. crow-production)"
+              onKeyDown={e => e.key === 'Enter' && handleCreateKey()}
+            />
+            <Button onClick={handleCreateKey}>Create</Button>
           </div>
-        )}
-      </section>
+
+          <Separator className="mb-3" />
+
+          {keys.length === 0 ? (
+            <p className="text-muted-foreground text-sm py-2">No API keys created yet.</p>
+          ) : (
+            <div className="flex flex-col gap-0.5">
+              {keys.map(key => (
+                <div key={key.id} className="flex items-center justify-between py-2 px-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">{key.name}</span>
+                    <Badge variant="secondary" className="text-[10px] font-mono">
+                      {key.key_prefix}...
+                    </Badge>
+                    {key.last_used_at && (
+                      <span className="text-xs text-muted-foreground">
+                        Used {new Date(key.last_used_at).toLocaleDateString()}
+                      </span>
+                    )}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-destructive hover:text-destructive"
+                    onClick={() => handleDeleteKey(key.id)}
+                  >
+                    <Trash2 size={14} />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

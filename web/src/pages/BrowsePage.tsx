@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api, Entry } from '../lib/api';
-import { Archive, Trash2 } from 'lucide-react';
+import { api, Entry } from '@/lib/api';
+import { Button } from '@/components/ui/button';
+import { EntryCard } from '@/components/EntryCard';
+import { cn } from '@/lib/utils';
+import { Plus } from 'lucide-react';
 
 const CATEGORIES = ['all', 'project', 'area', 'resource', 'archive'] as const;
 
@@ -37,76 +40,45 @@ export function BrowsePage() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 600 }}>Entries</h1>
-        <Link to="/new"><button className="btn-primary">+ New Entry</button></Link>
+      <div className="flex items-center justify-between mb-5">
+        <h1 className="text-xl font-semibold">Entries</h1>
+        <Link to="/new">
+          <Button size="sm"><Plus size={14} className="mr-1.5" /> New Entry</Button>
+        </Link>
       </div>
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+      <div className="flex gap-1.5 mb-5">
         {CATEGORIES.map(c => (
-          <button
+          <Button
             key={c}
+            variant={c === category ? 'default' : 'outline'}
+            size="sm"
+            className="capitalize text-xs"
             onClick={() => setCategory(c)}
-            className={c === category ? 'btn-primary' : 'btn-ghost'}
-            style={{ textTransform: 'capitalize', fontSize: 13 }}
           >
             {c}
-          </button>
+          </Button>
         ))}
       </div>
 
       {loading ? (
-        <p style={{ color: 'var(--text-muted)' }}>Loading...</p>
+        <p className="text-muted-foreground text-sm">Loading...</p>
       ) : entries.length === 0 ? (
-        <p style={{ color: 'var(--text-muted)' }}>No entries found.</p>
+        <div className="text-center py-12">
+          <p className="text-muted-foreground text-sm mb-3">No entries found.</p>
+          <Link to="/new">
+            <Button variant="outline" size="sm">Create your first entry</Button>
+          </Link>
+        </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        <div className={cn("flex flex-col rounded-lg border border-border overflow-hidden")}>
           {entries.map(entry => (
-            <div
+            <EntryCard
               key={entry.id}
-              style={{
-                padding: '14px 16px',
-                background: 'var(--bg-surface)',
-                borderBottom: '1px solid var(--border)',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'flex-start',
-              }}
-            >
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                  <Link to={`/entries/${entry.id}`} style={{ fontWeight: 500, fontSize: 15 }}>
-                    {entry.title}
-                  </Link>
-                  <span className={`tag category-${entry.category}`}>{entry.category}</span>
-                </div>
-                <p style={{
-                  color: 'var(--text-muted)',
-                  fontSize: 13,
-                  maxWidth: 600,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}>
-                  {entry.content.slice(0, 120)}
-                </p>
-                {entry.tags.length > 0 && (
-                  <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
-                    {entry.tags.map(t => <span key={t} className="tag">{t}</span>)}
-                  </div>
-                )}
-              </div>
-              <div style={{ display: 'flex', gap: 4, marginLeft: 12 }}>
-                {entry.category !== 'archive' && (
-                  <button className="btn-ghost" onClick={() => handleArchive(entry.id)} title="Archive" style={{ padding: '6px 8px' }}>
-                    <Archive size={14} />
-                  </button>
-                )}
-                <button className="btn-danger" onClick={() => handleDelete(entry.id)} title="Delete" style={{ padding: '6px 8px' }}>
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            </div>
+              entry={entry}
+              onArchive={handleArchive}
+              onDelete={handleDelete}
+            />
           ))}
         </div>
       )}

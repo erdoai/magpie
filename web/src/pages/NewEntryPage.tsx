@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api } from '../lib/api';
+import { api } from '@/lib/api';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export function NewEntryPage() {
   const navigate = useNavigate();
@@ -34,43 +38,46 @@ export function NewEntryPage() {
 
   return (
     <div>
-      <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 20 }}>New Entry</h1>
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 640 }}>
-        <input
+      <h1 className="text-xl font-semibold mb-5">New Entry</h1>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-3 max-w-2xl">
+        <Input
           value={form.title}
           onChange={e => setForm({ ...form, title: e.target.value })}
           placeholder="Title"
           required
           autoFocus
         />
-        <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>
-          <option value="project">Project</option>
-          <option value="area">Area</option>
-          <option value="resource">Resource</option>
-        </select>
-        <input
+        <Select value={form.category} onValueChange={(v) => v && setForm({ ...form, category: v })}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="project">Project</SelectItem>
+            <SelectItem value="area">Area</SelectItem>
+            <SelectItem value="resource">Resource</SelectItem>
+          </SelectContent>
+        </Select>
+        <Input
           value={form.tags}
           onChange={e => setForm({ ...form, tags: e.target.value })}
           placeholder="Tags (comma separated)"
         />
-        <input
+        <Input
           value={form.source}
           onChange={e => setForm({ ...form, source: e.target.value })}
           placeholder="Source (optional — e.g. crow, devbot, manual)"
         />
-        <textarea
+        <Textarea
           value={form.content}
           onChange={e => setForm({ ...form, content: e.target.value })}
           placeholder="Content (markdown supported)"
           rows={16}
           required
-          style={{ fontFamily: 'monospace', fontSize: 13, lineHeight: 1.6 }}
+          className="font-mono text-sm"
         />
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button type="button" className="btn-ghost" onClick={() => navigate('/')}>Cancel</button>
-          <button type="submit" className="btn-primary" disabled={saving}>
+        <div className="flex gap-2">
+          <Button type="button" variant="outline" onClick={() => navigate('/')}>Cancel</Button>
+          <Button type="submit" disabled={saving}>
             {saving ? 'Creating...' : 'Create Entry'}
-          </button>
+          </Button>
         </div>
       </form>
     </div>

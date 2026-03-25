@@ -1,6 +1,9 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { api, Entry } from '../lib/api';
+import { api, Entry } from '@/lib/api';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { EntryCard } from '@/components/EntryCard';
+import { Search } from 'lucide-react';
 
 export function SearchPage() {
   const [query, setQuery] = useState('');
@@ -23,58 +26,35 @@ export function SearchPage() {
 
   return (
     <div>
-      <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 20 }}>Search</h1>
+      <h1 className="text-xl font-semibold mb-5">Search</h1>
 
-      <form onSubmit={handleSearch} style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
-        <input
-          value={query}
-          onChange={e => setQuery(e.target.value)}
-          placeholder="Search knowledge entries..."
-          autoFocus
-          style={{ flex: 1 }}
-        />
-        <button type="submit" className="btn-primary" disabled={loading}>
+      <form onSubmit={handleSearch} className="flex gap-2 mb-6">
+        <div className="relative flex-1">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="Search knowledge entries..."
+            autoFocus
+            className="pl-9"
+          />
+        </div>
+        <Button type="submit" disabled={loading}>
           {loading ? 'Searching...' : 'Search'}
-        </button>
+        </Button>
       </form>
 
       {searched && results.length === 0 && (
-        <p style={{ color: 'var(--text-muted)' }}>No results found.</p>
+        <p className="text-muted-foreground text-sm text-center py-8">No results found.</p>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {results.map(entry => (
-          <div
-            key={entry.id}
-            style={{
-              padding: 16,
-              background: 'var(--bg-surface)',
-              border: '1px solid var(--border)',
-              borderRadius: 8,
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-              <Link to={`/entries/${entry.id}`} style={{ fontWeight: 500, fontSize: 15 }}>
-                {entry.title}
-              </Link>
-              <span className={`tag category-${entry.category}`}>{entry.category}</span>
-              {entry.score != null && (
-                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                  score: {entry.score.toFixed(4)}
-                </span>
-              )}
-            </div>
-            <p style={{ color: 'var(--text-muted)', fontSize: 13, lineHeight: 1.5 }}>
-              {entry.content.slice(0, 200)}{entry.content.length > 200 ? '...' : ''}
-            </p>
-            {entry.tags.length > 0 && (
-              <div style={{ display: 'flex', gap: 4, marginTop: 8 }}>
-                {entry.tags.map(t => <span key={t} className="tag">{t}</span>)}
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
+      {results.length > 0 && (
+        <div className="flex flex-col rounded-lg border border-border overflow-hidden">
+          {results.map(entry => (
+            <EntryCard key={entry.id} entry={entry} showScore />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

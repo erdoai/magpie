@@ -1,5 +1,8 @@
 import { useState } from 'react';
-import { api } from '../lib/api';
+import { api } from '@/lib/api';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 export function LoginPage({ onLogin }: { onLogin: () => void }) {
   const [key, setKey] = useState('');
@@ -13,7 +16,6 @@ export function LoginPage({ onLogin }: { onLogin: () => void }) {
     setLoading(true);
     setError('');
 
-    // Temporarily set the key to test it
     localStorage.setItem('magpie_api_key', key.trim());
     const valid = await api.checkAuth();
 
@@ -27,34 +29,28 @@ export function LoginPage({ onLogin }: { onLogin: () => void }) {
   };
 
   return (
-    <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      minHeight: '100vh',
-    }}>
-      <div style={{ width: 360 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>magpie</h1>
-        <p style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 24 }}>
-          Enter your API key to continue.
-        </p>
-
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <input
-            type="password"
-            value={key}
-            onChange={e => setKey(e.target.value)}
-            placeholder="mgp_... or static API key"
-            autoFocus
-          />
-          {error && (
-            <p style={{ color: 'var(--red)', fontSize: 13 }}>{error}</p>
-          )}
-          <button type="submit" className="btn-primary" disabled={loading}>
-            {loading ? 'Checking...' : 'Sign in'}
-          </button>
-        </form>
-      </div>
+    <div className="flex items-center justify-center min-h-screen">
+      <Card className="w-[380px]">
+        <CardHeader>
+          <CardTitle className="text-2xl">magpie</CardTitle>
+          <CardDescription>Enter your API key to continue.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+            <Input
+              type="password"
+              value={key}
+              onChange={e => setKey(e.target.value)}
+              placeholder="mgp_... or static API key"
+              autoFocus
+            />
+            {error && <p className="text-sm text-destructive">{error}</p>}
+            <Button type="submit" disabled={loading} className="w-full">
+              {loading ? 'Checking...' : 'Sign in'}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 }
