@@ -17,6 +17,7 @@ async def search(
     query: str,
     embedder: EmbeddingProvider | None = None,
     user_id: str | None = None,
+    org_id: str | None = None,
     category: str | None = None,
     tags: list[str] | None = None,
     limit: int = 10,
@@ -30,7 +31,7 @@ async def search(
     - keyword=False → semantic only
     - Both disabled → empty list
     """
-    scope = dict(user_id=user_id, category=category, tags=tags)
+    scope = dict(user_id=user_id, org_id=org_id, category=category, tags=tags)
     # Fetch more than needed from each source for better fusion
     fetch_limit = limit * 3
 

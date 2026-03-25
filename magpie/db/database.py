@@ -50,6 +50,7 @@ class Database:
         user_id: str | None = None,
         project_id: str | None = None,
         org_id: str | None = None,
+        workspace: str | None = None,
     ) -> str:
         entry_id = uuid4().hex
         now = datetime.now(UTC)
@@ -57,8 +58,9 @@ class Database:
             await self._pool.execute(
                 """INSERT INTO entries
                    (id, title, content, category, tags, source,
-                    embedding, user_id, project_id, org_id, created_at, updated_at)
-                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)""",
+                    embedding, user_id, project_id, org_id, workspace,
+                    created_at, updated_at)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)""",
                 entry_id,
                 title,
                 content,
@@ -69,6 +71,7 @@ class Database:
                 user_id,
                 project_id,
                 org_id,
+                workspace,
                 now,
                 now,
             )
@@ -76,8 +79,9 @@ class Database:
             await self._pool.execute(
                 """INSERT INTO entries
                    (id, title, content, category, tags, source,
-                    user_id, project_id, org_id, created_at, updated_at)
-                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)""",
+                    user_id, project_id, org_id, workspace,
+                    created_at, updated_at)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)""",
                 entry_id,
                 title,
                 content,
@@ -87,6 +91,7 @@ class Database:
                 user_id,
                 project_id,
                 org_id,
+                workspace,
                 now,
                 now,
             )
@@ -95,7 +100,7 @@ class Database:
     async def get_entry(self, entry_id: str) -> dict | None:
         row = await self._pool.fetchrow(
             "SELECT id, title, content, category, tags, source, user_id, project_id, org_id,"
-            " created_at, updated_at FROM entries WHERE id = $1",
+            " workspace, created_at, updated_at FROM entries WHERE id = $1",
             entry_id,
         )
         return dict(row) if row else None
@@ -143,6 +148,8 @@ class Database:
         tags: list[str] | None = None,
         source: str | None = None,
         user_id: str | None = None,
+        org_id: str | None = None,
+        workspace: str | None = None,
         project_id: str | None = None,
         offset: int = 0,
         limit: int = 50,
@@ -166,10 +173,30 @@ class Database:
             conditions.append(f"source = ${idx}")
             params.append(source)
 
-        if user_id:
+        # Visibility: your entries + entries shared to your org + global entries
+        if user_id and org_id:
+            idx += 1
+            uid_idx = idx
+            idx += 1
+            oid_idx = idx
+            conditions.append(
+                f"(user_id = ${uid_idx} OR org_id = ${oid_idx} OR user_id IS NULL)"
+            )
+            params.append(user_id)
+            params.append(org_id)
+        elif user_id:
             idx += 1
             conditions.append(f"(user_id = ${idx} OR user_id IS NULL)")
             params.append(user_id)
+        elif org_id:
+            idx += 1
+            conditions.append(f"(org_id = ${idx} OR user_id IS NULL)")
+            params.append(org_id)
+
+        if workspace:
+            idx += 1
+            conditions.append(f"workspace = ${idx}")
+            params.append(workspace)
 
         if project_id:
             idx += 1
@@ -185,8 +212,8 @@ class Database:
         limit_idx = idx
         params.append(limit)
 
-        cols = "id, title, content, category, tags, source, user_id, project_id, org_id"
-        cols += ", created_at, updated_at"
+        cols = ("id, title, content, category, tags, source, user_id, project_id,"
+                " org_id, workspace, created_at, updated_at")
         sql = (
             f"SELECT {cols} FROM entries {where}"
             f" ORDER BY updated_at DESC OFFSET ${offset_idx} LIMIT ${limit_idx}"
@@ -194,12 +221,44 @@ class Database:
         rows = await self._pool.fetch(sql, *params)
         return [dict(r) for r in rows]
 
+    # -- Helpers --
+
+    @staticmethod
+    def _add_visibility(
+        conditions: list[str],
+        params: list,
+        idx: int,
+        user_id: str | None,
+        org_id: str | None,
+    ) -> int:
+        """Add user/org visibility filter. Returns updated idx."""
+        if user_id and org_id:
+            idx += 1
+            uid_idx = idx
+            idx += 1
+            oid_idx = idx
+            conditions.append(
+                f"(user_id = ${uid_idx} OR org_id = ${oid_idx} OR user_id IS NULL)"
+            )
+            params.append(user_id)
+            params.append(org_id)
+        elif user_id:
+            idx += 1
+            conditions.append(f"(user_id = ${idx} OR user_id IS NULL)")
+            params.append(user_id)
+        elif org_id:
+            idx += 1
+            conditions.append(f"(org_id = ${idx} OR user_id IS NULL)")
+            params.append(org_id)
+        return idx
+
     # -- Search (used by fusion) --
 
     async def search_semantic(
         self,
         embedding: list[float],
         user_id: str | None = None,
+        org_id: str | None = None,
         category: str | None = None,
         tags: list[str] | None = None,
         limit: int = 20,
@@ -212,10 +271,7 @@ class Database:
         params: list = []
         idx = 0
 
-        if user_id:
-            idx += 1
-            conditions.append(f"(user_id = ${idx} OR user_id IS NULL)")
-            params.append(user_id)
+        idx = self._add_visibility(conditions, params, idx, user_id, org_id)
 
         if category:
             idx += 1
@@ -252,6 +308,7 @@ class Database:
         self,
         query: str,
         user_id: str | None = None,
+        org_id: str | None = None,
         category: str | None = None,
         tags: list[str] | None = None,
         limit: int = 20,
@@ -266,10 +323,7 @@ class Database:
         params.append(query)
         conditions.append(f"search_vector @@ plainto_tsquery('english', ${query_idx})")
 
-        if user_id:
-            idx += 1
-            conditions.append(f"(user_id = ${idx} OR user_id IS NULL)")
-            params.append(user_id)
+        idx = self._add_visibility(conditions, params, idx, user_id, org_id)
 
         if category:
             idx += 1

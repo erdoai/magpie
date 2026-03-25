@@ -13,6 +13,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
 
 
+def _auth_context(request: Request) -> dict:
+    """Get user_id and org_id from auth middleware."""
+    return {
+        "user_id": getattr(request.state, "user_id", None),
+        "org_id": getattr(request.state, "org_id", None),
+    }
+
+
 # -- Request/Response models --
 
 
@@ -22,8 +30,7 @@ class EntryCreate(BaseModel):
     category: str = "resource"
     tags: list[str] = []
     source: str | None = None
-    user_id: str | None = None
-    project_id: str | None = None
+    workspace: str | None = None
 
 
 class EntryUpdate(BaseModel):
@@ -38,7 +45,7 @@ class SearchRequest(BaseModel):
     query: str
     category: str | None = None
     tags: list[str] | None = None
-    user_id: str | None = None
+    workspace: str | None = None
     limit: int = 10
     semantic: bool = True
     keyword: bool = True
@@ -54,6 +61,7 @@ class EntryResponse(BaseModel):
     user_id: str | None = None
     project_id: str | None = None
     org_id: str | None = None
+    workspace: str | None = None
     score: float | None = None
     created_at: datetime
     updated_at: datetime
@@ -66,6 +74,7 @@ class EntryResponse(BaseModel):
 async def create_entry(body: EntryCreate, request: Request):
     db = request.app.state.db
     embedder = request.app.state.embedder
+    ctx = _auth_context(request)
 
     embedding = None
     if embedder:
@@ -81,8 +90,9 @@ async def create_entry(body: EntryCreate, request: Request):
         tags=body.tags,
         source=body.source,
         embedding=embedding,
-        user_id=body.user_id,
-        project_id=body.project_id,
+        user_id=ctx["user_id"],
+        org_id=ctx["org_id"],
+        workspace=body.workspace,
     )
 
     entry = await db.get_entry(entry_id)
@@ -95,18 +105,21 @@ async def list_entries(
     category: str | None = None,
     tags: str | None = None,
     source: str | None = None,
-    user_id: str | None = None,
+    workspace: str | None = None,
     project_id: str | None = None,
     offset: int = 0,
     limit: int = 50,
 ):
     db = request.app.state.db
+    ctx = _auth_context(request)
     tag_list = [t.strip() for t in tags.split(",")] if tags else None
     return await db.list_entries(
         category=category,
         tags=tag_list,
         source=source,
-        user_id=user_id,
+        user_id=ctx["user_id"],
+        org_id=ctx["org_id"],
+        workspace=workspace,
         project_id=project_id,
         offset=offset,
         limit=limit,
@@ -177,12 +190,14 @@ async def archive_entry(entry_id: str, request: Request):
 async def search_entries(body: SearchRequest, request: Request):
     db = request.app.state.db
     embedder = request.app.state.embedder
+    ctx = _auth_context(request)
 
     results = await search(
         db=db,
         query=body.query,
         embedder=embedder,
-        user_id=body.user_id,
+        user_id=ctx["user_id"],
+        org_id=ctx["org_id"],
         category=body.category,
         tags=body.tags,
         limit=body.limit,
