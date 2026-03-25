@@ -9,6 +9,12 @@ function headers(): HeadersInit {
 
 async function request<T>(path: string, opts?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, { ...opts, headers: headers() });
+  if (res.status === 401) {
+    // Clear invalid key and reload to show login
+    localStorage.removeItem('magpie_api_key');
+    window.location.reload();
+    throw new Error('Unauthorized');
+  }
   if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
   return res.json();
 }
@@ -40,6 +46,16 @@ export interface ApiKey {
 }
 
 export const api = {
+  // Auth
+  checkAuth: async (): Promise<boolean> => {
+    try {
+      const res = await fetch('/api/auth/check', { headers: headers() });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  },
+
   // Entries
   listEntries: (params?: Record<string, string>) => {
     const qs = params ? '?' + new URLSearchParams(params).toString() : '';
