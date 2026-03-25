@@ -24,19 +24,19 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if not static_key:
             return await call_next(request)
 
-        # Public paths
+        # Public paths — no auth needed
         if request.url.path in PUBLIC_PATHS:
             return await call_next(request)
 
-        # MCP endpoint — let MCP handle its own auth or pass through
-        if request.url.path.startswith("/mcp"):
+        # Static assets and SPA HTML — no auth needed (the app itself is public,
+        # but all data access requires auth via API/MCP)
+        if request.url.path.startswith("/assets") or (
+            not request.url.path.startswith("/api")
+            and not request.url.path.startswith("/mcp")
+        ):
             return await call_next(request)
 
-        # Only protect /api/ routes — UI and static assets are public
-        # (the UI uses localStorage API key for its own API calls)
-        if not request.url.path.startswith("/api"):
-            return await call_next(request)
-
+        # Everything below requires auth: /api/* and /mcp/*
         auth_header = request.headers.get("authorization", "")
         if not auth_header.startswith("Bearer "):
             return JSONResponse(status_code=401, content={"error": "Unauthorized"})
@@ -45,6 +45,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         # 1. Check static API key
         if token == static_key:
+            request.state.user_id = None
+            request.state.org_id = None
             return await call_next(request)
 
         # 2. Check per-user API keys in DB
@@ -52,7 +54,6 @@ class AuthMiddleware(BaseHTTPMiddleware):
         key_record = await db.get_api_key_by_hash(hash_key(token))
         if key_record:
             await db.touch_api_key(key_record["id"])
-            # Store user context on request for downstream use
             request.state.user_id = key_record.get("user_id")
             request.state.org_id = key_record.get("org_id")
             return await call_next(request)
