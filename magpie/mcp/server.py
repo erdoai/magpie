@@ -3,6 +3,7 @@
 import logging
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 
 from magpie.db.database import Database
 from magpie.embeddings.base import EmbeddingProvider
@@ -10,7 +11,12 @@ from magpie.search.fusion import search as fusion_search
 
 logger = logging.getLogger(__name__)
 
-mcp_server = FastMCP("magpie", streamable_http_path="/")
+mcp_server = FastMCP(
+    "magpie",
+    transport_security=TransportSecuritySettings(
+        allowed_hosts=["server-production-3634.up.railway.app", "magpie.erdo.ai", "localhost"],
+    ),
+)
 
 # These get set during app startup
 _db: Database | None = None
