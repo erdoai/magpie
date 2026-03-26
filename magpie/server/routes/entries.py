@@ -31,6 +31,7 @@ class EntryCreate(BaseModel):
     tags: list[str] = []
     source: str | None = None
     workspace: str | None = None
+    dedupe: bool = False
 
 
 class EntryUpdate(BaseModel):
@@ -83,17 +84,30 @@ async def create_entry(body: EntryCreate, request: Request):
         except Exception:
             logger.exception("Failed to generate embedding, continuing without")
 
-    entry_id = await db.create_entry(
-        title=body.title,
-        content=body.content,
-        category=body.category,
-        tags=body.tags,
-        source=body.source,
-        embedding=embedding,
-        user_id=ctx["user_id"],
-        org_id=ctx["org_id"],
-        workspace=body.workspace,
-    )
+    if body.dedupe:
+        entry_id, _was_updated = await db.upsert_entry(
+            title=body.title,
+            content=body.content,
+            category=body.category,
+            tags=body.tags,
+            source=body.source,
+            embedding=embedding,
+            user_id=ctx["user_id"],
+            org_id=ctx["org_id"],
+            workspace=body.workspace,
+        )
+    else:
+        entry_id = await db.create_entry(
+            title=body.title,
+            content=body.content,
+            category=body.category,
+            tags=body.tags,
+            source=body.source,
+            embedding=embedding,
+            user_id=ctx["user_id"],
+            org_id=ctx["org_id"],
+            workspace=body.workspace,
+        )
 
     entry = await db.get_entry(entry_id)
     return entry
@@ -184,6 +198,72 @@ async def archive_entry(entry_id: str, request: Request):
 
         return JSONResponse(status_code=404, content={"error": "Not found"})
     return {"ok": True}
+
+
+class FindDuplicatesRequest(BaseModel):
+    workspace: str | None = None
+    threshold: float = 0.12
+    limit: int = 50
+
+
+class MergeRequest(BaseModel):
+    source_ids: list[str]
+    title: str
+    content: str
+    category: str = "resource"
+    tags: list[str] = []
+    workspace: str | None = None
+
+
+@router.post("/entries/find-duplicates")
+async def find_duplicates(body: FindDuplicatesRequest, request: Request):
+    db = request.app.state.db
+    ctx = _auth_context(request)
+    clusters = await db.find_duplicate_clusters(
+        workspace=body.workspace,
+        user_id=ctx["user_id"],
+        org_id=ctx["org_id"],
+        threshold=body.threshold,
+        limit=body.limit,
+    )
+    return {"clusters": clusters}
+
+
+@router.post("/entries/merge", response_model=EntryResponse)
+async def merge_entries(body: MergeRequest, request: Request):
+    db = request.app.state.db
+    embedder = request.app.state.embedder
+    ctx = _auth_context(request)
+
+    if len(body.source_ids) < 2:
+        from fastapi.responses import JSONResponse
+
+        return JSONResponse(
+            status_code=400,
+            content={"error": "Need at least 2 source entries to merge"},
+        )
+
+    embedding = None
+    if embedder:
+        try:
+            embedding = await embedder.embed(f"{body.title}\n{body.content}")
+        except Exception:
+            logger.exception("Failed to generate embedding for merge")
+
+    new_id = await db.merge_entries(
+        source_ids=body.source_ids,
+        title=body.title,
+        content=body.content,
+        category=body.category,
+        tags=body.tags,
+        embedding=embedding,
+        user_id=ctx["user_id"],
+        org_id=ctx["org_id"],
+        workspace=body.workspace,
+    )
+
+    entry = await db.get_entry(new_id)
+    return entry
 
 
 @router.post("/search", response_model=list[EntryResponse])

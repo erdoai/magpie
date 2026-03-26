@@ -131,6 +131,7 @@ def _register_tools(server: FastMCP) -> None:
         category: str = "resource",
         tags: list[str] | None = None,
         source: str | None = None,
+        dedupe: bool = False,
     ) -> str:
         """Save knowledge. Use this to persist learnings, decisions,
         patterns, or anything worth remembering across sessions.
@@ -145,6 +146,8 @@ def _register_tools(server: FastMCP) -> None:
                 responsibility), resource (reference). Default: resource.
             tags: Tags for filtering (e.g. ["deploy", "railway"]).
             source: Where this came from (e.g. "claude-code", "manual").
+            dedupe: If true, update an existing similar entry instead
+                of creating a new one when a close match is found.
         """
         if not _db:
             return "Error: database not initialized"
@@ -155,6 +158,20 @@ def _register_tools(server: FastMCP) -> None:
                 embedding = await _embedder.embed(f"{title}\n{content}")
             except Exception:
                 logger.exception("Failed to generate embedding")
+
+        if dedupe:
+            entry_id, was_updated = await _db.upsert_entry(
+                title=title,
+                content=content,
+                category=category,
+                tags=tags,
+                source=source,
+                embedding=embedding,
+                workspace=workspace,
+            )
+            if was_updated:
+                return f"Updated existing entry {entry_id} in [{workspace}]: {title}"
+            return f"Created entry {entry_id} in [{workspace}]: {title}"
 
         entry_id = await _db.create_entry(
             title=title,
@@ -247,3 +264,103 @@ def _register_tools(server: FastMCP) -> None:
         if not ok:
             return f"Entry {id} not found."
         return f"Archived entry {id}."
+
+    @server.tool()
+    async def find_duplicates(
+        workspace: str | None = None,
+        threshold: float = 0.12,
+        limit: int = 50,
+    ) -> str:
+        """Find clusters of near-duplicate entries by semantic similarity.
+        Returns groups of entries that cover the same topic. Use this to
+        identify consolidation opportunities before merging.
+
+        Args:
+            workspace: Scope to a workspace. Omit to scan all.
+            threshold: Cosine distance threshold — lower is stricter.
+                Default 0.12.
+            limit: Max pairs to consider. Default 50.
+        """
+        if not _db:
+            return "Error: database not initialized"
+
+        clusters = await _db.find_duplicate_clusters(
+            workspace=workspace,
+            threshold=threshold,
+            limit=limit,
+        )
+
+        if not clusters:
+            return "No duplicate clusters found."
+
+        parts = []
+        for i, cluster in enumerate(clusters, 1):
+            avg_dist = sum(
+                e.get("min_distance", 0) for e in cluster
+            ) / len(cluster)
+            lines = [
+                f"## Cluster {i} ({len(cluster)} entries,"
+                f" avg distance: {avg_dist:.3f})"
+            ]
+            for entry in cluster:
+                ws = entry.get("workspace") or "general"
+                snippet = entry["content"][:120].replace("\n", " ")
+                dist = entry.get("min_distance", 0)
+                tags_str = ", ".join(entry.get("tags", []))
+                lines.append(
+                    f"- **{entry['title']}** [{ws}] (id: {entry['id']},"
+                    f" dist: {dist:.3f})\n"
+                    f"  Tags: {tags_str}\n"
+                    f"  {snippet}…"
+                )
+            parts.append("\n".join(lines))
+
+        return "\n\n".join(parts)
+
+    @server.tool()
+    async def merge(
+        source_ids: list[str],
+        title: str,
+        content: str,
+        category: str = "resource",
+        tags: list[str] | None = None,
+        workspace: str | None = None,
+    ) -> str:
+        """Merge multiple entries into one. The source entries are archived
+        with lineage tracking. You provide the merged title and content —
+        this tool handles the data operation.
+
+        Args:
+            source_ids: Entry IDs to merge (will be archived).
+            title: Title for the merged entry.
+            content: Synthesized content for the merged entry (markdown).
+            category: PARA category. Default: resource.
+            tags: Tags for the merged entry.
+            workspace: Workspace scope.
+        """
+        if not _db:
+            return "Error: database not initialized"
+
+        if len(source_ids) < 2:
+            return "Error: need at least 2 source entries to merge."
+
+        embedding = None
+        if _embedder:
+            try:
+                embedding = await _embedder.embed(f"{title}\n{content}")
+            except Exception:
+                logger.exception("Failed to generate embedding for merge")
+
+        new_id = await _db.merge_entries(
+            source_ids=source_ids,
+            title=title,
+            content=content,
+            category=category,
+            tags=tags,
+            embedding=embedding,
+            workspace=workspace,
+        )
+        return (
+            f"Merged {len(source_ids)} entries into {new_id}: {title}\n"
+            f"Archived: {', '.join(source_ids)}"
+        )

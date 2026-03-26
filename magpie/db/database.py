@@ -352,6 +352,315 @@ class Database:
         rows = await self._pool.fetch(sql, *params)
         return [dict(r) for r in rows]
 
+    # -- Similarity & Deduplication --
+
+    async def find_similar(
+        self,
+        embedding: list[float],
+        threshold: float = 0.15,
+        workspace: str | None = None,
+        user_id: str | None = None,
+        org_id: str | None = None,
+        exclude_ids: list[str] | None = None,
+        limit: int = 5,
+    ) -> list[dict]:
+        """Find entries similar to the given embedding within cosine distance threshold."""
+        if not self.has_vectors:
+            return []
+
+        conditions = ["category != 'archive'", "embedding IS NOT NULL"]
+        params: list = []
+        idx = 0
+
+        idx = self._add_visibility(conditions, params, idx, user_id, org_id)
+
+        if workspace:
+            idx += 1
+            conditions.append(f"workspace = ${idx}")
+            params.append(workspace)
+
+        if exclude_ids:
+            idx += 1
+            conditions.append(f"NOT (id = ANY(${idx}))")
+            params.append(exclude_ids)
+
+        idx += 1
+        params.append(str(embedding))
+        embed_idx = idx
+
+        idx += 1
+        params.append(threshold)
+        thresh_idx = idx
+
+        idx += 1
+        params.append(limit)
+        limit_idx = idx
+
+        where = f"WHERE {' AND '.join(conditions)}"
+
+        sql = (
+            f"SELECT id, title, content, category, tags, source, workspace,"
+            f" created_at, updated_at,"
+            f" embedding <=> ${embed_idx} AS distance"
+            f" FROM entries {where}"
+            f" AND embedding <=> ${embed_idx} < ${thresh_idx}"
+            f" ORDER BY embedding <=> ${embed_idx}"
+            f" LIMIT ${limit_idx}"
+        )
+        rows = await self._pool.fetch(sql, *params)
+        return [dict(r) for r in rows]
+
+    async def find_duplicate_clusters(
+        self,
+        workspace: str | None = None,
+        user_id: str | None = None,
+        org_id: str | None = None,
+        threshold: float = 0.12,
+        limit: int = 50,
+    ) -> list[list[dict]]:
+        """Find clusters of near-duplicate entries by embedding similarity.
+
+        Uses a self-join to find all pairs within threshold, then groups
+        connected pairs into clusters via union-find.
+        """
+        if not self.has_vectors:
+            return []
+
+        conditions = [
+            "a.category != 'archive'",
+            "b.category != 'archive'",
+            "a.embedding IS NOT NULL",
+            "b.embedding IS NOT NULL",
+            "a.id < b.id",
+        ]
+        params: list = []
+        idx = 0
+
+        idx += 1
+        params.append(threshold)
+        thresh_idx = idx
+
+        if workspace:
+            idx += 1
+            conditions.append(f"a.workspace = ${idx}")
+            conditions.append(f"b.workspace = ${idx}")
+            params.append(workspace)
+
+        # Visibility scoping for both sides
+        if user_id and org_id:
+            idx += 1
+            uid_idx = idx
+            idx += 1
+            oid_idx = idx
+            conditions.append(
+                f"(a.user_id = ${uid_idx} OR a.org_id = ${oid_idx} OR a.user_id IS NULL)"
+            )
+            conditions.append(
+                f"(b.user_id = ${uid_idx} OR b.org_id = ${oid_idx} OR b.user_id IS NULL)"
+            )
+            params.append(user_id)
+            params.append(org_id)
+        elif user_id:
+            idx += 1
+            conditions.append(f"(a.user_id = ${idx} OR a.user_id IS NULL)")
+            conditions.append(f"(b.user_id = ${idx} OR b.user_id IS NULL)")
+            params.append(user_id)
+        elif org_id:
+            idx += 1
+            conditions.append(f"(a.org_id = ${idx} OR a.user_id IS NULL)")
+            conditions.append(f"(b.org_id = ${idx} OR b.user_id IS NULL)")
+            params.append(org_id)
+
+        idx += 1
+        params.append(limit)
+        limit_idx = idx
+
+        where = f"WHERE {' AND '.join(conditions)}"
+
+        sql = (
+            f"SELECT a.id AS id_a, a.title AS title_a, a.content AS content_a,"
+            f" a.category AS category_a, a.tags AS tags_a, a.source AS source_a,"
+            f" a.workspace AS workspace_a, a.created_at AS created_a, a.updated_at AS updated_a,"
+            f" b.id AS id_b, b.title AS title_b, b.content AS content_b,"
+            f" b.category AS category_b, b.tags AS tags_b, b.source AS source_b,"
+            f" b.workspace AS workspace_b, b.created_at AS created_b, b.updated_at AS updated_b,"
+            f" a.embedding <=> b.embedding AS distance"
+            f" FROM entries a JOIN entries b ON a.id < b.id"
+            f" {where}"
+            f" AND a.embedding <=> b.embedding < ${thresh_idx}"
+            f" ORDER BY a.embedding <=> b.embedding"
+            f" LIMIT ${limit_idx}"
+        )
+        rows = await self._pool.fetch(sql, *params)
+
+        if not rows:
+            return []
+
+        # Union-find to group connected pairs into clusters
+        parent: dict[str, str] = {}
+
+        def find(x: str) -> str:
+            while parent.get(x, x) != x:
+                parent[x] = parent.get(parent[x], parent[x])
+                x = parent[x]
+            return x
+
+        def union(x: str, y: str) -> None:
+            px, py = find(x), find(y)
+            if px != py:
+                parent[px] = py
+
+        entry_map: dict[str, dict] = {}
+        pair_distances: list[tuple[str, str, float]] = []
+
+        for row in rows:
+            id_a, id_b = row["id_a"], row["id_b"]
+            distance = row["distance"]
+            union(id_a, id_b)
+            pair_distances.append((id_a, id_b, distance))
+
+            if id_a not in entry_map:
+                entry_map[id_a] = {
+                    "id": id_a, "title": row["title_a"], "content": row["content_a"],
+                    "category": row["category_a"], "tags": row["tags_a"],
+                    "source": row["source_a"], "workspace": row["workspace_a"],
+                    "created_at": row["created_a"], "updated_at": row["updated_a"],
+                }
+            if id_b not in entry_map:
+                entry_map[id_b] = {
+                    "id": id_b, "title": row["title_b"], "content": row["content_b"],
+                    "category": row["category_b"], "tags": row["tags_b"],
+                    "source": row["source_b"], "workspace": row["workspace_b"],
+                    "created_at": row["created_b"], "updated_at": row["updated_b"],
+                }
+
+        # Group by cluster root
+        clusters_map: dict[str, list[dict]] = {}
+        for eid in entry_map:
+            root = find(eid)
+            clusters_map.setdefault(root, []).append(entry_map[eid])
+
+        # Add min distance to each entry within its cluster
+        for id_a, id_b, distance in pair_distances:
+            entry_a = entry_map[id_a]
+            entry_b = entry_map[id_b]
+            entry_a["min_distance"] = min(entry_a.get("min_distance", 1.0), distance)
+            entry_b["min_distance"] = min(entry_b.get("min_distance", 1.0), distance)
+
+        return [cluster for cluster in clusters_map.values() if len(cluster) > 1]
+
+    async def merge_entries(
+        self,
+        source_ids: list[str],
+        title: str,
+        content: str,
+        category: str = "resource",
+        tags: list[str] | None = None,
+        source: str | None = None,
+        embedding: list[float] | None = None,
+        user_id: str | None = None,
+        org_id: str | None = None,
+        workspace: str | None = None,
+    ) -> str:
+        """Atomically merge entries: create new entry + archive sources with lineage."""
+        new_id = uuid4().hex
+        now = datetime.now(UTC)
+        lineage_source = source or f"merged_from:{','.join(source_ids)}"
+
+        async with self._pool.acquire() as conn:
+            async with conn.transaction():
+                # Create merged entry
+                if embedding and self.has_vectors:
+                    await conn.execute(
+                        """INSERT INTO entries
+                           (id, title, content, category, tags, source,
+                            embedding, user_id, org_id, workspace,
+                            created_at, updated_at)
+                           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)""",
+                        new_id, title, content, category, tags or [],
+                        lineage_source, str(embedding),
+                        user_id, org_id, workspace, now, now,
+                    )
+                else:
+                    await conn.execute(
+                        """INSERT INTO entries
+                           (id, title, content, category, tags, source,
+                            user_id, org_id, workspace,
+                            created_at, updated_at)
+                           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)""",
+                        new_id, title, content, category, tags or [],
+                        lineage_source,
+                        user_id, org_id, workspace, now, now,
+                    )
+
+                # Archive sources with lineage
+                await conn.execute(
+                    """UPDATE entries
+                       SET category = 'archive',
+                           source = COALESCE(source, '') || $1,
+                           updated_at = $2
+                       WHERE id = ANY($3)""",
+                    f" -> merged_into:{new_id}",
+                    now,
+                    source_ids,
+                )
+
+        return new_id
+
+    async def upsert_entry(
+        self,
+        title: str,
+        content: str,
+        category: str = "resource",
+        tags: list[str] | None = None,
+        source: str | None = None,
+        embedding: list[float] | None = None,
+        user_id: str | None = None,
+        project_id: str | None = None,
+        org_id: str | None = None,
+        workspace: str | None = None,
+        dedupe_threshold: float = 0.10,
+    ) -> tuple[str, bool]:
+        """Create or update an entry. If a similar entry exists within threshold, update it.
+
+        Returns (entry_id, was_updated).
+        """
+        if embedding and self.has_vectors:
+            similar = await self.find_similar(
+                embedding,
+                threshold=dedupe_threshold,
+                workspace=workspace,
+                user_id=user_id,
+                org_id=org_id,
+                limit=1,
+            )
+            if similar:
+                match_id = similar[0]["id"]
+                await self.update_entry(
+                    match_id,
+                    title=title,
+                    content=content,
+                    category=category,
+                    tags=tags,
+                    source=source,
+                    embedding=embedding,
+                )
+                return match_id, True
+
+        entry_id = await self.create_entry(
+            title=title,
+            content=content,
+            category=category,
+            tags=tags,
+            source=source,
+            embedding=embedding,
+            user_id=user_id,
+            project_id=project_id,
+            org_id=org_id,
+            workspace=workspace,
+        )
+        return entry_id, False
+
     # -- API Keys --
 
     async def create_api_key(
