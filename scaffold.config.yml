@@ -1,8 +1,8 @@
 auto:
-  MAGPIE_API_KEY:
+  API_KEY:
     type: secret
     length: 32
-  MAGPIE_SESSION_SECRET:
+  SESSION_SECRET:
     type: secret
     length: 48
 
