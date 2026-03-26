@@ -10,7 +10,7 @@ from magpie.search.fusion import search as fusion_search
 
 logger = logging.getLogger(__name__)
 
-mcp_server = FastMCP("magpie")
+mcp_server = FastMCP("magpie", streamable_http_path="/")
 
 # These get set during app startup
 _db: Database | None = None
