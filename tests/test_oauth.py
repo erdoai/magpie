@@ -2,22 +2,18 @@
 
 import time
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
-import pytest
+from mcp.shared.auth import OAuthClientInformationFull
 from pydantic import AnyUrl
 
 from magpie.mcp.oauth import (
     ACCESS_TOKEN_TTL,
-    AUTH_CODE_TTL,
-    REFRESH_TOKEN_TTL,
     MagpieAccessToken,
     MagpieAuthCode,
     MagpieOAuthProvider,
     MagpieRefreshToken,
 )
-from mcp.shared.auth import OAuthClientInformationFull
-
 
 # -- Fixtures --
 
