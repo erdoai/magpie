@@ -116,6 +116,7 @@ export const api = {
     request<{ ok: boolean }>(`/api/entries/${id}/archive`, { method: 'POST' }),
   search: (query: string, opts?: {
     category?: string; tags?: string[]; workspace?: string; limit?: number;
+    semantic?: boolean; keyword?: boolean;
   }) =>
     request<Entry[]>('/api/search', {
       method: 'POST',
