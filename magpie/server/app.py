@@ -13,8 +13,8 @@ from magpie.config.settings import Settings
 from magpie.db.database import Database
 from magpie.embeddings.base import EmbeddingProvider
 from magpie.embeddings.openai import OpenAIEmbeddings
-from magpie.mcp.server import init_mcp, mcp_server
-from magpie.server.routes import auth, entries, health, keys, orgs
+from magpie.mcp.server import create_mcp_server, init_mcp
+from magpie.server.routes import auth, entries, health, keys, oauth, orgs
 
 logger = logging.getLogger(__name__)
 
@@ -51,9 +51,22 @@ async def lifespan(app: FastAPI):
         logger.info("No MAGPIE_OPENAI_API_KEY — keyword search only")
     app.state.embedder = embedder
 
-    # Initialize MCP
+    # Initialize MCP tools (sets _db/_embedder globals)
     init_mcp(db, embedder)
-    _mcp_http = mcp_server.streamable_http_app()
+
+    # Create MCP server — with OAuth if configured
+    oauth_provider = None
+    if settings.oauth_issuer_url:
+        from magpie.mcp.oauth import MagpieOAuthProvider
+        oauth_provider = MagpieOAuthProvider(db, settings.oauth_issuer_url)
+        app.state.oauth_provider = oauth_provider
+        logger.info("OAuth issuer: %s", settings.oauth_issuer_url)
+
+    mcp = create_mcp_server(
+        oauth_issuer_url=settings.oauth_issuer_url or None,
+        oauth_provider=oauth_provider,
+    )
+    _mcp_http = mcp.streamable_http_app()
 
     async with _mcp_http.router.lifespan_context(_mcp_http):
         logger.info("magpie started on %s:%d", settings.host, settings.port)
@@ -75,6 +88,7 @@ def _create_inner_app() -> FastAPI:
     app.include_router(entries.router)
     app.include_router(keys.router)
     app.include_router(orgs.router)
+    app.include_router(oauth.router)
 
     # Serve web UI
     web_dist = None
@@ -111,15 +125,29 @@ def create_app():
             await inner(scope, receive, send)
             return
 
-        # /mcp — delegate directly to MCP app (bypasses middleware)
+        # /mcp — delegate directly to MCP app (handles its own OAuth auth)
         if path == "/mcp":
-            # Auth check for MCP
+            # If OAuth is configured, let the MCP SDK handle auth entirely
+            if inner.state.settings.oauth_issuer_url:
+                await _mcp_http(scope, receive, send)
+                return
+
+            # Legacy: API key auth for MCP when OAuth is not configured
             if not await _check_auth(scope, inner):
                 response = JSONResponse(
                     status_code=401, content={"error": "Unauthorized"}
                 )
                 await response(scope, receive, send)
                 return
+            await _mcp_http(scope, receive, send)
+            return
+
+        # MCP OAuth endpoints (well-known, register, token, authorize, revoke)
+        # These are handled by the MCP SDK's Starlette app
+        if inner.state.settings.oauth_issuer_url and (
+            path.startswith("/.well-known/oauth")
+            or path in ("/authorize", "/register", "/token", "/revoke")
+        ):
             await _mcp_http(scope, receive, send)
             return
 

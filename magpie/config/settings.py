@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     api_key: str = ""
     session_secret: str = ""
 
+    # OAuth — issuer URL for MCP OAuth (e.g. https://magpie.erdo.ai)
+    # When set, enables OAuth on the /mcp endpoint
+    oauth_issuer_url: str = ""
+
     # Email OTP via Resend
     resend_api_key: str = ""
     resend_from: str = "magpie <noreply@erdo.ai>"
