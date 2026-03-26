@@ -13,6 +13,7 @@ services:
       OPENAI_API_KEY: "${{env.OPENAI_API_KEY}}"
       API_KEY: "${{env.API_KEY}}"
       RESEND_API_KEY: "${{env.RESEND_API_KEY}}"
+      RESEND_FROM: "magpie <hi@magpie.erdo.ai>"
       SESSION_SECRET: "${{env.SESSION_SECRET}}"
 
 databases:

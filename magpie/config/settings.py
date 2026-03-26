@@ -22,4 +22,4 @@ class Settings(BaseSettings):
 
     # Email OTP via Resend
     resend_api_key: str = ""
-    resend_from: str = "magpie <noreply@erdo.ai>"
+    resend_from: str = ""
