@@ -14,7 +14,11 @@ logger = logging.getLogger(__name__)
 mcp_server = FastMCP(
     "magpie",
     transport_security=TransportSecuritySettings(
-        allowed_hosts=["server-production-3634.up.railway.app", "magpie.erdo.ai", "localhost"],
+        allowed_hosts=[
+            "server-production-3634.up.railway.app",
+            "magpie.erdo.ai",
+            "localhost",
+        ],
     ),
 )
 
@@ -30,20 +34,22 @@ def init_mcp(db: Database, embedder: EmbeddingProvider | None) -> None:
 
 
 @mcp_server.tool()
-async def magpie_search(
+async def search(
     query: str,
     category: str | None = None,
     tags: list[str] | None = None,
     workspace: str | None = None,
     limit: int = 10,
 ) -> str:
-    """Search knowledge entries using semantic + keyword search.
+    """Search the knowledge base using semantic similarity and keyword
+    matching. Use this to recall information, find past decisions, or
+    check if something has been documented.
 
     Args:
-        query: The search query text.
-        category: Filter by PARA category (project, area, resource, archive).
-        tags: Filter by tags (entries matching any tag are included).
-        workspace: Filter by workspace (e.g. "devbot", "crow", "shared").
+        query: Natural language query — describe what you're looking for.
+        category: Filter by PARA category: project, area, resource, archive.
+        tags: Filter to entries matching any of these tags.
+        workspace: Scope to a workspace (e.g. "devbot", "crow").
         limit: Max results to return (default 10).
     """
     if not _db:
@@ -79,7 +85,7 @@ async def magpie_search(
 
 
 @mcp_server.tool()
-async def magpie_write(
+async def write(
     title: str,
     content: str,
     category: str = "resource",
@@ -87,15 +93,19 @@ async def magpie_write(
     source: str | None = None,
     workspace: str | None = None,
 ) -> str:
-    """Create a new knowledge entry.
+    """Save knowledge to the knowledge base. Use this to persist
+    learnings, decisions, patterns, or any information worth
+    remembering across sessions.
 
     Args:
-        title: Short descriptive title.
-        content: Full content of the knowledge entry (markdown supported).
-        category: PARA category — one of: project, area, resource (default: resource).
-        tags: Optional list of tags for filtering.
-        source: Optional source identifier (e.g. "crow", "devbot", "manual").
-        workspace: Optional workspace to scope this entry to.
+        title: Short descriptive title summarizing the knowledge.
+        content: Full content (markdown supported). Include context
+            and reasoning.
+        category: project (active goal), area (ongoing responsibility),
+            resource (reference material). Default: resource.
+        tags: Tags for filtering (e.g. ["deploy", "railway"]).
+        source: Origin (e.g. "claude-code", "manual", "devbot").
+        workspace: Scope to a workspace. Omit for org-wide knowledge.
     """
     if not _db:
         return "Error: database not initialized"
@@ -120,11 +130,12 @@ async def magpie_write(
 
 
 @mcp_server.tool()
-async def magpie_read(id: str) -> str:
-    """Read a knowledge entry by ID.
+async def read(id: str) -> str:
+    """Read a specific knowledge entry by its ID. Use after searching
+    to get the full content of an entry.
 
     Args:
-        id: The entry ID.
+        id: The entry ID (from search or list results).
     """
     if not _db:
         return "Error: database not initialized"
@@ -145,18 +156,20 @@ async def magpie_read(id: str) -> str:
 
 
 @mcp_server.tool()
-async def magpie_list(
+async def list_entries(
     category: str | None = None,
     tags: list[str] | None = None,
     workspace: str | None = None,
     limit: int = 20,
 ) -> str:
-    """List knowledge entries, optionally filtered.
+    """Browse knowledge entries. Returns titles and metadata. Use
+    search instead if you have a specific query — this is for
+    browsing what's stored.
 
     Args:
-        category: Filter by PARA category (project, area, resource, archive).
-        tags: Filter by tags.
-        workspace: Filter by workspace.
+        category: Filter by PARA category: project, area, resource, archive.
+        tags: Filter to entries matching any of these tags.
+        workspace: Scope to a specific workspace.
         limit: Max results (default 20).
     """
     if not _db:
@@ -181,8 +194,9 @@ async def magpie_list(
 
 
 @mcp_server.tool()
-async def magpie_archive(id: str) -> str:
-    """Archive a knowledge entry (moves to 'archive' category).
+async def archive(id: str) -> str:
+    """Archive a knowledge entry — marks it as completed or deprecated.
+    Archived entries won't appear in search but are still accessible.
 
     Args:
         id: The entry ID to archive.
