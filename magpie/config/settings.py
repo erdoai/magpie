@@ -2,7 +2,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="MAGPIE_")
+    model_config = SettingsConfigDict(env_prefix="")
 
     # Database — Postgres with pgvector
     database_url: str = ""
