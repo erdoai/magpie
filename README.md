@@ -2,135 +2,141 @@
 
 Knowledge store with semantic + keyword search. Built for AI agents, usable by humans.
 
+Postgres + pgvector. REST API + MCP server. Management UI.
+
 ## What it does
 
-- **Dual search**: Semantic (vector embeddings) + keyword (Postgres full-text search), combined with Reciprocal Rank Fusion
-- **PARA categories**: Organize knowledge as Projects, Areas, Resources, or Archives
-- **REST API + MCP server**: Use from any HTTP client or connect AI agents via MCP
-- **Management UI**: Browse, edit, search, and archive entries *(coming in v0.2)*
+- **Dual search** — semantic (vector embeddings) + keyword (Postgres full-text), combined with Reciprocal Rank Fusion
+- **Workspaces** — organize knowledge by project (devbot, crow, general, etc.)
+- **Orgs + teams** — share knowledge within your team, invite members
+- **MCP server** — connect AI agents (Claude Code, Crow, etc.) via the Model Context Protocol
+- **REST API** — use from any HTTP client
+- **Management UI** — browse, search, edit, create, archive entries
 
 ## What it doesn't do
 
-- It's not an agent framework
-- It's not a chat memory system
-- It's not a knowledge graph
-- It's not a SaaS product
+Not an agent framework. Not a chat memory system. Not a knowledge graph.
 
 ## Quick start
 
 ```bash
 pip install magpie-ai
 
-# Set your Postgres URL (needs pgvector extension)
-export MAGPIE_DATABASE_URL=postgresql://user:pass@host:5432/magpie
+export DATABASE_URL=postgresql://user:pass@host:5432/magpie
+export OPENAI_API_KEY=sk-...  # optional — keyword search works without it
 
-# Optional: enable semantic search
-export MAGPIE_OPENAI_API_KEY=sk-...
-
-# Start
 magpie serve
 ```
 
 Server starts on `http://localhost:8200`. API docs at `/docs`.
 
-## Usage
+## MCP integration
 
-### REST API
+### Claude Code
 
 ```bash
-# Create an entry
-curl -X POST http://localhost:8200/api/entries \
-  -H 'Content-Type: application/json' \
-  -d '{"title": "Deploy process", "content": "Run scaffold up to deploy to Railway", "category": "resource", "tags": ["deploy", "railway"]}'
-
-# Search
-curl -X POST http://localhost:8200/api/search \
-  -H 'Content-Type: application/json' \
-  -d '{"query": "how to deploy"}'
-
-# List entries
-curl http://localhost:8200/api/entries
-
-# Archive
-curl -X POST http://localhost:8200/api/entries/{id}/archive
+claude mcp add --transport http magpie https://your-magpie-server/mcp \
+  --header "Authorization: Bearer YOUR_API_KEY"
 ```
 
-### MCP (for AI agents)
-
-Connect any MCP-compatible agent to `http://localhost:8200/mcp`. Available tools:
+This gives Claude Code these tools:
 
 | Tool | Description |
 |------|-------------|
-| `magpie_search` | Search entries (semantic + keyword) |
-| `magpie_write` | Create a new entry |
-| `magpie_read` | Read entry by ID |
-| `magpie_list` | List entries with filters |
-| `magpie_archive` | Archive an entry |
+| `search` | Semantic + keyword search across knowledge |
+| `write` | Save knowledge (requires workspace) |
+| `read` | Read entry by ID |
+| `list_entries` | Browse/filter entries |
+| `archive` | Archive an entry |
 
-#### Claude Code
+**Workspace pattern**: When writing knowledge, you specify which project it relates to (`workspace: "devbot"`, `workspace: "crow"`, etc.). When searching, you can scope to a workspace or search across all.
 
-Add to your `.claude/settings.json`:
+### Crow
 
-```json
-{
-  "mcpServers": {
-    "magpie": {
-      "url": "http://localhost:8200/mcp"
-    }
-  }
-}
-```
-
-#### Crow
-
-Add to your `crow.yml`:
+Add to `crow.yml`:
 
 ```yaml
 mcp:
   magpie:
-    url: http://localhost:8200/mcp
+    url: https://your-magpie-server/mcp
+    headers:
+      Authorization: "Bearer ${MAGPIE_API_KEY}"
 ```
 
 Then give agents access: `mcp_servers: [magpie]`
 
 ## Auth
 
-Set `MAGPIE_API_KEY` to enable bearer token auth:
+Magpie supports three auth methods:
 
+**API keys** (for agents/programmatic access):
 ```bash
-export MAGPIE_API_KEY=my-secret-key
-
-# Then pass it in requests:
-curl -H 'Authorization: Bearer my-secret-key' http://localhost:8200/api/entries
+export API_KEY=your-static-key
+# Or create per-user keys via the API/UI
 ```
 
-When unset, all endpoints are open (good for local dev).
+**Email OTP** (for human users):
+```bash
+export RESEND_API_KEY=re_...
+export RESEND_FROM="magpie <hi@yourdomain.com>"
+```
+
+**Session cookies** — set after email OTP login, 30-day TTL.
+
+When `API_KEY` is empty and `RESEND_API_KEY` is empty, auth is disabled (local dev).
+
+## Orgs + workspaces
+
+- **Org** = your team. Members share knowledge within the org.
+- **Workspace** = a project scope (e.g. "devbot", "crow", "general"). Used in tool calls to organize knowledge.
+- **Visibility**: you see your entries + your org's entries + global entries.
+
+Create orgs and invite members from the Settings page in the UI.
+
+## REST API
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/entries` | Create entry |
+| `GET` | `/api/entries` | List (filter by category, tags, workspace) |
+| `GET` | `/api/entries/{id}` | Get one |
+| `PUT` | `/api/entries/{id}` | Update |
+| `DELETE` | `/api/entries/{id}` | Delete |
+| `POST` | `/api/entries/{id}/archive` | Archive |
+| `POST` | `/api/search` | Dual search |
+| `POST` | `/api/keys` | Create API key |
+| `GET` | `/api/keys` | List keys |
+| `POST` | `/api/orgs` | Create org |
+| `GET` | `/api/orgs` | List your orgs |
+
+Auth: `Authorization: Bearer <key>` header, or session cookie from email login.
 
 ## Config
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `MAGPIE_DATABASE_URL` | Postgres connection string | *required* |
-| `MAGPIE_OPENAI_API_KEY` | OpenAI API key for embeddings | *empty (keyword only)* |
-| `MAGPIE_EMBEDDING_MODEL` | Embedding model name | `text-embedding-3-small` |
-| `MAGPIE_API_KEY` | Static auth key | *empty (no auth)* |
-| `MAGPIE_HOST` | Server bind host | `0.0.0.0` |
-| `MAGPIE_PORT` | Server port | `8200` |
+| `DATABASE_URL` | Postgres connection string | *required* |
+| `OPENAI_API_KEY` | OpenAI API key for embeddings | *empty (keyword only)* |
+| `API_KEY` | Static auth key | *empty (no auth)* |
+| `SESSION_SECRET` | Secret for session cookies | *empty* |
+| `RESEND_API_KEY` | Resend key for email OTP | *empty (API key login only)* |
+| `RESEND_FROM` | Email sender address | *empty* |
+| `HOST` | Server bind host | `0.0.0.0` |
+| `PORT` | Server port | `8200` |
 
-## Deployment
+## Deploy
 
 ### Docker
 
 ```bash
 docker build -t magpie .
-docker run -e MAGPIE_DATABASE_URL=... -p 8200:8200 magpie
+docker run -e DATABASE_URL=... -p 8200:8200 magpie
 ```
 
-### Railway
-
-Deploy with [scaffold](https://github.com/erdoai/scaffold):
+### Railway (via scaffold)
 
 ```bash
+pip install scaffold
 scaffold up
 ```
 
@@ -140,9 +146,8 @@ scaffold up
 git clone https://github.com/erdoai/magpie.git
 cd magpie
 pip install -e ".[dev]"
+cd web && yarn install && yarn build && cd ..
 magpie serve
-ruff check .
-pytest
 ```
 
 ## License
