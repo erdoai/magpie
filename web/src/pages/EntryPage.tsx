@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowLeft, Pencil, Trash2 } from 'lucide-react';
+import Markdown from 'react-markdown';
 
 export function EntryPage() {
   const { id } = useParams<{ id: string }>();
@@ -108,6 +109,7 @@ export function EntryPage() {
           <div className="flex items-center gap-2.5 mb-3">
             <h1 className="text-xl font-semibold">{entry.title}</h1>
             <Badge variant="outline">{entry.category}</Badge>
+            {entry.workspace && <Badge variant="secondary">{entry.workspace}</Badge>}
           </div>
           {entry.tags.length > 0 && (
             <div className="flex gap-1 mb-4">
@@ -118,10 +120,8 @@ export function EntryPage() {
             ID: {entry.id} &middot; Source: {entry.source || 'manual'} &middot; Updated: {new Date(entry.updated_at).toLocaleString()}
           </p>
           <Card>
-            <CardContent className="pt-5">
-              <div className="whitespace-pre-wrap text-sm leading-relaxed">
-                {entry.content}
-              </div>
+            <CardContent className="pt-5 prose prose-invert prose-sm max-w-none">
+              <Markdown>{entry.content}</Markdown>
             </CardContent>
           </Card>
         </div>
