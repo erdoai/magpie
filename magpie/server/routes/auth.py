@@ -42,7 +42,7 @@ async def send_code(body: SendCodeRequest, request: Request):
     # Send via Resend
     try:
         async with httpx.AsyncClient() as client:
-            await client.post(
+            resp = await client.post(
                 "https://api.resend.com/emails",
                 headers={"Authorization": f"Bearer {settings.resend_api_key}"},
                 json={
@@ -53,9 +53,19 @@ async def send_code(body: SendCodeRequest, request: Request):
                 },
                 timeout=10,
             )
+            if resp.status_code != 200:
+                logger.error("Resend error %s: %s", resp.status_code, resp.text)
+                from fastapi.responses import JSONResponse
+
+                return JSONResponse(
+                    status_code=502,
+                    content={"error": f"Email service error: {resp.text}"},
+                )
     except Exception:
         logger.exception("Failed to send email")
-        return {"error": "Failed to send email"}
+        from fastapi.responses import JSONResponse
+
+        return JSONResponse(status_code=502, content={"error": "Failed to send email"})
 
     return {"ok": True}
 
