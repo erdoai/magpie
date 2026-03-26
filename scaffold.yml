@@ -9,11 +9,12 @@ services:
     start: "magpie serve"
     health_check: /health
     env:
-      MAGPIE_DATABASE_URL: "${{postgres.url}}"
-      MAGPIE_OPENAI_API_KEY: "${{env.OPENAI_API_KEY}}"
-      MAGPIE_API_KEY: "${{env.MAGPIE_API_KEY}}"
-      MAGPIE_RESEND_API_KEY: "${{env.RESEND_API_KEY}}"
-      MAGPIE_SESSION_SECRET: "${{env.MAGPIE_SESSION_SECRET}}"
+      DATABASE_URL: "${{postgres.url}}"
+      OPENAI_API_KEY: "${{env.OPENAI_API_KEY}}"
+      API_KEY: "${{env.API_KEY}}"
+      RESEND_API_KEY: "${{env.RESEND_API_KEY}}"
+      RESEND_FROM: "magpie <hi@magpie.erdo.ai>"
+      SESSION_SECRET: "${{env.SESSION_SECRET}}"
 
 databases:
   postgres:
