@@ -35,6 +35,11 @@ export function EntryCard({
           <Badge variant="outline" className={CATEGORY_COLORS[entry.category]}>
             {entry.category}
           </Badge>
+          {entry.workspace && (
+            <Badge variant="secondary" className="text-[10px]">
+              {entry.workspace}
+            </Badge>
+          )}
           {showScore && entry.score != null && (
             <span className="text-xs text-muted-foreground">
               {entry.score.toFixed(4)}
