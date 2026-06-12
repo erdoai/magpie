@@ -49,7 +49,12 @@ Keep this section current as work lands. Update it in the same change as the wor
   - [x] `POST /api/entries/:id/resolve` → `{markdown, dependencies}`
   - [x] MCP `resolve_knowledge` tool + `read(resolved=true)`
   - [x] 9 resolver tests (shorthand/explicit/scalar/JSON-path, cross-org denial, attachment refs, code-block protection); suite at 80
-- [ ] Phase 6: CLI
+- [x] Phase 6: CLI — landed 2026-06-12 (not yet published to npm)
+  - [x] `cli/` TypeScript workspace, `@magpie/cli`, Node 18+ (commander + MCP SDK + zod 4, native fetch)
+  - [x] `login` (email OTP → mints an API key via the session, stored in `~/.config/magpie/config.json`), `logout`, `whoami`, `link` (default workspace/project)
+  - [x] `org list`, `workspace list`, `search`, `read --resolved`, `write`, `archive`, `collections list/get/set`, `attachments add/list`, `import <dir>`
+  - [x] `magpie mcp` — stdio MCP server proxying to the REST API with the stored key (search/read/write/list/archive/resolve_knowledge/get_document/set_document/list_attachments/get_attachment), for local agent setups
+  - [ ] Publish to npm (`@magpie/cli` vs `@magpieai/cli` still open — scope availability to check at publish time)
 - [ ] Phase 7: Hosted deployment
 - [ ] Phase 8: App integrations
 

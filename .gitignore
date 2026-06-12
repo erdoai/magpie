@@ -17,3 +17,10 @@ web/.yarn/
 web/.pnp.*
 web/dist/
 web/tsconfig.tsbuildinfo
+
+# cli
+cli/node_modules/
+cli/dist/
+
+# local attachment storage
+data/
