@@ -52,6 +52,11 @@ ruff check .
 pytest
 ```
 
+## Code style
+
+- All imports go at the top of the file. No function-level/local imports, no
+  `__import__` tricks — this applies to CLI commands, lifespans, and routes too.
+
 ## Key patterns
 
 - Embedding provider is abstracted (`magpie/embeddings/base.py`). OpenAI is default.

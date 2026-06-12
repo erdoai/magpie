@@ -16,7 +16,13 @@ Keep this section current as work lands. Update it in the same change as the wor
   - [x] Visibility/cross-org isolation tests (`tests/test_isolation.py`, 16 tests over real routers + auth middleware with an in-memory DB)
   - [x] UI project filters/badges + CLI `--project` on import
   - Note: session auth still resolves "first org" as the active org; proper org switching is deferred to hosted onboarding (Phase 7). MCP tools apply the token user's org role; workspace-pinned API keys do not yet apply to MCP (OAuth tokens are user-level).
-- [ ] Phase 2: Links
+- [x] Phase 2: Links — landed 2026-06-12
+  - [x] Migration 008: `links` table (polymorphic source/target for Phase 3 reuse; org_id mirrors source entry, NULL = global)
+  - [x] Parser (`magpie/links.py`): `[[Title]]`, `[[Title|display]]`, `[[https://url]]`, `[[app:type:id]]` resource refs; code blocks skipped; deduped by normalized target
+  - [x] Link sync on every write path (REST create/update/merge, MCP write/merge, CLI import). Title links resolve within writer's visibility (org/global); unresolved links stored and matched as backlinks by normalized title once the target exists. Deleting an entry drops its outgoing links and demotes inbound links to unresolved.
+  - [x] `GET /api/entries/:id/links` (outgoing + visibility-filtered backlinks), MCP `list_links` tool, link/backlink sections in MCP `read`
+  - [x] UI links/backlinks panel on the entry page
+  - [x] 11 parser + link-behavior tests, incl. cross-org resolution/backlink leak checks
 - [ ] Phase 3: Collections
 - [ ] Phase 4: Attachments
 - [ ] Phase 5: Reference resolution

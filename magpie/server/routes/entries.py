@@ -7,6 +7,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from magpie.links import normalize_target, sync_entry_links
 from magpie.search.fusion import search
 from magpie.server.context import AuthContext, auth_context
 
@@ -128,6 +129,7 @@ async def create_entry(body: EntryCreate, request: Request):
             project=project,
         )
 
+    await sync_entry_links(db, entry_id)
     entry = await db.get_entry(entry_id)
     return entry
 
@@ -170,6 +172,23 @@ async def get_entry(entry_id: str, request: Request):
     return entry
 
 
+@router.get("/entries/{entry_id}/links")
+async def get_entry_links(entry_id: str, request: Request):
+    db = request.app.state.db
+    ctx = auth_context(request)
+    entry = await _get_accessible_entry(db, entry_id, ctx)
+    if not entry:
+        return _not_found()
+    outgoing = await db.get_outgoing_links(entry_id)
+    backlinks = await db.get_backlinks(
+        entry_id,
+        normalize_target(entry["title"]),
+        user_id=ctx.user_id,
+        org_id=ctx.org_id,
+    )
+    return {"outgoing": outgoing, "backlinks": backlinks}
+
+
 @router.put("/entries/{entry_id}", response_model=EntryResponse)
 async def update_entry(entry_id: str, body: EntryUpdate, request: Request):
     db = request.app.state.db
@@ -197,6 +216,9 @@ async def update_entry(entry_id: str, body: EntryUpdate, request: Request):
     ok = await db.update_entry(entry_id, **fields)
     if not ok:
         return _not_found()
+
+    if "content" in fields:
+        await sync_entry_links(db, entry_id)
 
     return await db.get_entry(entry_id)
 
@@ -310,6 +332,7 @@ async def merge_entries(body: MergeRequest, request: Request):
         project=project,
     )
 
+    await sync_entry_links(db, new_id)
     entry = await db.get_entry(new_id)
     return entry
 

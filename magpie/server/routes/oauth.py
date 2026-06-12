@@ -6,6 +6,7 @@ import secrets
 import httpx
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+from mcp.server.auth.provider import construct_redirect_uri
 
 logger = logging.getLogger(__name__)
 
@@ -215,8 +216,6 @@ async def authorize_approve(request: Request):
 async def authorize_deny(request: Request):
     """User denied — redirect with error."""
     form = await request.form()
-    from mcp.server.auth.provider import construct_redirect_uri
-
     redirect_url = construct_redirect_uri(
         form["redirect_uri"],
         error="access_denied",

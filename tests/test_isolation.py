@@ -35,6 +35,7 @@ class FakeDatabase:
         self.members_removed: list[tuple[str, str]] = []
         self.invited: list[tuple[str, str, str]] = []
         self.search_calls: list[dict] = []
+        self.links: dict[str, list[dict]] = {}  # source_id -> outgoing links
 
     # -- keys --
 
@@ -177,6 +178,58 @@ class FakeDatabase:
     async def search_keyword(self, query, **scope):
         self.search_calls.append({"query": query, **scope})
         return []
+
+    # -- links --
+
+    async def find_entries_by_titles(self, normalized_titles, user_id=None, org_id=None):
+        ctx = AuthContext(user_id=user_id, org_id=org_id)
+        result = {}
+        for entry in self.entries.values():
+            norm = " ".join(entry["title"].split()).lower()
+            if norm in normalized_titles and ctx.can_access(entry):
+                result[norm] = entry["id"]
+        return result
+
+    async def replace_entry_links(self, entry_id, org_id, links):
+        self.links[entry_id] = [
+            {**li, "id": uuid4().hex, "org_id": org_id, "source_id": entry_id,
+             "created_at": datetime.now(UTC)}
+            for li in links
+        ]
+
+    async def get_outgoing_links(self, entry_id):
+        out = []
+        for li in self.links.get(entry_id, []):
+            target = self.entries.get(li.get("target_id") or "")
+            out.append({
+                **li,
+                "target_title": target["title"] if target else None,
+                "target_workspace": target.get("workspace") if target else None,
+                "target_project": target.get("project") if target else None,
+            })
+        return out
+
+    async def get_backlinks(self, entry_id, normalized_title, user_id=None, org_id=None):
+        ctx = AuthContext(user_id=user_id, org_id=org_id)
+        result = []
+        for source_id, links in self.links.items():
+            source = self.entries.get(source_id)
+            if not source or not ctx.can_access(source):
+                continue
+            for li in links:
+                hit = (
+                    (li["target_type"] == "entry" and li.get("target_id") == entry_id)
+                    or (li["target_type"] == "unresolved"
+                        and li["normalized_target"] == normalized_title)
+                )
+                if hit:
+                    result.append({
+                        **li,
+                        "source_title": source["title"],
+                        "source_workspace": source.get("workspace"),
+                        "source_project": source.get("project"),
+                    })
+        return result
 
 
 def make_client(db: FakeDatabase) -> TestClient:

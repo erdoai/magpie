@@ -5,6 +5,7 @@ import secrets
 
 import httpx
 from fastapi import APIRouter, Request, Response
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -55,16 +56,12 @@ async def send_code(body: SendCodeRequest, request: Request):
             )
             if resp.status_code != 200:
                 logger.error("Resend error %s: %s", resp.status_code, resp.text)
-                from fastapi.responses import JSONResponse
-
                 return JSONResponse(
                     status_code=502,
                     content={"error": f"Email service error: {resp.text}"},
                 )
     except Exception:
         logger.exception("Failed to send email")
-        from fastapi.responses import JSONResponse
-
         return JSONResponse(status_code=502, content={"error": "Failed to send email"})
 
     return {"ok": True}

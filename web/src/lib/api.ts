@@ -53,6 +53,32 @@ export interface ApiKey {
   last_used_at: string | null;
 }
 
+export interface OutgoingLink {
+  id: string;
+  target_type: 'entry' | 'url' | 'resource' | 'unresolved';
+  target_id: string | null;
+  target_ref: string | null;
+  link_text: string;
+  normalized_target: string;
+  target_title: string | null;
+  target_workspace: string | null;
+  target_project: string | null;
+}
+
+export interface Backlink {
+  id: string;
+  source_id: string;
+  source_title: string;
+  source_workspace: string | null;
+  source_project: string | null;
+  link_text: string;
+}
+
+export interface EntryLinks {
+  outgoing: OutgoingLink[];
+  backlinks: Backlink[];
+}
+
 export interface User {
   id: string;
   email: string;
@@ -109,6 +135,7 @@ export const api = {
     return request<Entry[]>(`/api/entries${qs}`);
   },
   getEntry: (id: string) => request<Entry>(`/api/entries/${id}`),
+  getEntryLinks: (id: string) => request<EntryLinks>(`/api/entries/${id}/links`),
   createEntry: (data: Partial<Entry>) =>
     request<Entry>('/api/entries', { method: 'POST', body: JSON.stringify(data) }),
   updateEntry: (id: string, data: Partial<Entry>) =>

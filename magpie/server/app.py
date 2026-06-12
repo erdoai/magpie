@@ -13,7 +13,9 @@ from magpie.config.settings import Settings
 from magpie.db.database import Database
 from magpie.embeddings.base import EmbeddingProvider
 from magpie.embeddings.openai import OpenAIEmbeddings
+from magpie.mcp.oauth import MagpieOAuthProvider
 from magpie.mcp.server import create_mcp_server, init_mcp
+from magpie.server.auth import AuthMiddleware
 from magpie.server.routes import auth, entries, health, keys, oauth, orgs
 
 logger = logging.getLogger(__name__)
@@ -57,7 +59,6 @@ async def lifespan(app: FastAPI):
     # Create MCP server — with OAuth if configured
     oauth_provider = None
     if settings.oauth_issuer_url:
-        from magpie.mcp.oauth import MagpieOAuthProvider
         oauth_provider = MagpieOAuthProvider(db, settings.oauth_issuer_url)
         app.state.oauth_provider = oauth_provider
         logger.info("OAuth issuer: %s", settings.oauth_issuer_url)
@@ -155,7 +156,6 @@ def create_app():
         await inner(scope, receive, send)
 
     # Add auth middleware to the inner FastAPI app
-    from magpie.server.auth import AuthMiddleware
     inner.add_middleware(AuthMiddleware)
 
     return app

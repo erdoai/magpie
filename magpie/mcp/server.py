@@ -13,6 +13,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 
 from magpie.db.database import Database
 from magpie.embeddings.base import EmbeddingProvider
+from magpie.links import normalize_target, sync_entry_links
 from magpie.mcp.oauth import MagpieOAuthProvider
 from magpie.search.fusion import search as fusion_search
 from magpie.server.context import AuthContext
@@ -84,6 +85,17 @@ async def _tool_context() -> AuthContext:
     if orgs:
         return AuthContext(user_id=user_id, org_id=orgs[0]["id"], role=orgs[0].get("role"))
     return AuthContext(user_id=user_id)
+
+
+def _format_link(link: dict) -> str:
+    """One-line summary of an outgoing link edge."""
+    if link["target_type"] == "entry":
+        return f"- [[{link['link_text']}]] → {link.get('target_title')} (id: {link['target_id']})"
+    if link["target_type"] == "url":
+        return f"- [[{link['link_text']}]] → {link['target_ref']}"
+    if link["target_type"] == "resource":
+        return f"- [[{link['link_text']}]] → resource {link['target_ref']}"
+    return f"- [[{link['link_text']}]] (unresolved)"
 
 
 def _register_tools(server: FastMCP) -> None:
@@ -202,6 +214,7 @@ def _register_tools(server: FastMCP) -> None:
                 workspace=workspace,
                 project=project,
             )
+            await sync_entry_links(_db, entry_id)
             if was_updated:
                 return f"Updated existing entry {entry_id} in [{scope}]: {title}"
             return f"Created entry {entry_id} in [{scope}]: {title}"
@@ -218,6 +231,7 @@ def _register_tools(server: FastMCP) -> None:
             workspace=workspace,
             project=project,
         )
+        await sync_entry_links(_db, entry_id)
         return f"Created entry {entry_id} in [{scope}]: {title}"
 
     @server.tool()
@@ -238,7 +252,7 @@ def _register_tools(server: FastMCP) -> None:
 
         ws = entry.get("workspace") or "general"
         scope = f"{ws}/{entry['project']}" if entry.get("project") else ws
-        return (
+        result = (
             f"# [{scope}] {entry['title']}\n"
             f"Category: {entry['category']} | "
             f"Tags: {', '.join(entry.get('tags', []))}\n"
@@ -247,6 +261,25 @@ def _register_tools(server: FastMCP) -> None:
             f"ID: {entry['id']}\n\n"
             f"{entry['content']}"
         )
+
+        outgoing = await _db.get_outgoing_links(id)
+        backlinks = await _db.get_backlinks(
+            id, normalize_target(entry["title"]),
+            user_id=ctx.user_id, org_id=ctx.org_id,
+        )
+        if outgoing:
+            lines = ["\n\n## Links"]
+            for link in outgoing:
+                lines.append(_format_link(link))
+            result += "\n".join(lines)
+        if backlinks:
+            lines = ["\n\n## Backlinks"]
+            for link in backlinks:
+                lines.append(
+                    f"- {link['source_title']} (id: {link['source_id']})"
+                )
+            result += "\n".join(lines)
+        return result
 
     @server.tool()
     async def list_entries(
@@ -293,6 +326,43 @@ def _register_tools(server: FastMCP) -> None:
                 f" ({short_id}…) {tags_str}"
             )
         return "\n".join(lines)
+
+    @server.tool()
+    async def list_links(id: str) -> str:
+        """List links and backlinks for a knowledge entry.
+
+        Links are parsed from [[wikilinks]] in entry Markdown. Targets can
+        be other entries, external URLs, product resources (app:type:id),
+        or unresolved titles. Backlinks are entries that reference this one.
+
+        Args:
+            id: The entry ID.
+        """
+        if not _db:
+            return "Error: database not initialized"
+
+        ctx = await _tool_context()
+        entry = await _db.get_entry(id)
+        if not entry or not ctx.can_access(entry):
+            return f"Entry {id} not found."
+
+        outgoing = await _db.get_outgoing_links(id)
+        backlinks = await _db.get_backlinks(
+            id, normalize_target(entry["title"]),
+            user_id=ctx.user_id, org_id=ctx.org_id,
+        )
+
+        if not outgoing and not backlinks:
+            return "No links or backlinks."
+
+        parts = []
+        if outgoing:
+            parts.append("## Links\n" + "\n".join(_format_link(li) for li in outgoing))
+        if backlinks:
+            parts.append("## Backlinks\n" + "\n".join(
+                f"- {li['source_title']} (id: {li['source_id']})" for li in backlinks
+            ))
+        return "\n\n".join(parts)
 
     @server.tool()
     async def archive(id: str) -> str:
@@ -434,6 +504,7 @@ def _register_tools(server: FastMCP) -> None:
             workspace=workspace,
             project=project,
         )
+        await sync_entry_links(_db, new_id)
         return (
             f"Merged {len(source_ids)} entries into {new_id}: {title}\n"
             f"Archived: {', '.join(source_ids)}"

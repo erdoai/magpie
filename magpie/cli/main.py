@@ -1,9 +1,21 @@
 """Magpie CLI — knowledge store with dual search."""
 
+import asyncio
 import logging
+import os
+from pathlib import Path
 
+import asyncpg
 import typer
+import uvicorn
 from rich.console import Console
+
+from magpie.__version__ import __version__
+from magpie.config.settings import Settings
+from magpie.db.database import Database
+from magpie.db.migrate import run_migrations
+from magpie.embeddings.openai import OpenAIEmbeddings
+from magpie.links import sync_entry_links
 
 app = typer.Typer(help="magpie — knowledge store with semantic + keyword search")
 console = Console()
@@ -15,12 +27,6 @@ def serve(
     port: int = typer.Option(None, help="Override MAGPIE_PORT"),
 ):
     """Start the magpie server (REST + MCP)."""
-    import os
-
-    import uvicorn
-
-    from magpie.config.settings import Settings
-
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(name)s: %(message)s")
 
     settings = Settings()
@@ -38,13 +44,6 @@ def serve(
 @app.command()
 def migrate():
     """Run database migrations only (no server)."""
-    import asyncio
-
-    import asyncpg
-
-    from magpie.config.settings import Settings
-    from magpie.db.migrate import run_migrations
-
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(name)s: %(message)s")
 
     settings = Settings()
@@ -71,12 +70,6 @@ def import_cmd(
     project: str = typer.Option(None, help="Project within the workspace"),
 ):
     """Import knowledge from external sources."""
-    import asyncio
-    from pathlib import Path
-
-    from magpie.config.settings import Settings
-    from magpie.db.database import Database
-
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(name)s: %(message)s")
 
     settings = Settings()
@@ -89,8 +82,6 @@ def import_cmd(
 
         embedder = None
         if settings.openai_api_key:
-            from magpie.embeddings.openai import OpenAIEmbeddings
-
             embedder = OpenAIEmbeddings(
                 api_key=settings.openai_api_key,
                 model=settings.embedding_model,
@@ -169,7 +160,7 @@ async def _import_markdown_file(db, embedder, file_path, workspace, project, sou
         except Exception:
             pass
 
-    await db.create_entry(
+    entry_id = await db.create_entry(
         title=title,
         content=text,
         category=category,
@@ -179,6 +170,8 @@ async def _import_markdown_file(db, embedder, file_path, workspace, project, sou
         workspace=workspace,
         project=project,
     )
+    await sync_entry_links(db, entry_id)
+
     console.print(f"  Imported: {title}")
     return 1
 
@@ -186,8 +179,6 @@ async def _import_markdown_file(db, embedder, file_path, workspace, project, sou
 @app.command()
 def version():
     """Show magpie version."""
-    from magpie.__version__ import __version__
-
     console.print(f"magpie {__version__}")
 
 

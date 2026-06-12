@@ -1,19 +1,46 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { api, Entry } from '@/lib/api';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { api, Entry, EntryLinks, OutgoingLink } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, Pencil, Trash2 } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Link2, Pencil, Trash2 } from 'lucide-react';
 import Markdown from 'react-markdown';
+
+function OutgoingLinkRow({ link }: { link: OutgoingLink }) {
+  if (link.target_type === 'entry' && link.target_id) {
+    return (
+      <Link to={`/entries/${link.target_id}`} className="text-sm hover:underline">
+        {link.target_title || link.link_text}
+      </Link>
+    );
+  }
+  if (link.target_type === 'url' && link.target_ref) {
+    return (
+      <a href={link.target_ref} target="_blank" rel="noreferrer"
+         className="text-sm hover:underline inline-flex items-center gap-1">
+        {link.link_text} <ExternalLink size={12} />
+      </a>
+    );
+  }
+  if (link.target_type === 'resource') {
+    return <span className="text-sm font-mono">{link.target_ref}</span>;
+  }
+  return (
+    <span className="text-sm text-muted-foreground">
+      {link.link_text} <Badge variant="outline" className="text-[10px] ml-1">unresolved</Badge>
+    </span>
+  );
+}
 
 export function EntryPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [entry, setEntry] = useState<Entry | null>(null);
+  const [links, setLinks] = useState<EntryLinks | null>(null);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ title: '', content: '', category: '', tags: '' });
   const [saving, setSaving] = useState(false);
@@ -29,6 +56,7 @@ export function EntryPage() {
         tags: e.tags.join(', '),
       });
     });
+    api.getEntryLinks(id).then(setLinks).catch(() => setLinks(null));
   }, [id]);
 
   const handleSave = async () => {
@@ -43,6 +71,7 @@ export function EntryPage() {
       });
       setEntry(updated);
       setEditing(false);
+      api.getEntryLinks(id).then(setLinks).catch(() => {});
     } catch (e) {
       console.error(e);
     }
@@ -128,6 +157,43 @@ export function EntryPage() {
               <Markdown>{entry.content}</Markdown>
             </CardContent>
           </Card>
+
+          {links && (links.outgoing.length > 0 || links.backlinks.length > 0) && (
+            <Card className="mt-4">
+              <CardContent className="pt-5">
+                <div className="flex flex-col gap-4 sm:flex-row sm:gap-12">
+                  {links.outgoing.length > 0 && (
+                    <div>
+                      <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                        <Link2 size={12} /> Links
+                      </h2>
+                      <ul className="flex flex-col gap-1">
+                        {links.outgoing.map(link => (
+                          <li key={link.id}><OutgoingLinkRow link={link} /></li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {links.backlinks.length > 0 && (
+                    <div>
+                      <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                        <Link2 size={12} className="rotate-180" /> Backlinks
+                      </h2>
+                      <ul className="flex flex-col gap-1">
+                        {links.backlinks.map(link => (
+                          <li key={link.id}>
+                            <Link to={`/entries/${link.source_id}`} className="text-sm hover:underline">
+                              {link.source_title}
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
     </div>

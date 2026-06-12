@@ -1,5 +1,5 @@
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import asyncpg
@@ -131,7 +131,22 @@ class Database:
         return result == "UPDATE 1"
 
     async def delete_entry(self, entry_id: str) -> bool:
-        result = await self._pool.execute("DELETE FROM entries WHERE id = $1", entry_id)
+        async with self._pool.acquire() as conn:
+            async with conn.transaction():
+                # Drop outgoing links; demote inbound links to unresolved so
+                # other entries' references stay visible (and re-resolvable).
+                await conn.execute(
+                    "DELETE FROM links WHERE source_type = 'entry' AND source_id = $1",
+                    entry_id,
+                )
+                await conn.execute(
+                    "UPDATE links SET target_type = 'unresolved', target_id = NULL"
+                    " WHERE target_type = 'entry' AND target_id = $1",
+                    entry_id,
+                )
+                result = await conn.execute(
+                    "DELETE FROM entries WHERE id = $1", entry_id
+                )
         return result == "DELETE 1"
 
     async def archive_entry(self, entry_id: str) -> bool:
@@ -692,6 +707,109 @@ class Database:
         )
         return entry_id, False
 
+    # -- Links --
+
+    async def find_entries_by_titles(
+        self,
+        normalized_titles: list[str],
+        user_id: str | None = None,
+        org_id: str | None = None,
+    ) -> dict[str, str]:
+        """Resolve normalized (lowercased) titles to entry IDs within visibility.
+
+        On collision the most recently updated entry wins.
+        """
+        if not normalized_titles:
+            return {}
+
+        conditions = ["LOWER(title) = ANY($1)"]
+        params: list = [normalized_titles]
+        idx = 1
+        idx = self._add_visibility(conditions, params, idx, user_id, org_id)
+
+        sql = (
+            f"SELECT DISTINCT ON (LOWER(title)) LOWER(title) AS norm_title, id"
+            f" FROM entries WHERE {' AND '.join(conditions)}"
+            f" ORDER BY LOWER(title), updated_at DESC"
+        )
+        rows = await self._pool.fetch(sql, *params)
+        return {r["norm_title"]: r["id"] for r in rows}
+
+    async def replace_entry_links(
+        self, entry_id: str, org_id: str | None, links: list[dict]
+    ) -> None:
+        """Replace all outgoing link edges for an entry."""
+        async with self._pool.acquire() as conn:
+            async with conn.transaction():
+                await conn.execute(
+                    "DELETE FROM links WHERE source_type = 'entry' AND source_id = $1",
+                    entry_id,
+                )
+                for link in links:
+                    await conn.execute(
+                        """INSERT INTO links
+                           (id, org_id, source_type, source_id, target_type,
+                            target_id, target_ref, link_text, normalized_target)
+                           VALUES ($1, $2, 'entry', $3, $4, $5, $6, $7, $8)""",
+                        uuid4().hex,
+                        org_id,
+                        entry_id,
+                        link["target_type"],
+                        link.get("target_id"),
+                        link.get("target_ref"),
+                        link["link_text"],
+                        link["normalized_target"],
+                    )
+
+    async def get_outgoing_links(self, entry_id: str) -> list[dict]:
+        rows = await self._pool.fetch(
+            "SELECT l.id, l.target_type, l.target_id, l.target_ref, l.link_text,"
+            " l.normalized_target, l.created_at,"
+            " e.title AS target_title, e.workspace AS target_workspace,"
+            " e.project AS target_project"
+            " FROM links l LEFT JOIN entries e ON l.target_id = e.id"
+            " WHERE l.source_type = 'entry' AND l.source_id = $1"
+            " ORDER BY l.created_at",
+            entry_id,
+        )
+        return [dict(r) for r in rows]
+
+    async def get_backlinks(
+        self,
+        entry_id: str,
+        normalized_title: str,
+        user_id: str | None = None,
+        org_id: str | None = None,
+    ) -> list[dict]:
+        """Links pointing at this entry — resolved by ID, or unresolved
+        wikilinks whose normalized target matches this entry's title.
+
+        Source entries are visibility-filtered so titles don't leak across orgs.
+        """
+        conditions = [
+            "(l.target_type = 'entry' AND l.target_id = $1)"
+            " OR (l.target_type = 'unresolved' AND l.normalized_target = $2)"
+        ]
+        params: list = [entry_id, normalized_title]
+        idx = 2
+
+        vis: list[str] = []
+        idx = self._add_visibility(vis, params, idx, user_id, org_id)
+        conditions = [f"({conditions[0]})"] + [
+            v.replace("user_id", "e.user_id").replace("org_id", "e.org_id") for v in vis
+        ]
+
+        sql = (
+            f"SELECT l.id, l.source_id, l.link_text, l.target_type, l.created_at,"
+            f" e.title AS source_title, e.workspace AS source_workspace,"
+            f" e.project AS source_project"
+            f" FROM links l JOIN entries e ON l.source_id = e.id"
+            f" WHERE l.source_type = 'entry' AND {' AND '.join(conditions)}"
+            f" ORDER BY l.created_at DESC"
+        )
+        rows = await self._pool.fetch(sql, *params)
+        return [dict(r) for r in rows]
+
     # -- API Keys --
 
     async def create_api_key(
@@ -867,7 +985,7 @@ class Database:
 
     async def create_email_token(self, email: str, code: str, ttl_minutes: int = 10) -> str:
         token_id = uuid4().hex
-        expires = datetime.now(UTC) + __import__("datetime").timedelta(minutes=ttl_minutes)
+        expires = datetime.now(UTC) + timedelta(minutes=ttl_minutes)
         await self._pool.execute(
             "INSERT INTO email_tokens (id, email, code, expires_at) VALUES ($1, $2, $3, $4)",
             token_id, email, code, expires,
@@ -892,7 +1010,7 @@ class Database:
 
     async def create_session(self, user_id: str, ttl_hours: int = 720) -> str:
         session_id = uuid4().hex
-        expires = datetime.now(UTC) + __import__("datetime").timedelta(hours=ttl_hours)
+        expires = datetime.now(UTC) + timedelta(hours=ttl_hours)
         await self._pool.execute(
             "INSERT INTO sessions (id, user_id, expires_at) VALUES ($1, $2, $3)",
             session_id, user_id, expires,

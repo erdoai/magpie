@@ -12,6 +12,7 @@ approves the client.
 import logging
 import secrets
 import time
+from datetime import UTC, datetime, timedelta
 from urllib.parse import urlencode
 
 from mcp.server.auth.provider import (
@@ -357,8 +358,6 @@ class MagpieOAuthProvider:
     ) -> str:
         """Create and store an authorization code. Returns the redirect URL."""
         code = secrets.token_urlsafe(32)  # 256 bits of entropy
-        from datetime import UTC, datetime, timedelta
-
         expires_at = datetime.now(UTC) + timedelta(seconds=AUTH_CODE_TTL)
 
         await self._db._pool.execute(
