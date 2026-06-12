@@ -81,9 +81,11 @@ async def lifespan(app: FastAPI):
         app.state.oauth_provider = oauth_provider
         logger.info("OAuth issuer: %s", settings.oauth_issuer_url)
 
+    extra_hosts = [h.strip() for h in settings.mcp_allowed_hosts.split(",") if h.strip()]
     mcp = create_mcp_server(
         oauth_issuer_url=settings.oauth_issuer_url or None,
         oauth_provider=oauth_provider,
+        allowed_hosts=extra_hosts,
     )
     _mcp_http = mcp.streamable_http_app()
 

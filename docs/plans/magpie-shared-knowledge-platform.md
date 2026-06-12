@@ -55,7 +55,15 @@ Keep this section current as work lands. Update it in the same change as the wor
   - [x] `org list`, `workspace list`, `search`, `read --resolved`, `write`, `archive`, `collections list/get/set`, `attachments add/list`, `import <dir>`
   - [x] `magpie mcp` — stdio MCP server proxying to the REST API with the stored key (search/read/write/list/archive/resolve_knowledge/get_document/set_document/list_attachments/get_attachment), for local agent setups
   - [ ] Publish to npm (`@magpie/cli` vs `@magpieai/cli` still open — scope availability to check at publish time)
-- [ ] Phase 7: Hosted deployment
+- [~] Phase 7: Hosted deployment — core deployed 2026-06-12, hardening open
+  - [x] Railway project `magpie` on Niall's personal workspace (standalone, not erdo): Postgres 18 + pgvector (EU), `server` service from repo Dockerfile
+  - [x] Storage: Cloudflare R2 bucket `magpie-attachments` (WEUR) via the S3 provider, region `auto`. Note: brand-new R2 account hostnames return TLS handshake failures (alert 40) until Cloudflare provisions edge certs — resolves itself within ~30 min.
+  - [x] Env: DATABASE_URL ref, generated API_KEY/SESSION_SECRET, STORAGE_*, OAUTH_ISSUER_URL + ASSET_PUBLIC_BASE_URL = https://server-production-ee91.up.railway.app
+  - [x] MCP transport allowed-hosts now derived from OAUTH_ISSUER_URL + MCP_ALLOWED_HOSTS (was hardcoded to magpie.erdo.ai)
+  - [x] Migrations 001–010 applied clean on fresh DB; pgvector detected; smoke-tested: entry create/search, attachment upload→R2 (inline SQL read-back), delete cleans blob, /mcp serves OAuth challenge
+  - [ ] OPENAI_API_KEY not set — keyword search only until provided
+  - [ ] Custom domain (currently Railway-generated; magpie.erdo.ai optional later — requires updating OAUTH_ISSUER_URL/ASSET_PUBLIC_BASE_URL)
+  - [ ] Backups, per-org quotas, usage page, hosted onboarding docs, import/export path
 - [ ] Phase 8: App integrations
 
 ## Summary

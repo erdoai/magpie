@@ -15,6 +15,15 @@ services:
       RESEND_API_KEY: "${{env.RESEND_API_KEY}}"
       RESEND_FROM: "magpie <hi@magpie.erdo.ai>"
       SESSION_SECRET: "${{env.SESSION_SECRET}}"
+      OAUTH_ISSUER_URL: "https://magpie.erdo.ai"
+      # Attachment storage — Cloudflare R2 (S3-compatible)
+      STORAGE_PROVIDER: "s3"
+      STORAGE_BUCKET: "${{env.STORAGE_BUCKET}}"
+      STORAGE_ENDPOINT: "${{env.STORAGE_ENDPOINT}}"
+      STORAGE_ACCESS_KEY_ID: "${{env.STORAGE_ACCESS_KEY_ID}}"
+      STORAGE_SECRET_ACCESS_KEY: "${{env.STORAGE_SECRET_ACCESS_KEY}}"
+      STORAGE_REGION: "auto"
+      ASSET_PUBLIC_BASE_URL: "https://magpie.erdo.ai"
 
 databases:
   postgres:

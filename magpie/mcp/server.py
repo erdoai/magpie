@@ -4,6 +4,7 @@ import base64
 import json
 import logging
 import mimetypes
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 from mcp.server.auth.middleware.auth_context import get_access_token
@@ -46,17 +47,18 @@ mcp_server: FastMCP | None = None
 def create_mcp_server(
     oauth_issuer_url: str | None = None,
     oauth_provider: MagpieOAuthProvider | None = None,
+    allowed_hosts: list[str] | None = None,
 ) -> FastMCP:
     """Create the FastMCP server, optionally with OAuth."""
+    hosts = ["localhost", "127.0.0.1"]
+    if oauth_issuer_url:
+        hosts.append(urlsplit(oauth_issuer_url).netloc)
+    if allowed_hosts:
+        hosts.extend(h for h in allowed_hosts if h)
+
     kwargs: dict = {
         "name": "magpie",
-        "transport_security": TransportSecuritySettings(
-            allowed_hosts=[
-                "server-production-3634.up.railway.app",
-                "magpie.erdo.ai",
-                "localhost",
-            ],
-        ),
+        "transport_security": TransportSecuritySettings(allowed_hosts=hosts),
     }
 
     if oauth_issuer_url and oauth_provider:

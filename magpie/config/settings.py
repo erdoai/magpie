@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     # When set, enables OAuth on the /mcp endpoint
     oauth_issuer_url: str = ""
 
+    # Extra hostnames allowed to reach /mcp (comma-separated). localhost and
+    # the OAuth issuer host are always allowed.
+    mcp_allowed_hosts: str = ""
+
     # Email OTP via Resend
     resend_api_key: str = ""
     resend_from: str = ""
