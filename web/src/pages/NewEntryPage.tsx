@@ -14,6 +14,7 @@ export function NewEntryPage() {
     content: '',
     category: 'resource',
     workspace: '',
+    project: '',
     tags: '',
     source: '',
   });
@@ -40,6 +41,7 @@ export function NewEntryPage() {
         content: form.content,
         category: form.category,
         workspace: form.workspace || null,
+        project: form.project || null,
         tags: form.tags.split(',').map(t => t.trim()).filter(Boolean),
         source: form.source || null,
       });
@@ -86,6 +88,11 @@ export function NewEntryPage() {
               placeholder="Workspace (e.g. devbot, general)"
             />
           )}
+          <Input
+            value={form.project}
+            onChange={e => setForm({ ...form, project: e.target.value })}
+            placeholder="Project (optional)"
+          />
         </div>
         <Input
           value={form.tags}

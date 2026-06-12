@@ -38,7 +38,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         ):
             return await call_next(request)
 
-        # No auth configured at all — allow everything
+        # No auth configured at all — allow everything (unrestricted context)
         if not settings.api_key and not settings.resend_api_key:
             return await call_next(request)
 
@@ -49,19 +49,23 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if auth_header.startswith("Bearer "):
             token = auth_header[7:]
 
-            # Static API key
+            # Static API key — unrestricted, single-tenant mode
             if settings.api_key and token == settings.api_key:
                 request.state.user_id = None
                 request.state.org_id = None
+                request.state.role = None
                 return await call_next(request)
 
-            # Per-user API key
+            # Per-user API key — carries org/workspace/project scope and role
             db = request.app.state.db
             key_record = await db.get_api_key_by_hash(hash_key(token))
             if key_record:
                 await db.touch_api_key(key_record["id"])
                 request.state.user_id = key_record.get("user_id")
                 request.state.org_id = key_record.get("org_id")
+                request.state.role = key_record.get("role") or "editor"
+                request.state.auth_workspace = key_record.get("workspace")
+                request.state.auth_project = key_record.get("project")
                 return await call_next(request)
 
         # 2. Session cookie
@@ -74,6 +78,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 # Resolve org from user's memberships (use first org)
                 orgs = await db.list_user_orgs(session["user_id"])
                 request.state.org_id = orgs[0]["id"] if orgs else None
+                request.state.role = orgs[0].get("role") if orgs else None
                 return await call_next(request)
 
         return JSONResponse(status_code=401, content={"error": "Unauthorized"})

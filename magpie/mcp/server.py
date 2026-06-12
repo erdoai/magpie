@@ -2,6 +2,7 @@
 
 import logging
 
+from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.auth.settings import (
     AuthSettings,
     ClientRegistrationOptions,
@@ -14,6 +15,7 @@ from magpie.db.database import Database
 from magpie.embeddings.base import EmbeddingProvider
 from magpie.mcp.oauth import MagpieOAuthProvider
 from magpie.search.fusion import search as fusion_search
+from magpie.server.context import AuthContext
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +70,22 @@ def init_mcp(db: Database, embedder: EmbeddingProvider | None) -> None:
     _embedder = embedder
 
 
+async def _tool_context() -> AuthContext:
+    """Resolve the caller's tenant scope from the MCP OAuth token.
+
+    No token (static-key or auth-disabled deployments) → unrestricted
+    single-tenant context, preserving pre-OAuth behavior.
+    """
+    token = get_access_token()
+    user_id = getattr(token, "user_id", None) if token else None
+    if not user_id or not _db:
+        return AuthContext()
+    orgs = await _db.list_user_orgs(user_id)
+    if orgs:
+        return AuthContext(user_id=user_id, org_id=orgs[0]["id"], role=orgs[0].get("role"))
+    return AuthContext(user_id=user_id)
+
+
 def _register_tools(server: FastMCP) -> None:
     """Register all MCP tools on the given server instance."""
 
@@ -75,6 +93,7 @@ def _register_tools(server: FastMCP) -> None:
     async def search(
         query: str,
         workspace: str | None = None,
+        project: str | None = None,
         category: str | None = None,
         tags: list[str] | None = None,
         limit: int = 10,
@@ -83,8 +102,10 @@ def _register_tools(server: FastMCP) -> None:
 
         Args:
             query: What you're looking for — natural language.
-            workspace: Which project/area to search in (e.g. "devbot",
-                "crow", "magpie", "general"). Omit to search all.
+            workspace: Which app/product namespace to search in (e.g.
+                "reach", "alertee", "magpie", "general"). Omit to search all.
+            project: Narrower work area within the workspace (e.g. a
+                customer or product slug). Omit to search the whole workspace.
             category: Filter by type: project, area, resource, archive.
             tags: Filter to entries matching any of these tags.
             limit: Max results (default 10).
@@ -92,19 +113,19 @@ def _register_tools(server: FastMCP) -> None:
         if not _db:
             return "Error: database not initialized"
 
+        ctx = await _tool_context()
         results = await fusion_search(
             db=_db,
             query=query,
             embedder=_embedder,
+            user_id=ctx.user_id,
+            org_id=ctx.org_id,
+            workspace=workspace,
+            project=project,
             category=category,
             tags=tags,
             limit=limit,
         )
-
-        if workspace:
-            results = [
-                r for r in results if r.get("workspace") == workspace
-            ]
 
         if not results:
             return "No entries found."
@@ -114,8 +135,9 @@ def _register_tools(server: FastMCP) -> None:
             score = entry.get("score", "")
             score_str = f" (score: {score})" if score else ""
             ws = entry.get("workspace") or "general"
+            scope = f"{ws}/{entry['project']}" if entry.get("project") else ws
             parts.append(
-                f"## [{ws}] {entry['title']}{score_str}\n"
+                f"## [{scope}] {entry['title']}{score_str}\n"
                 f"Category: {entry['category']} | "
                 f"Tags: {', '.join(entry.get('tags', []))}\n"
                 f"ID: {entry['id']}\n\n"
@@ -128,6 +150,7 @@ def _register_tools(server: FastMCP) -> None:
         title: str,
         content: str,
         workspace: str,
+        project: str | None = None,
         category: str = "resource",
         tags: list[str] | None = None,
         source: str | None = None,
@@ -140,8 +163,10 @@ def _register_tools(server: FastMCP) -> None:
             title: Short descriptive title.
             content: Full content (markdown). Include context and
                 reasoning, not just the conclusion.
-            workspace: Which project this relates to (e.g. "devbot",
-                "crow", "magpie", "general"). Required.
+            workspace: Which app/product namespace this relates to (e.g.
+                "reach", "alertee", "magpie", "general"). Required.
+            project: Narrower work area within the workspace (e.g. a
+                customer or product slug). Optional.
             category: project (active goal), area (ongoing
                 responsibility), resource (reference). Default: resource.
             tags: Tags for filtering (e.g. ["deploy", "railway"]).
@@ -152,6 +177,10 @@ def _register_tools(server: FastMCP) -> None:
         if not _db:
             return "Error: database not initialized"
 
+        ctx = await _tool_context()
+        if not ctx.has_role("editor"):
+            return "Error: your role does not allow writing knowledge."
+
         embedding = None
         if _embedder:
             try:
@@ -159,6 +188,7 @@ def _register_tools(server: FastMCP) -> None:
             except Exception:
                 logger.exception("Failed to generate embedding")
 
+        scope = f"{workspace}/{project}" if project else workspace
         if dedupe:
             entry_id, was_updated = await _db.upsert_entry(
                 title=title,
@@ -167,11 +197,14 @@ def _register_tools(server: FastMCP) -> None:
                 tags=tags,
                 source=source,
                 embedding=embedding,
+                user_id=ctx.user_id,
+                org_id=ctx.org_id,
                 workspace=workspace,
+                project=project,
             )
             if was_updated:
-                return f"Updated existing entry {entry_id} in [{workspace}]: {title}"
-            return f"Created entry {entry_id} in [{workspace}]: {title}"
+                return f"Updated existing entry {entry_id} in [{scope}]: {title}"
+            return f"Created entry {entry_id} in [{scope}]: {title}"
 
         entry_id = await _db.create_entry(
             title=title,
@@ -180,9 +213,12 @@ def _register_tools(server: FastMCP) -> None:
             tags=tags,
             source=source,
             embedding=embedding,
+            user_id=ctx.user_id,
+            org_id=ctx.org_id,
             workspace=workspace,
+            project=project,
         )
-        return f"Created entry {entry_id} in [{workspace}]: {title}"
+        return f"Created entry {entry_id} in [{scope}]: {title}"
 
     @server.tool()
     async def read(id: str) -> str:
@@ -195,13 +231,15 @@ def _register_tools(server: FastMCP) -> None:
         if not _db:
             return "Error: database not initialized"
 
+        ctx = await _tool_context()
         entry = await _db.get_entry(id)
-        if not entry:
+        if not entry or not ctx.can_access(entry):
             return f"Entry {id} not found."
 
         ws = entry.get("workspace") or "general"
+        scope = f"{ws}/{entry['project']}" if entry.get("project") else ws
         return (
-            f"# [{ws}] {entry['title']}\n"
+            f"# [{scope}] {entry['title']}\n"
             f"Category: {entry['category']} | "
             f"Tags: {', '.join(entry.get('tags', []))}\n"
             f"Source: {entry.get('source', 'unknown')} | "
@@ -213,6 +251,7 @@ def _register_tools(server: FastMCP) -> None:
     @server.tool()
     async def list_entries(
         workspace: str | None = None,
+        project: str | None = None,
         category: str | None = None,
         tags: list[str] | None = None,
         limit: int = 20,
@@ -222,6 +261,7 @@ def _register_tools(server: FastMCP) -> None:
 
         Args:
             workspace: Filter to a workspace. Omit to see all.
+            project: Filter to a project within the workspace.
             category: Filter by type: project, area, resource, archive.
             tags: Filter to entries matching any of these tags.
             limit: Max results (default 20).
@@ -229,10 +269,14 @@ def _register_tools(server: FastMCP) -> None:
         if not _db:
             return "Error: database not initialized"
 
+        ctx = await _tool_context()
         entries = await _db.list_entries(
             category=category,
             tags=tags,
+            user_id=ctx.user_id,
+            org_id=ctx.org_id,
             workspace=workspace,
+            project=project,
             limit=limit,
         )
         if not entries:
@@ -243,8 +287,9 @@ def _register_tools(server: FastMCP) -> None:
             tags_str = ", ".join(entry.get("tags", []))
             short_id = entry["id"][:8]
             ws = entry.get("workspace") or "general"
+            scope = f"{ws}/{entry['project']}" if entry.get("project") else ws
             lines.append(
-                f"- **{entry['title']}** [{ws}/{entry['category']}]"
+                f"- **{entry['title']}** [{scope}/{entry['category']}]"
                 f" ({short_id}…) {tags_str}"
             )
         return "\n".join(lines)
@@ -260,6 +305,14 @@ def _register_tools(server: FastMCP) -> None:
         if not _db:
             return "Error: database not initialized"
 
+        ctx = await _tool_context()
+        if not ctx.has_role("editor"):
+            return "Error: your role does not allow archiving knowledge."
+
+        entry = await _db.get_entry(id)
+        if not entry or not ctx.can_access(entry):
+            return f"Entry {id} not found."
+
         ok = await _db.archive_entry(id)
         if not ok:
             return f"Entry {id} not found."
@@ -268,6 +321,7 @@ def _register_tools(server: FastMCP) -> None:
     @server.tool()
     async def find_duplicates(
         workspace: str | None = None,
+        project: str | None = None,
         threshold: float = 0.12,
         limit: int = 50,
     ) -> str:
@@ -277,6 +331,7 @@ def _register_tools(server: FastMCP) -> None:
 
         Args:
             workspace: Scope to a workspace. Omit to scan all.
+            project: Scope to a project within the workspace.
             threshold: Cosine distance threshold — lower is stricter.
                 Default 0.12.
             limit: Max pairs to consider. Default 50.
@@ -284,8 +339,12 @@ def _register_tools(server: FastMCP) -> None:
         if not _db:
             return "Error: database not initialized"
 
+        ctx = await _tool_context()
         clusters = await _db.find_duplicate_clusters(
             workspace=workspace,
+            project=project,
+            user_id=ctx.user_id,
+            org_id=ctx.org_id,
             threshold=threshold,
             limit=limit,
         )
@@ -325,6 +384,7 @@ def _register_tools(server: FastMCP) -> None:
         category: str = "resource",
         tags: list[str] | None = None,
         workspace: str | None = None,
+        project: str | None = None,
     ) -> str:
         """Merge multiple entries into one. The source entries are archived
         with lineage tracking. You provide the merged title and content —
@@ -337,12 +397,23 @@ def _register_tools(server: FastMCP) -> None:
             category: PARA category. Default: resource.
             tags: Tags for the merged entry.
             workspace: Workspace scope.
+            project: Project scope within the workspace.
         """
         if not _db:
             return "Error: database not initialized"
 
+        ctx = await _tool_context()
+        if not ctx.has_role("editor"):
+            return "Error: your role does not allow merging knowledge."
+
         if len(source_ids) < 2:
             return "Error: need at least 2 source entries to merge."
+
+        # Every source entry must be visible to the caller
+        for source_id in source_ids:
+            entry = await _db.get_entry(source_id)
+            if not entry or not ctx.can_access(entry):
+                return f"Entry {source_id} not found."
 
         embedding = None
         if _embedder:
@@ -358,7 +429,10 @@ def _register_tools(server: FastMCP) -> None:
             category=category,
             tags=tags,
             embedding=embedding,
+            user_id=ctx.user_id,
+            org_id=ctx.org_id,
             workspace=workspace,
+            project=project,
         )
         return (
             f"Merged {len(source_ids)} entries into {new_id}: {title}\n"

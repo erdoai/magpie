@@ -37,7 +37,7 @@ export function EntryCard({
           </Badge>
           {entry.workspace && (
             <Badge variant="secondary" className="text-[10px]">
-              {entry.workspace}
+              {entry.project ? `${entry.workspace}/${entry.project}` : entry.workspace}
             </Badge>
           )}
           {showScore && entry.score != null && (

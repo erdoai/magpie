@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, Entry, Workspace } from '@/lib/api';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { EntryCard } from '@/components/EntryCard';
 import { cn } from '@/lib/utils';
 import { Plus } from 'lucide-react';
@@ -12,6 +13,7 @@ export function BrowsePage() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [category, setCategory] = useState<string>('all');
   const [workspace, setWorkspace] = useState<string>('all');
+  const [project, setProject] = useState<string>('');
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -30,6 +32,7 @@ export function BrowsePage() {
       const params: Record<string, string> = {};
       if (category !== 'all') params.category = category;
       if (workspace !== 'all') params.workspace = workspace;
+      if (project.trim()) params.project = project.trim();
       setEntries(await api.listEntries(params));
     } catch (e) {
       console.error(e);
@@ -37,7 +40,7 @@ export function BrowsePage() {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [category, workspace]);
+  useEffect(() => { load(); }, [category, workspace, project]);
 
   const handleArchive = async (id: string) => {
     await api.archiveEntry(id);
@@ -97,6 +100,12 @@ export function BrowsePage() {
             ))}
           </div>
         )}
+        <Input
+          value={project}
+          onChange={e => setProject(e.target.value)}
+          placeholder="Filter by project"
+          className="h-8 w-44 text-xs"
+        />
       </div>
 
       {loading ? (

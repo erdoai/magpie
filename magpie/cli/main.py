@@ -68,6 +68,7 @@ def import_cmd(
         None, help="Path to import from (default: ~/.claude for claude, current dir for markdown)"
     ),
     workspace: str = typer.Option("general", help="Workspace to import into"),
+    project: str = typer.Option(None, help="Project within the workspace"),
 ):
     """Import knowledge from external sources."""
     import asyncio
@@ -108,7 +109,7 @@ def import_cmd(
                     if md_file.name == "MEMORY.md":
                         continue
                     count += await _import_markdown_file(
-                        db, embedder, md_file, workspace, source="claude-code"
+                        db, embedder, md_file, workspace, project, source="claude-code"
                     )
 
         elif source == "markdown":
@@ -116,7 +117,7 @@ def import_cmd(
             base = Path(path) if path else Path(".")
             for md_file in sorted(base.rglob("*.md")):
                 count += await _import_markdown_file(
-                    db, embedder, md_file, workspace, source="markdown"
+                    db, embedder, md_file, workspace, project, source="markdown"
                 )
 
         else:
@@ -131,7 +132,7 @@ def import_cmd(
     asyncio.run(_run())
 
 
-async def _import_markdown_file(db, embedder, file_path, workspace, source):
+async def _import_markdown_file(db, embedder, file_path, workspace, project, source):
     """Import a single markdown file as an entry. Returns 1 if imported, 0 if skipped."""
     text = file_path.read_text().strip()
     if not text:
@@ -176,6 +177,7 @@ async def _import_markdown_file(db, embedder, file_path, workspace, source):
         source=source,
         embedding=embedding,
         workspace=workspace,
+        project=project,
     )
     console.print(f"  Imported: {title}")
     return 1

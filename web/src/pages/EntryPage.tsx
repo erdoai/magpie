@@ -109,7 +109,11 @@ export function EntryPage() {
           <div className="flex items-center gap-2.5 mb-3">
             <h1 className="text-xl font-semibold">{entry.title}</h1>
             <Badge variant="outline">{entry.category}</Badge>
-            {entry.workspace && <Badge variant="secondary">{entry.workspace}</Badge>}
+            {entry.workspace && (
+              <Badge variant="secondary">
+                {entry.project ? `${entry.workspace}/${entry.project}` : entry.workspace}
+              </Badge>
+            )}
           </div>
           {entry.tags.length > 0 && (
             <div className="flex gap-1 mb-4">

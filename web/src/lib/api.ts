@@ -31,9 +31,9 @@ export interface Entry {
   tags: string[];
   source: string | null;
   user_id: string | null;
-  project_id: string | null;
   org_id: string | null;
   workspace: string | null;
+  project: string | null;
   score?: number;
   created_at: string;
   updated_at: string;
@@ -46,6 +46,9 @@ export interface ApiKey {
   key?: string;
   user_id: string | null;
   org_id: string | null;
+  workspace: string | null;
+  project: string | null;
+  role: string;
   created_at: string;
   last_used_at: string | null;
 }
@@ -115,8 +118,8 @@ export const api = {
   archiveEntry: (id: string) =>
     request<{ ok: boolean }>(`/api/entries/${id}/archive`, { method: 'POST' }),
   search: (query: string, opts?: {
-    category?: string; tags?: string[]; workspace?: string; limit?: number;
-    semantic?: boolean; keyword?: boolean;
+    category?: string; tags?: string[]; workspace?: string; project?: string;
+    limit?: number; semantic?: boolean; keyword?: boolean;
   }) =>
     request<Entry[]>('/api/search', {
       method: 'POST',
@@ -125,8 +128,8 @@ export const api = {
 
   // Keys
   listKeys: () => request<ApiKey[]>('/api/keys'),
-  createKey: (name: string) =>
-    request<ApiKey>('/api/keys', { method: 'POST', body: JSON.stringify({ name }) }),
+  createKey: (name: string, opts?: { workspace?: string; project?: string; role?: string }) =>
+    request<ApiKey>('/api/keys', { method: 'POST', body: JSON.stringify({ name, ...opts }) }),
   deleteKey: (id: string) =>
     request<{ ok: boolean }>(`/api/keys/${id}`, { method: 'DELETE' }),
 

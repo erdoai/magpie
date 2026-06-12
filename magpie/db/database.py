@@ -48,9 +48,9 @@ class Database:
         source: str | None = None,
         embedding: list[float] | None = None,
         user_id: str | None = None,
-        project_id: str | None = None,
         org_id: str | None = None,
         workspace: str | None = None,
+        project: str | None = None,
     ) -> str:
         entry_id = uuid4().hex
         now = datetime.now(UTC)
@@ -58,7 +58,7 @@ class Database:
             await self._pool.execute(
                 """INSERT INTO entries
                    (id, title, content, category, tags, source,
-                    embedding, user_id, project_id, org_id, workspace,
+                    embedding, user_id, org_id, workspace, project,
                     created_at, updated_at)
                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)""",
                 entry_id,
@@ -69,9 +69,9 @@ class Database:
                 source,
                 str(embedding),
                 user_id,
-                project_id,
                 org_id,
                 workspace,
+                project,
                 now,
                 now,
             )
@@ -79,7 +79,7 @@ class Database:
             await self._pool.execute(
                 """INSERT INTO entries
                    (id, title, content, category, tags, source,
-                    user_id, project_id, org_id, workspace,
+                    user_id, org_id, workspace, project,
                     created_at, updated_at)
                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)""",
                 entry_id,
@@ -89,9 +89,9 @@ class Database:
                 tags or [],
                 source,
                 user_id,
-                project_id,
                 org_id,
                 workspace,
+                project,
                 now,
                 now,
             )
@@ -99,8 +99,8 @@ class Database:
 
     async def get_entry(self, entry_id: str) -> dict | None:
         row = await self._pool.fetchrow(
-            "SELECT id, title, content, category, tags, source, user_id, project_id, org_id,"
-            " workspace, created_at, updated_at FROM entries WHERE id = $1",
+            "SELECT id, title, content, category, tags, source, user_id, org_id,"
+            " workspace, project, created_at, updated_at FROM entries WHERE id = $1",
             entry_id,
         )
         return dict(row) if row else None
@@ -150,7 +150,7 @@ class Database:
         user_id: str | None = None,
         org_id: str | None = None,
         workspace: str | None = None,
-        project_id: str | None = None,
+        project: str | None = None,
         offset: int = 0,
         limit: int = 50,
     ) -> list[dict]:
@@ -198,10 +198,10 @@ class Database:
             conditions.append(f"workspace = ${idx}")
             params.append(workspace)
 
-        if project_id:
+        if project:
             idx += 1
-            conditions.append(f"project_id = ${idx}")
-            params.append(project_id)
+            conditions.append(f"project = ${idx}")
+            params.append(project)
 
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
@@ -212,8 +212,8 @@ class Database:
         limit_idx = idx
         params.append(limit)
 
-        cols = ("id, title, content, category, tags, source, user_id, project_id,"
-                " org_id, workspace, created_at, updated_at")
+        cols = ("id, title, content, category, tags, source, user_id,"
+                " org_id, workspace, project, created_at, updated_at")
         sql = (
             f"SELECT {cols} FROM entries {where}"
             f" ORDER BY updated_at DESC OFFSET ${offset_idx} LIMIT ${limit_idx}"
@@ -254,11 +254,32 @@ class Database:
 
     # -- Search (used by fusion) --
 
+    @staticmethod
+    def _add_scope(
+        conditions: list[str],
+        params: list,
+        idx: int,
+        workspace: str | None,
+        project: str | None,
+    ) -> int:
+        """Add workspace/project filters. Returns updated idx."""
+        if workspace:
+            idx += 1
+            conditions.append(f"workspace = ${idx}")
+            params.append(workspace)
+        if project:
+            idx += 1
+            conditions.append(f"project = ${idx}")
+            params.append(project)
+        return idx
+
     async def search_semantic(
         self,
         embedding: list[float],
         user_id: str | None = None,
         org_id: str | None = None,
+        workspace: str | None = None,
+        project: str | None = None,
         category: str | None = None,
         tags: list[str] | None = None,
         limit: int = 20,
@@ -272,6 +293,7 @@ class Database:
         idx = 0
 
         idx = self._add_visibility(conditions, params, idx, user_id, org_id)
+        idx = self._add_scope(conditions, params, idx, workspace, project)
 
         if category:
             idx += 1
@@ -294,7 +316,7 @@ class Database:
         limit_idx = idx
 
         sql = (
-            f"SELECT id, title, content, category, tags, source,"
+            f"SELECT id, title, content, category, tags, source, workspace, project,"
             f" created_at, updated_at,"
             f" embedding <=> ${embed_idx} AS distance"
             f" FROM entries {where}"
@@ -309,6 +331,8 @@ class Database:
         query: str,
         user_id: str | None = None,
         org_id: str | None = None,
+        workspace: str | None = None,
+        project: str | None = None,
         category: str | None = None,
         tags: list[str] | None = None,
         limit: int = 20,
@@ -324,6 +348,7 @@ class Database:
         conditions.append(f"search_vector @@ plainto_tsquery('english', ${query_idx})")
 
         idx = self._add_visibility(conditions, params, idx, user_id, org_id)
+        idx = self._add_scope(conditions, params, idx, workspace, project)
 
         if category:
             idx += 1
@@ -342,7 +367,7 @@ class Database:
         limit_idx = idx
 
         sql = (
-            f"SELECT id, title, content, category, tags, source,"
+            f"SELECT id, title, content, category, tags, source, workspace, project,"
             f" created_at, updated_at,"
             f" ts_rank(search_vector, plainto_tsquery('english', ${query_idx})) AS rank"
             f" FROM entries {where}"
@@ -359,6 +384,7 @@ class Database:
         embedding: list[float],
         threshold: float = 0.15,
         workspace: str | None = None,
+        project: str | None = None,
         user_id: str | None = None,
         org_id: str | None = None,
         exclude_ids: list[str] | None = None,
@@ -373,11 +399,7 @@ class Database:
         idx = 0
 
         idx = self._add_visibility(conditions, params, idx, user_id, org_id)
-
-        if workspace:
-            idx += 1
-            conditions.append(f"workspace = ${idx}")
-            params.append(workspace)
+        idx = self._add_scope(conditions, params, idx, workspace, project)
 
         if exclude_ids:
             idx += 1
@@ -399,7 +421,7 @@ class Database:
         where = f"WHERE {' AND '.join(conditions)}"
 
         sql = (
-            f"SELECT id, title, content, category, tags, source, workspace,"
+            f"SELECT id, title, content, category, tags, source, workspace, project,"
             f" created_at, updated_at,"
             f" embedding <=> ${embed_idx} AS distance"
             f" FROM entries {where}"
@@ -413,6 +435,7 @@ class Database:
     async def find_duplicate_clusters(
         self,
         workspace: str | None = None,
+        project: str | None = None,
         user_id: str | None = None,
         org_id: str | None = None,
         threshold: float = 0.12,
@@ -445,6 +468,12 @@ class Database:
             conditions.append(f"a.workspace = ${idx}")
             conditions.append(f"b.workspace = ${idx}")
             params.append(workspace)
+
+        if project:
+            idx += 1
+            conditions.append(f"a.project = ${idx}")
+            conditions.append(f"b.project = ${idx}")
+            params.append(project)
 
         # Visibility scoping for both sides
         if user_id and org_id:
@@ -561,6 +590,7 @@ class Database:
         user_id: str | None = None,
         org_id: str | None = None,
         workspace: str | None = None,
+        project: str | None = None,
     ) -> str:
         """Atomically merge entries: create new entry + archive sources with lineage."""
         new_id = uuid4().hex
@@ -574,23 +604,23 @@ class Database:
                     await conn.execute(
                         """INSERT INTO entries
                            (id, title, content, category, tags, source,
-                            embedding, user_id, org_id, workspace,
+                            embedding, user_id, org_id, workspace, project,
                             created_at, updated_at)
-                           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)""",
+                           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)""",
                         new_id, title, content, category, tags or [],
                         lineage_source, str(embedding),
-                        user_id, org_id, workspace, now, now,
+                        user_id, org_id, workspace, project, now, now,
                     )
                 else:
                     await conn.execute(
                         """INSERT INTO entries
                            (id, title, content, category, tags, source,
-                            user_id, org_id, workspace,
+                            user_id, org_id, workspace, project,
                             created_at, updated_at)
-                           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)""",
+                           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)""",
                         new_id, title, content, category, tags or [],
                         lineage_source,
-                        user_id, org_id, workspace, now, now,
+                        user_id, org_id, workspace, project, now, now,
                     )
 
                 # Archive sources with lineage
@@ -616,9 +646,9 @@ class Database:
         source: str | None = None,
         embedding: list[float] | None = None,
         user_id: str | None = None,
-        project_id: str | None = None,
         org_id: str | None = None,
         workspace: str | None = None,
+        project: str | None = None,
         dedupe_threshold: float = 0.10,
     ) -> tuple[str, bool]:
         """Create or update an entry. If a similar entry exists within threshold, update it.
@@ -630,6 +660,7 @@ class Database:
                 embedding,
                 threshold=dedupe_threshold,
                 workspace=workspace,
+                project=project,
                 user_id=user_id,
                 org_id=org_id,
                 limit=1,
@@ -655,9 +686,9 @@ class Database:
             source=source,
             embedding=embedding,
             user_id=user_id,
-            project_id=project_id,
             org_id=org_id,
             workspace=workspace,
+            project=project,
         )
         return entry_id, False
 
@@ -670,27 +701,31 @@ class Database:
         key_prefix: str,
         user_id: str | None = None,
         org_id: str | None = None,
+        workspace: str | None = None,
+        project: str | None = None,
+        role: str = "editor",
     ) -> str:
         key_id = uuid4().hex
         await self._pool.execute(
-            "INSERT INTO api_keys (id, name, key_hash, key_prefix, user_id, org_id)"
-            " VALUES ($1, $2, $3, $4, $5, $6)",
-            key_id, name, key_hash, key_prefix, user_id, org_id,
+            "INSERT INTO api_keys"
+            " (id, name, key_hash, key_prefix, user_id, org_id, workspace, project, role)"
+            " VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+            key_id, name, key_hash, key_prefix, user_id, org_id, workspace, project, role,
         )
         return key_id
 
     async def get_api_key(self, key_id: str) -> dict | None:
         row = await self._pool.fetchrow(
-            "SELECT id, name, key_prefix, user_id, org_id, created_at, last_used_at"
-            " FROM api_keys WHERE id = $1",
+            "SELECT id, name, key_prefix, user_id, org_id, workspace, project, role,"
+            " created_at, last_used_at FROM api_keys WHERE id = $1",
             key_id,
         )
         return dict(row) if row else None
 
     async def get_api_key_by_hash(self, key_hash: str) -> dict | None:
         row = await self._pool.fetchrow(
-            "SELECT id, name, key_prefix, user_id, org_id, created_at, last_used_at"
-            " FROM api_keys WHERE key_hash = $1",
+            "SELECT id, name, key_prefix, user_id, org_id, workspace, project, role,"
+            " created_at, last_used_at FROM api_keys WHERE key_hash = $1",
             key_hash,
         )
         return dict(row) if row else None
@@ -703,8 +738,8 @@ class Database:
 
     async def list_api_keys(self) -> list[dict]:
         rows = await self._pool.fetch(
-            "SELECT id, name, key_prefix, user_id, org_id, created_at, last_used_at"
-            " FROM api_keys ORDER BY created_at DESC"
+            "SELECT id, name, key_prefix, user_id, org_id, workspace, project, role,"
+            " created_at, last_used_at FROM api_keys ORDER BY created_at DESC"
         )
         return [dict(r) for r in rows]
 
@@ -714,8 +749,9 @@ class Database:
 
     async def list_api_keys_for_user(self, user_id: str) -> list[dict]:
         rows = await self._pool.fetch(
-            "SELECT id, name, key_prefix, user_id, org_id, created_at, last_used_at"
-            " FROM api_keys WHERE user_id = $1 ORDER BY created_at DESC",
+            "SELECT id, name, key_prefix, user_id, org_id, workspace, project, role,"
+            " created_at, last_used_at FROM api_keys WHERE user_id = $1"
+            " ORDER BY created_at DESC",
             user_id,
         )
         return [dict(r) for r in rows]
@@ -780,6 +816,13 @@ class Database:
             org_id, user_id, role,
         )
 
+    async def get_org_role(self, org_id: str, user_id: str) -> str | None:
+        row = await self._pool.fetchrow(
+            "SELECT role FROM org_members WHERE org_id = $1 AND user_id = $2",
+            org_id, user_id,
+        )
+        return row["role"] if row else None
+
     async def list_org_members(self, org_id: str) -> list[dict]:
         rows = await self._pool.fetch(
             "SELECT u.id, u.email, u.display_name, om.role, om.joined_at"
@@ -805,6 +848,10 @@ class Database:
             ws_id, org_id, name, slug,
         )
         return ws_id
+
+    async def get_workspace(self, ws_id: str) -> dict | None:
+        row = await self._pool.fetchrow("SELECT * FROM workspaces WHERE id = $1", ws_id)
+        return dict(row) if row else None
 
     async def list_workspaces(self, org_id: str) -> list[dict]:
         rows = await self._pool.fetch(

@@ -40,7 +40,9 @@ Environment variables with `MAGPIE_` prefix:
 ## Data model
 
 Entries use PARA categories (Projects / Areas / Resources / Archives).
-Scoped by user_id, project_id, org_id (all optional, NULL = global).
+Scoped by user_id, org_id, workspace, project (all optional, NULL = global).
+Workspace = broad app/product namespace (e.g. "reach"); project = narrower work
+area within it (e.g. "alertee"). Org roles: owner > admin > editor > viewer.
 
 ## Development
 
