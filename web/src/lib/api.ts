@@ -106,6 +106,23 @@ export interface CollectionDocument {
   updated_at: string;
 }
 
+export interface Attachment {
+  id: string;
+  entry_id: string;
+  handle: string;
+  kind: 'image' | 'sql' | 'text' | 'pdf' | 'file';
+  filename: string;
+  media_type: string;
+  byte_size: number;
+  description: string | null;
+  role: string | null;
+  public: boolean;
+  download_url: string;
+  public_url: string | null;
+  content_text: string | null;
+  created_at: string;
+}
+
 export interface User {
   id: string;
   email: string;
@@ -208,6 +225,29 @@ export const api = {
     request<{ ok: boolean }>(`/api/collections/${slug}/documents/${key}`, {
       method: 'DELETE',
     }),
+
+  // Attachments
+  listAttachments: (entryId: string) =>
+    request<Attachment[]>(`/api/entries/${entryId}/attachments`),
+  uploadAttachment: async (entryId: string, file: File, opts?: {
+    role?: string; description?: string; public?: boolean;
+  }): Promise<Attachment> => {
+    const form = new FormData();
+    form.append('file', file);
+    if (opts?.role) form.append('role', opts.role);
+    if (opts?.description) form.append('description', opts.description);
+    if (opts?.public) form.append('public', 'true');
+    const h: HeadersInit = {};
+    const key = localStorage.getItem('magpie_api_key');
+    if (key) h['Authorization'] = `Bearer ${key}`;
+    const res = await fetch(`/api/entries/${entryId}/attachments`, {
+      method: 'POST', body: form, headers: h, credentials: 'include',
+    });
+    if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
+    return res.json();
+  },
+  deleteAttachment: (id: string) =>
+    request<{ ok: boolean }>(`/api/attachments/${id}`, { method: 'DELETE' }),
 
   // Keys
   listKeys: () => request<ApiKey[]>('/api/keys'),

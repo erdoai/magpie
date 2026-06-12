@@ -1,7 +1,10 @@
 """MCP server exposing magpie tools for AI agents."""
 
+import base64
 import json
 import logging
+import mimetypes
+from uuid import uuid4
 
 from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.auth.settings import (
@@ -12,6 +15,13 @@ from mcp.server.auth.settings import (
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
+from magpie.attachments import (
+    attachment_payload,
+    handle_for,
+    infer_kind,
+    is_browser_safe,
+    storage_key_for,
+)
 from magpie.collections import VALUE_TYPES, validate_value
 from magpie.db.database import Database
 from magpie.embeddings.base import EmbeddingProvider
@@ -25,6 +35,8 @@ logger = logging.getLogger(__name__)
 # These get set during app startup
 _db: Database | None = None
 _embedder: EmbeddingProvider | None = None
+_storage = None
+_settings = None
 
 # Module-level server — created by create_mcp_server()
 mcp_server: FastMCP | None = None
@@ -67,10 +79,17 @@ def create_mcp_server(
     return server
 
 
-def init_mcp(db: Database, embedder: EmbeddingProvider | None) -> None:
-    global _db, _embedder
+def init_mcp(
+    db: Database,
+    embedder: EmbeddingProvider | None,
+    storage=None,
+    settings=None,
+) -> None:
+    global _db, _embedder, _storage, _settings
     _db = db
     _embedder = embedder
+    _storage = storage
+    _settings = settings
 
 
 async def _tool_context() -> AuthContext:
@@ -98,6 +117,15 @@ def _format_link(link: dict) -> str:
     if link["target_type"] == "resource":
         return f"- [[{link['link_text']}]] → resource {link['target_ref']}"
     return f"- [[{link['link_text']}]] (unresolved)"
+
+
+def _format_attachment_line(att: dict) -> str:
+    role = f" role={att['role']}" if att.get("role") else ""
+    desc = f" — {att['description']}" if att.get("description") else ""
+    return (
+        f"- {att['filename']} [{att['kind']}]{role}"
+        f" ({att['byte_size']} bytes, handle: {handle_for(att['id'])}){desc}"
+    )
 
 
 def _register_tools(server: FastMCP) -> None:
@@ -281,6 +309,13 @@ def _register_tools(server: FastMCP) -> None:
                     f"- {link['source_title']} (id: {link['source_id']})"
                 )
             result += "\n".join(lines)
+
+        attachments = await _db.list_attachments(id)
+        if attachments:
+            lines = ["\n\n## Attachments"]
+            for att in attachments:
+                lines.append(_format_attachment_line(att))
+            result += "\n".join(lines)
         return result
 
     @server.tool()
@@ -389,6 +424,137 @@ def _register_tools(server: FastMCP) -> None:
         if not ok:
             return f"Entry {id} not found."
         return f"Archived entry {id}."
+
+    @server.tool()
+    async def upload_attachment(
+        entry_id: str,
+        filename: str,
+        content_base64: str,
+        description: str | None = None,
+        role: str | None = None,
+        public: bool = False,
+    ) -> str:
+        """Attach a file to a knowledge entry — logos, screenshots, SQL
+        snippets, briefs, reference docs. Future agents reuse these real
+        assets instead of recreating or hotlinking them.
+
+        Args:
+            entry_id: The entry that owns this attachment.
+            filename: Filename with extension (drives kind/media type).
+                Use role conventions for brand work: logo-primary,
+                favicon-32x32, hero-*, screenshot-*, query-*.
+            content_base64: File bytes, base64-encoded.
+            description: What this is and when to use it.
+            role: Deterministic role tag (e.g. "logo-primary").
+            public: Serve via stable /public/assets URL (browser-safe
+                images only) — for generated pages that need durable links.
+        """
+        if not _db:
+            return "Error: database not initialized"
+        if not _storage:
+            return "Error: attachment storage not configured"
+
+        ctx = await _tool_context()
+        if not ctx.has_role("editor"):
+            return "Error: your role does not allow uploading attachments."
+
+        entry = await _db.get_entry(entry_id)
+        if not entry or not ctx.can_access(entry):
+            return f"Entry {entry_id} not found."
+
+        try:
+            data = base64.b64decode(content_base64, validate=True)
+        except Exception:
+            return "Error: content_base64 is not valid base64."
+        if not data:
+            return "Error: empty file."
+
+        media_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+        kind = infer_kind(filename, media_type)
+        if public and not is_browser_safe(media_type):
+            return "Error: only browser-safe image media can be public."
+
+        att_id = uuid4().hex
+        storage_key = storage_key_for(entry.get("org_id"), entry_id, att_id, filename)
+        await _storage.put(storage_key, data, media_type)
+        await _db.create_attachment(
+            att_id=att_id,
+            entry_id=entry_id,
+            kind=kind,
+            filename=filename,
+            media_type=media_type,
+            storage_key=storage_key,
+            byte_size=len(data),
+            org_id=entry.get("org_id"),
+            description=description,
+            role=role,
+            public=public,
+            created_by_user_id=ctx.user_id,
+        )
+        return (
+            f"Attached {filename} ({kind}, {len(data)} bytes) to entry {entry_id}.\n"
+            f"Handle: {handle_for(att_id)}"
+        )
+
+    @server.tool()
+    async def list_attachments(entry_id: str) -> str:
+        """List attachments on a knowledge entry.
+
+        Args:
+            entry_id: The entry ID.
+        """
+        if not _db:
+            return "Error: database not initialized"
+
+        ctx = await _tool_context()
+        entry = await _db.get_entry(entry_id)
+        if not entry or not ctx.can_access(entry):
+            return f"Entry {entry_id} not found."
+
+        attachments = await _db.list_attachments(entry_id)
+        if not attachments:
+            return "No attachments."
+        return "\n".join(_format_attachment_line(att) for att in attachments)
+
+    @server.tool()
+    async def get_attachment(id: str) -> str:
+        """Read an attachment by ID (or magpie:<id> handle). Small SQL/text
+        attachments return their content inline; binaries return a
+        download URL.
+
+        Args:
+            id: Attachment ID or magpie:<id> handle.
+        """
+        if not _db:
+            return "Error: database not initialized"
+
+        att_id = id.removeprefix("magpie:")
+        ctx = await _tool_context()
+        att = await _db.get_attachment(att_id)
+        if att:
+            entry = await _db.get_entry(att["entry_id"])
+            if not entry or not ctx.can_access(entry):
+                att = None
+        if not att:
+            return f"Attachment {id} not found."
+
+        payload = await attachment_payload(att, _storage, _settings)
+        lines = [
+            f"# {att['filename']} ({att['kind']}, {att['byte_size']} bytes)",
+            f"Handle: {payload['handle']} | Media type: {att['media_type']}",
+            f"Entry: {att['entry_id']}",
+        ]
+        if att.get("role"):
+            lines.append(f"Role: {att['role']}")
+        if att.get("description"):
+            lines.append(f"Description: {att['description']}")
+        if payload.get("public_url"):
+            lines.append(f"Public URL: {payload['public_url']}")
+        if payload.get("content_text") is not None:
+            lines.append(f"\n```\n{payload['content_text']}\n```")
+        else:
+            lines.append(f"Download: {payload['download_url']}")
+        return "\n".join(lines)
 
     @server.tool()
     async def list_collections(

@@ -16,7 +16,17 @@ from magpie.embeddings.openai import OpenAIEmbeddings
 from magpie.mcp.oauth import MagpieOAuthProvider
 from magpie.mcp.server import create_mcp_server, init_mcp
 from magpie.server.auth import AuthMiddleware
-from magpie.server.routes import auth, collections, entries, health, keys, oauth, orgs
+from magpie.server.routes import (
+    attachments,
+    auth,
+    collections,
+    entries,
+    health,
+    keys,
+    oauth,
+    orgs,
+)
+from magpie.storage import create_storage
 
 logger = logging.getLogger(__name__)
 
@@ -53,8 +63,16 @@ async def lifespan(app: FastAPI):
         logger.info("No MAGPIE_OPENAI_API_KEY — keyword search only")
     app.state.embedder = embedder
 
-    # Initialize MCP tools (sets _db/_embedder globals)
-    init_mcp(db, embedder)
+    # Attachment storage
+    storage = create_storage(settings)
+    app.state.storage = storage
+    if storage:
+        logger.info("Attachment storage: %s", settings.storage_provider)
+    else:
+        logger.info("No attachment storage configured — attachments disabled")
+
+    # Initialize MCP tools (sets _db/_embedder/_storage/_settings globals)
+    init_mcp(db, embedder, storage=storage, settings=settings)
 
     # Create MCP server — with OAuth if configured
     oauth_provider = None
@@ -75,6 +93,8 @@ async def lifespan(app: FastAPI):
 
     if embedder:
         await embedder.close()
+    if storage:
+        await storage.close()
     await db.close()
     _mcp_http = None
     logger.info("magpie stopped")
@@ -88,6 +108,7 @@ def _create_inner_app() -> FastAPI:
     app.include_router(auth.router)
     app.include_router(entries.router)
     app.include_router(collections.router)
+    app.include_router(attachments.router)
     app.include_router(keys.router)
     app.include_router(orgs.router)
     app.include_router(oauth.router)

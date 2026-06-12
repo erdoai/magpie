@@ -1145,6 +1145,53 @@ class Database:
         )
         return result == "DELETE 1"
 
+    # -- Attachments --
+
+    async def create_attachment(
+        self,
+        entry_id: str,
+        kind: str,
+        filename: str,
+        media_type: str,
+        storage_key: str,
+        byte_size: int,
+        org_id: str | None = None,
+        description: str | None = None,
+        role: str | None = None,
+        public: bool = False,
+        created_by_user_id: str | None = None,
+        att_id: str | None = None,
+    ) -> str:
+        att_id = att_id or uuid4().hex
+        await self._pool.execute(
+            """INSERT INTO attachments
+               (id, org_id, entry_id, kind, filename, media_type, storage_key,
+                byte_size, description, role, public, created_by_user_id)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)""",
+            att_id, org_id, entry_id, kind, filename, media_type, storage_key,
+            byte_size, description, role, public, created_by_user_id,
+        )
+        return att_id
+
+    async def get_attachment(self, att_id: str) -> dict | None:
+        row = await self._pool.fetchrow(
+            "SELECT * FROM attachments WHERE id = $1", att_id
+        )
+        return dict(row) if row else None
+
+    async def list_attachments(self, entry_id: str) -> list[dict]:
+        rows = await self._pool.fetch(
+            "SELECT * FROM attachments WHERE entry_id = $1 ORDER BY created_at",
+            entry_id,
+        )
+        return [dict(r) for r in rows]
+
+    async def delete_attachment(self, att_id: str) -> bool:
+        result = await self._pool.execute(
+            "DELETE FROM attachments WHERE id = $1", att_id
+        )
+        return result == "DELETE 1"
+
     # -- Email OTP --
 
     async def create_email_token(self, email: str, code: str, ttl_minutes: int = 10) -> str:

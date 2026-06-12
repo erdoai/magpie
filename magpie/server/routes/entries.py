@@ -234,6 +234,15 @@ async def delete_entry(entry_id: str, request: Request):
     if not await _get_accessible_entry(db, entry_id, ctx):
         return _not_found()
 
+    # Delete attachment blobs before the rows cascade away
+    storage = getattr(request.app.state, "storage", None)
+    if storage:
+        for att in await db.list_attachments(entry_id):
+            try:
+                await storage.delete(att["storage_key"])
+            except Exception:
+                logger.exception("Failed to delete blob %s", att["storage_key"])
+
     ok = await db.delete_entry(entry_id)
     if not ok:
         return _not_found()

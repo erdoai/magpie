@@ -32,7 +32,17 @@ Keep this section current as work lands. Update it in the same change as the wor
   - [x] UI collections browser: sidebar list, document table with type badges, JSON/typed editor
   - [x] 10 collection tests (typed validation, roundtrip, cross-org isolation, role checks, scoped-key clamping); suite at 60
   - Note: collection/document wikilink *targets* deferred to Phase 5 (reference resolution), where `{{collection...}}` syntax lands; the links table is already polymorphic.
-- [ ] Phase 4: Attachments
+- [x] Phase 4: Attachments — landed 2026-06-12
+  - [x] Storage abstraction: local filesystem + S3-compatible (AWS/R2/MinIO/Railway) via httpx + SigV4, presigned GET URLs, no boto3 dependency
+  - [x] Migration 010: entry-owned attachments (kind/role/filename/media_type, attachment-level `public` flag). Note: dropped `storage_bucket` column from the original schema — single bucket per deployment, configured in env.
+  - [x] REST: multipart upload, metadata read (inline `content_text` for small SQL/text), download (signed-URL redirect or stream), delete (blob + row), `GET /public/assets/:id` for explicitly-public browser-safe images only
+  - [x] Stable `magpie:<id>` handles; public URLs root-relative (or `ASSET_PUBLIC_BASE_URL`) so generated pages don't embed expiring signed URLs
+  - [x] MCP: `upload_attachment` (base64), `list_attachments`, `get_attachment`; attachments listed in `read`
+  - [x] CLI: `magpie attachments add/list`
+  - [x] UI attachments panel: upload with role, previews, copy handle/public URL, delete
+  - [x] Role/filename conventions documented in README + MCP tool prompts
+  - [x] 11 attachment tests (storage roundtrip, traversal rejection, upload/read/delete, public gating, cross-org isolation); suite at 71
+  - Decision (open question resolved): public serving is **attachment-level opt-in** (`public=true` at upload, images only) — simplest and most explicit.
 - [ ] Phase 5: Reference resolution
 - [ ] Phase 6: CLI
 - [ ] Phase 7: Hosted deployment

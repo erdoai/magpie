@@ -87,11 +87,37 @@ When `API_KEY` is empty and `RESEND_API_KEY` is empty, auth is disabled (local d
 
 ## Orgs + workspaces
 
-- **Org** = your team. Members share knowledge within the org.
-- **Workspace** = a project scope (e.g. "devbot", "crow", "general"). Used in tool calls to organize knowledge.
+- **Org** = your team. Members share knowledge within the org. Roles: owner > admin > editor > viewer.
+- **Workspace** = a broad app/product namespace (e.g. "reach", "alertee", "general").
+- **Project** = a narrower work area within a workspace (e.g. a customer or product slug). Entries, collections, and searches accept both.
 - **Visibility**: you see your entries + your org's entries + global entries.
 
 Create orgs and invite members from the Settings page in the UI.
+
+## Collections
+
+Named JSON document stores for structured context read whole by key: strategy, config, brand tokens, advisories, metrics. Document values are typed (`json`, `string`, `integer`, `float`, `boolean`, `datetime`) — declared on write, validated, and returned with reads so agents deserialize without guessing.
+
+## Links
+
+Markdown entries can reference other knowledge with `[[wikilinks]]`:
+
+- `[[Entry Title]]` — link to another entry (resolved within your visibility)
+- `[[Entry Title|display text]]`
+- `[[https://example.com]]` — external URL
+- `[[alertee:check:42]]` — product resource reference (`app:type:id`)
+
+Links are reparsed on every save. Reads return outgoing links and backlinks; unresolved titles become backlinks automatically once the target entry exists.
+
+## Attachments
+
+Attachments are owned by knowledge entries — logos, screenshots, SQL snippets, briefs, PDFs. Each gets a stable `magpie:<id>` handle; small SQL/text attachments are inlined in reads, binaries get download URLs. Browser-safe images can opt into a stable public URL at `/public/assets/<id>` (never SQL/text/PDF).
+
+Role/filename conventions give agents deterministic asset joins for brand and landing-page work:
+
+`logo-primary`, `logo-mono-white`, `favicon-32x32`, `apple-icon-180x180`, `hero-*`, `product-*`, `customer-logo-*`, `headshot-*`, `screenshot-*`, `query-*`, `source`
+
+Storage backends: local filesystem (default) or any S3-compatible store (AWS S3, Cloudflare R2, MinIO, Railway object storage) — see Config.
 
 ## REST API
 
@@ -123,6 +149,14 @@ Auth: `Authorization: Bearer <key>` header, or session cookie from email login.
 | `RESEND_FROM` | Email sender address | *empty* |
 | `HOST` | Server bind host | `0.0.0.0` |
 | `PORT` | Server port | `8200` |
+| `STORAGE_PROVIDER` | Attachment storage: `local` or `s3` | `local` |
+| `STORAGE_DIR` | Local storage directory | `data/attachments` |
+| `STORAGE_BUCKET` | S3 bucket name | *empty* |
+| `STORAGE_ENDPOINT` | S3-compatible endpoint (R2/MinIO/Railway) | *AWS default* |
+| `STORAGE_ACCESS_KEY_ID` | S3 access key | *empty* |
+| `STORAGE_SECRET_ACCESS_KEY` | S3 secret key | *empty* |
+| `STORAGE_REGION` | S3 region | `us-east-1` |
+| `ASSET_PUBLIC_BASE_URL` | Base URL for public asset links | *empty (root-relative)* |
 
 ## Deploy
 

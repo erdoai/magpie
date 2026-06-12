@@ -1,13 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { api, Entry, EntryLinks, OutgoingLink } from '@/lib/api';
+import { api, Attachment, Entry, EntryLinks, OutgoingLink } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, ExternalLink, Link2, Pencil, Trash2 } from 'lucide-react';
+import { ArrowLeft, Copy, ExternalLink, Link2, Paperclip, Pencil, Trash2, Upload } from 'lucide-react';
 import Markdown from 'react-markdown';
 
 function OutgoingLinkRow({ link }: { link: OutgoingLink }) {
@@ -41,6 +41,10 @@ export function EntryPage() {
   const navigate = useNavigate();
   const [entry, setEntry] = useState<Entry | null>(null);
   const [links, setLinks] = useState<EntryLinks | null>(null);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [uploadRole, setUploadRole] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ title: '', content: '', category: '', tags: '' });
   const [saving, setSaving] = useState(false);
@@ -57,7 +61,29 @@ export function EntryPage() {
       });
     });
     api.getEntryLinks(id).then(setLinks).catch(() => setLinks(null));
+    api.listAttachments(id).then(setAttachments).catch(() => setAttachments([]));
   }, [id]);
+
+  const handleUpload = async (file: File | undefined) => {
+    if (!id || !file) return;
+    setUploading(true);
+    try {
+      await api.uploadAttachment(id, file, { role: uploadRole || undefined });
+      setUploadRole('');
+      setAttachments(await api.listAttachments(id));
+    } catch (e) {
+      console.error(e);
+      alert(String(e));
+    }
+    setUploading(false);
+    if (fileInput.current) fileInput.current.value = '';
+  };
+
+  const handleDeleteAttachment = async (attId: string) => {
+    if (!id || !confirm('Delete this attachment?')) return;
+    await api.deleteAttachment(attId);
+    setAttachments(await api.listAttachments(id));
+  };
 
   const handleSave = async () => {
     if (!id) return;
@@ -155,6 +181,100 @@ export function EntryPage() {
           <Card>
             <CardContent className="pt-5 prose prose-invert prose-sm max-w-none">
               <Markdown>{entry.content}</Markdown>
+            </CardContent>
+          </Card>
+
+          <Card className="mt-4">
+            <CardContent className="pt-5">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                  <Paperclip size={12} /> Attachments
+                </h2>
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={uploadRole}
+                    onChange={e => setUploadRole(e.target.value)}
+                    placeholder="role (e.g. logo-primary)"
+                    className="h-7 w-44 text-xs"
+                  />
+                  <input
+                    ref={fileInput}
+                    type="file"
+                    className="hidden"
+                    onChange={e => handleUpload(e.target.files?.[0])}
+                  />
+                  <Button
+                    variant="outline" size="sm" className="h-7 text-xs"
+                    disabled={uploading}
+                    onClick={() => fileInput.current?.click()}
+                  >
+                    <Upload size={12} className="mr-1.5" />
+                    {uploading ? 'Uploading…' : 'Upload'}
+                  </Button>
+                </div>
+              </div>
+              {attachments.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No attachments.</p>
+              ) : (
+                <ul className="flex flex-col gap-2">
+                  {attachments.map(att => (
+                    <li key={att.id} className="flex items-center gap-3">
+                      {att.kind === 'image' && (
+                        <img
+                          src={att.public_url || att.download_url}
+                          alt={att.filename}
+                          className="h-9 w-9 object-contain rounded border border-border bg-background"
+                        />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <a
+                            href={att.download_url}
+                            target="_blank" rel="noreferrer"
+                            className="text-sm hover:underline truncate"
+                          >
+                            {att.filename}
+                          </a>
+                          <Badge variant="outline" className="text-[10px]">{att.kind}</Badge>
+                          {att.role && (
+                            <Badge variant="secondary" className="text-[10px]">{att.role}</Badge>
+                          )}
+                          {att.public && (
+                            <Badge variant="secondary" className="text-[10px]">public</Badge>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">
+                          {(att.byte_size / 1024).toFixed(1)} KB
+                          {att.description ? ` · ${att.description}` : ''}
+                        </p>
+                      </div>
+                      <Button
+                        variant="ghost" size="sm" className="h-7 text-xs"
+                        title="Copy handle"
+                        onClick={() => navigator.clipboard.writeText(att.handle)}
+                      >
+                        <Copy size={12} className="mr-1" /> handle
+                      </Button>
+                      {att.public_url && (
+                        <Button
+                          variant="ghost" size="sm" className="h-7 text-xs"
+                          title="Copy public URL"
+                          onClick={() => navigator.clipboard.writeText(att.public_url!)}
+                        >
+                          <Copy size={12} className="mr-1" /> URL
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost" size="icon"
+                        className="h-7 w-7 text-destructive hover:text-destructive"
+                        onClick={() => handleDeleteAttachment(att.id)}
+                      >
+                        <Trash2 size={13} />
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </CardContent>
           </Card>
 

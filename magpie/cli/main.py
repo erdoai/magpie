@@ -2,8 +2,10 @@
 
 import asyncio
 import logging
+import mimetypes
 import os
 from pathlib import Path
+from uuid import uuid4
 
 import asyncpg
 import typer
@@ -11,13 +13,17 @@ import uvicorn
 from rich.console import Console
 
 from magpie.__version__ import __version__
+from magpie.attachments import handle_for, infer_kind, storage_key_for
 from magpie.config.settings import Settings
 from magpie.db.database import Database
 from magpie.db.migrate import run_migrations
 from magpie.embeddings.openai import OpenAIEmbeddings
 from magpie.links import sync_entry_links
+from magpie.storage import create_storage
 
 app = typer.Typer(help="magpie — knowledge store with semantic + keyword search")
+attachments_app = typer.Typer(help="Manage entry attachments")
+app.add_typer(attachments_app, name="attachments")
 console = Console()
 
 
@@ -174,6 +180,94 @@ async def _import_markdown_file(db, embedder, file_path, workspace, project, sou
 
     console.print(f"  Imported: {title}")
     return 1
+
+
+@attachments_app.command("add")
+def attachments_add(
+    entry_id: str = typer.Argument(help="Entry to attach to"),
+    file: str = typer.Argument(help="Path to the file"),
+    role: str = typer.Option(None, help="Role tag (e.g. logo-primary, query-revenue)"),
+    description: str = typer.Option(None, help="What this is and when to use it"),
+    public: bool = typer.Option(False, help="Serve via /public/assets (images only)"),
+):
+    """Attach a file to a knowledge entry."""
+    settings = Settings()
+    if not settings.database_url:
+        console.print("[red]DATABASE_URL is not set[/red]")
+        raise typer.Exit(1)
+
+    path = Path(file)
+    if not path.is_file():
+        console.print(f"[red]File not found: {file}[/red]")
+        raise typer.Exit(1)
+
+    async def _run():
+        db = await Database.connect(settings.database_url)
+        storage = create_storage(settings)
+        if not storage:
+            console.print("[red]Attachment storage not configured[/red]")
+            await db.close()
+            raise typer.Exit(1)
+
+        entry = await db.get_entry(entry_id)
+        if not entry:
+            console.print(f"[red]Entry {entry_id} not found[/red]")
+            await db.close()
+            raise typer.Exit(1)
+
+        data = path.read_bytes()
+        media_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+        kind = infer_kind(path.name, media_type)
+
+        att_id = uuid4().hex
+        storage_key = storage_key_for(entry.get("org_id"), entry_id, att_id, path.name)
+        await storage.put(storage_key, data, media_type)
+        await db.create_attachment(
+            att_id=att_id,
+            entry_id=entry_id,
+            kind=kind,
+            filename=path.name,
+            media_type=media_type,
+            storage_key=storage_key,
+            byte_size=len(data),
+            org_id=entry.get("org_id"),
+            description=description,
+            role=role,
+            public=public,
+        )
+        await storage.close()
+        await db.close()
+        console.print(
+            f"[green]Attached {path.name} ({kind}, {len(data)} bytes)[/green]\n"
+            f"Handle: {handle_for(att_id)}"
+        )
+
+    asyncio.run(_run())
+
+
+@attachments_app.command("list")
+def attachments_list(entry_id: str = typer.Argument(help="Entry ID")):
+    """List attachments on a knowledge entry."""
+    settings = Settings()
+    if not settings.database_url:
+        console.print("[red]DATABASE_URL is not set[/red]")
+        raise typer.Exit(1)
+
+    async def _run():
+        db = await Database.connect(settings.database_url)
+        attachments = await db.list_attachments(entry_id)
+        await db.close()
+        if not attachments:
+            console.print("No attachments.")
+            return
+        for att in attachments:
+            role = f" [cyan]{att['role']}[/cyan]" if att.get("role") else ""
+            console.print(
+                f"- {att['filename']} [{att['kind']}]{role}"
+                f" ({att['byte_size']} bytes) {handle_for(att['id'])}"
+            )
+
+    asyncio.run(_run())
 
 
 @app.command()

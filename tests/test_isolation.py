@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 
 from magpie.server.auth import AuthMiddleware
 from magpie.server.context import AuthContext
-from magpie.server.routes import collections, entries, keys, orgs
+from magpie.server.routes import attachments, collections, entries, keys, orgs
 
 
 def _hash(token: str) -> str:
@@ -24,6 +24,8 @@ class FakeSettings:
     api_key = ""
     resend_api_key = "configured"  # auth enforced
     oauth_issuer_url = ""
+    asset_public_base_url = ""
+    attachment_inline_limit = 16384
 
 
 class FakeDatabase:
@@ -38,6 +40,7 @@ class FakeDatabase:
         self.links: dict[str, list[dict]] = {}  # source_id -> outgoing links
         self.collections: dict[str, dict] = {}
         self.documents: dict[tuple[str, str], dict] = {}  # (collection_id, key)
+        self.attachments: dict[str, dict] = {}
 
     # -- keys --
 
@@ -206,6 +209,32 @@ class FakeDatabase:
     async def delete_document(self, collection_id, key):
         return self.documents.pop((collection_id, key), None) is not None
 
+    # -- attachments --
+
+    async def create_attachment(self, entry_id, kind, filename, media_type,
+                                storage_key, byte_size, org_id=None, description=None,
+                                role=None, public=False, created_by_user_id=None,
+                                att_id=None):
+        att_id = att_id or uuid4().hex
+        self.attachments[att_id] = {
+            "id": att_id, "org_id": org_id, "entry_id": entry_id, "kind": kind,
+            "filename": filename, "media_type": media_type,
+            "storage_key": storage_key, "byte_size": byte_size,
+            "description": description, "role": role, "public": public,
+            "metadata_json": {}, "created_by_user_id": created_by_user_id,
+            "created_at": datetime.now(UTC),
+        }
+        return att_id
+
+    async def get_attachment(self, att_id):
+        return self.attachments.get(att_id)
+
+    async def list_attachments(self, entry_id):
+        return [a for a in self.attachments.values() if a["entry_id"] == entry_id]
+
+    async def delete_attachment(self, att_id):
+        return self.attachments.pop(att_id, None) is not None
+
     # -- entries --
 
     def add_entry(self, **fields):
@@ -310,16 +339,18 @@ class FakeDatabase:
         return result
 
 
-def make_client(db: FakeDatabase) -> TestClient:
+def make_client(db: FakeDatabase, storage=None) -> TestClient:
     app = FastAPI()
     app.include_router(entries.router)
     app.include_router(collections.router)
+    app.include_router(attachments.router)
     app.include_router(keys.router)
     app.include_router(orgs.router)
     app.add_middleware(AuthMiddleware)
     app.state.settings = FakeSettings()
     app.state.db = db
     app.state.embedder = None
+    app.state.storage = storage
     return TestClient(app)
 
 
