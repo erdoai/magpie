@@ -23,7 +23,15 @@ Keep this section current as work lands. Update it in the same change as the wor
   - [x] `GET /api/entries/:id/links` (outgoing + visibility-filtered backlinks), MCP `list_links` tool, link/backlink sections in MCP `read`
   - [x] UI links/backlinks panel on the entry page
   - [x] 11 parser + link-behavior tests, incl. cross-org resolution/backlink leak checks
-- [ ] Phase 3: Collections
+- [x] Phase 3: Collections — landed 2026-06-12
+  - [x] Migration 009: collections (org/workspace/project/slug unique via coalesced index) + documents (collection+key unique, JSONB value, `value_type`)
+  - [x] Typed values (`magpie/collections.py`): json/string/integer/float/boolean/datetime, validated on write, returned with reads; bools rejected as ints, datetimes must be ISO 8601
+  - [x] JSONB codec on the asyncpg pool (values are Python objects, not strings)
+  - [x] REST CRUD: GET/POST/DELETE `/api/collections`, GET/PUT/DELETE `/api/collections/:slug/documents[/:key]` with editor role checks, org visibility, key-scope clamping
+  - [x] MCP tools: `list_collections`, `get_document`, `set_document` (with `create_collection` flag + missing-key hints), `delete_document`
+  - [x] UI collections browser: sidebar list, document table with type badges, JSON/typed editor
+  - [x] 10 collection tests (typed validation, roundtrip, cross-org isolation, role checks, scoped-key clamping); suite at 60
+  - Note: collection/document wikilink *targets* deferred to Phase 5 (reference resolution), where `{{collection...}}` syntax lands; the links table is already polymorphic.
 - [ ] Phase 4: Attachments
 - [ ] Phase 5: Reference resolution
 - [ ] Phase 6: CLI

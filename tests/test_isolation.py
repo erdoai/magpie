@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 
 from magpie.server.auth import AuthMiddleware
 from magpie.server.context import AuthContext
-from magpie.server.routes import entries, keys, orgs
+from magpie.server.routes import collections, entries, keys, orgs
 
 
 def _hash(token: str) -> str:
@@ -36,6 +36,8 @@ class FakeDatabase:
         self.invited: list[tuple[str, str, str]] = []
         self.search_calls: list[dict] = []
         self.links: dict[str, list[dict]] = {}  # source_id -> outgoing links
+        self.collections: dict[str, dict] = {}
+        self.documents: dict[tuple[str, str], dict] = {}  # (collection_id, key)
 
     # -- keys --
 
@@ -127,6 +129,82 @@ class FakeDatabase:
 
     async def delete_workspace(self, ws_id):
         return self.workspaces.pop(ws_id, None) is not None
+
+    # -- collections / documents --
+
+    async def create_collection(self, slug, title, description=None, visibility="org",
+                                org_id=None, workspace=None, project=None,
+                                created_by_user_id=None):
+        col_id = uuid4().hex
+        now = datetime.now(UTC)
+        self.collections[col_id] = {
+            "id": col_id, "org_id": org_id, "workspace": workspace,
+            "project": project, "slug": slug, "title": title,
+            "description": description, "visibility": visibility,
+            "created_by_user_id": created_by_user_id,
+            "created_at": now, "updated_at": now,
+        }
+        return col_id
+
+    async def get_collection(self, col_id):
+        return self.collections.get(col_id)
+
+    async def find_collection(self, slug, org_id=None, workspace=None, project=None):
+        matches = [
+            c for c in self.collections.values()
+            if c["slug"] == slug
+            and (not org_id or c["org_id"] in (org_id, None))
+            and (not workspace or c["workspace"] in (workspace, None))
+            and (not project or c["project"] in (project, None))
+        ]
+        matches.sort(key=lambda c: (c["org_id"] is None, c["workspace"] is None,
+                                    c["project"] is None))
+        return matches[0] if matches else None
+
+    async def list_collections(self, org_id=None, workspace=None, project=None):
+        result = []
+        for c in self.collections.values():
+            if org_id and c["org_id"] not in (org_id, None):
+                continue
+            if workspace and c["workspace"] != workspace:
+                continue
+            if project and c["project"] != project:
+                continue
+            count = sum(1 for (cid, _k) in self.documents if cid == c["id"])
+            result.append({**c, "document_count": count})
+        return result
+
+    async def delete_collection(self, col_id):
+        if col_id not in self.collections:
+            return False
+        del self.collections[col_id]
+        for key in [k for k in self.documents if k[0] == col_id]:
+            del self.documents[key]
+        return True
+
+    async def set_document(self, collection_id, key, value, value_type="json",
+                           summary=None, org_id=None, created_by_user_id=None):
+        now = datetime.now(UTC)
+        existing = self.documents.get((collection_id, key))
+        doc_id = existing["id"] if existing else uuid4().hex
+        self.documents[(collection_id, key)] = {
+            "id": doc_id, "org_id": org_id, "collection_id": collection_id,
+            "key": key, "value": value, "value_type": value_type,
+            "summary": summary or (existing or {}).get("summary"),
+            "metadata_json": {}, "created_by_user_id": created_by_user_id,
+            "created_at": (existing or {}).get("created_at", now), "updated_at": now,
+        }
+        return doc_id
+
+    async def get_document(self, collection_id, key):
+        return self.documents.get((collection_id, key))
+
+    async def list_documents(self, collection_id):
+        return [d for (cid, _k), d in sorted(self.documents.items())
+                if cid == collection_id]
+
+    async def delete_document(self, collection_id, key):
+        return self.documents.pop((collection_id, key), None) is not None
 
     # -- entries --
 
@@ -235,6 +313,7 @@ class FakeDatabase:
 def make_client(db: FakeDatabase) -> TestClient:
     app = FastAPI()
     app.include_router(entries.router)
+    app.include_router(collections.router)
     app.include_router(keys.router)
     app.include_router(orgs.router)
     app.add_middleware(AuthMiddleware)

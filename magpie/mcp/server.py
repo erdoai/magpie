@@ -1,5 +1,6 @@
 """MCP server exposing magpie tools for AI agents."""
 
+import json
 import logging
 
 from mcp.server.auth.middleware.auth_context import get_access_token
@@ -11,6 +12,7 @@ from mcp.server.auth.settings import (
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
+from magpie.collections import VALUE_TYPES, validate_value
 from magpie.db.database import Database
 from magpie.embeddings.base import EmbeddingProvider
 from magpie.links import normalize_target, sync_entry_links
@@ -387,6 +389,191 @@ def _register_tools(server: FastMCP) -> None:
         if not ok:
             return f"Entry {id} not found."
         return f"Archived entry {id}."
+
+    @server.tool()
+    async def list_collections(
+        workspace: str | None = None,
+        project: str | None = None,
+    ) -> str:
+        """List collections — named JSON document stores for structured
+        context (strategy, config, brand tokens, advisories, metrics).
+
+        Args:
+            workspace: Filter to a workspace. Omit to see all.
+            project: Filter to a project within the workspace.
+        """
+        if not _db:
+            return "Error: database not initialized"
+
+        ctx = await _tool_context()
+        collections = await _db.list_collections(
+            org_id=ctx.org_id, workspace=workspace, project=project
+        )
+        collections = [
+            c for c in collections
+            if ctx.can_access({"user_id": None, "org_id": c.get("org_id")})
+        ]
+        if not collections:
+            return "No collections found."
+
+        lines = []
+        for col in collections:
+            ws = col.get("workspace") or "global"
+            scope = f"{ws}/{col['project']}" if col.get("project") else ws
+            desc = f" — {col['description']}" if col.get("description") else ""
+            lines.append(
+                f"- **{col['slug']}** [{scope}]"
+                f" ({col['document_count']} documents){desc}"
+            )
+        return "\n".join(lines)
+
+    @server.tool()
+    async def get_document(
+        collection: str,
+        key: str,
+        workspace: str | None = None,
+        project: str | None = None,
+    ) -> str:
+        """Read a document from a collection by key. Returns the value
+        plus its declared value_type so you can deserialize correctly.
+
+        Args:
+            collection: Collection slug (e.g. "reach.strategy").
+            key: Document key within the collection.
+            workspace: Workspace scope for slug lookup.
+            project: Project scope for slug lookup.
+        """
+        if not _db:
+            return "Error: database not initialized"
+
+        ctx = await _tool_context()
+        col = await _db.find_collection(
+            collection, org_id=ctx.org_id, workspace=workspace, project=project
+        )
+        if not col or not ctx.can_access({"user_id": None, "org_id": col.get("org_id")}):
+            return f"Collection {collection} not found."
+
+        doc = await _db.get_document(col["id"], key)
+        if not doc:
+            keys = [d["key"] for d in await _db.list_documents(col["id"])]
+            hint = f" Available keys: {', '.join(keys)}" if keys else ""
+            return f"Document {key} not found in {collection}.{hint}"
+
+        summary = f"Summary: {doc['summary']}\n" if doc.get("summary") else ""
+        return (
+            f"# {collection}/{key}\n"
+            f"Type: {doc['value_type']} | Updated: {doc['updated_at']}\n"
+            f"{summary}\n"
+            f"{json.dumps(doc['value'], indent=2, default=str)}"
+        )
+
+    @server.tool()
+    async def set_document(
+        collection: str,
+        key: str,
+        value: str,
+        value_type: str = "json",
+        summary: str | None = None,
+        workspace: str | None = None,
+        project: str | None = None,
+        create_collection: bool = False,
+    ) -> str:
+        """Write a document to a collection. Creates or overwrites by key.
+
+        Args:
+            collection: Collection slug (e.g. "reach.strategy").
+            key: Document key within the collection.
+            value: The value, JSON-encoded (e.g. '{"a": 1}', '"text"',
+                '42', 'true', '"2026-06-12T10:00:00Z"').
+            value_type: json (default), string, integer, float, boolean,
+                or datetime (ISO 8601 string). Validated on write.
+            summary: Optional human/agent-readable summary of the value.
+            workspace: Workspace scope.
+            project: Project scope.
+            create_collection: Create the collection if it doesn't exist.
+        """
+        if not _db:
+            return "Error: database not initialized"
+
+        ctx = await _tool_context()
+        if not ctx.has_role("editor"):
+            return "Error: your role does not allow writing documents."
+
+        try:
+            parsed_value = json.loads(value)
+        except json.JSONDecodeError as e:
+            return f"Error: value is not valid JSON: {e}"
+
+        if value_type not in VALUE_TYPES:
+            return f"Error: unknown value_type. One of: {', '.join(VALUE_TYPES)}"
+        error = validate_value(parsed_value, value_type)
+        if error:
+            return f"Error: {error}"
+
+        col = await _db.find_collection(
+            collection, org_id=ctx.org_id, workspace=workspace, project=project
+        )
+        if col and not ctx.can_access({"user_id": None, "org_id": col.get("org_id")}):
+            col = None
+        if not col:
+            if not create_collection:
+                return (
+                    f"Collection {collection} not found."
+                    f" Pass create_collection=true to create it."
+                )
+            col_id = await _db.create_collection(
+                slug=collection,
+                title=collection,
+                org_id=ctx.org_id,
+                workspace=workspace,
+                project=project,
+                created_by_user_id=ctx.user_id,
+            )
+            col = await _db.get_collection(col_id)
+
+        await _db.set_document(
+            collection_id=col["id"],
+            key=key,
+            value=parsed_value,
+            value_type=value_type,
+            summary=summary,
+            org_id=col.get("org_id"),
+            created_by_user_id=ctx.user_id,
+        )
+        return f"Set {collection}/{key} ({value_type})."
+
+    @server.tool()
+    async def delete_document(
+        collection: str,
+        key: str,
+        workspace: str | None = None,
+        project: str | None = None,
+    ) -> str:
+        """Delete a document from a collection.
+
+        Args:
+            collection: Collection slug.
+            key: Document key to delete.
+            workspace: Workspace scope.
+            project: Project scope.
+        """
+        if not _db:
+            return "Error: database not initialized"
+
+        ctx = await _tool_context()
+        if not ctx.has_role("editor"):
+            return "Error: your role does not allow deleting documents."
+
+        col = await _db.find_collection(
+            collection, org_id=ctx.org_id, workspace=workspace, project=project
+        )
+        if not col or not ctx.can_access({"user_id": None, "org_id": col.get("org_id")}):
+            return f"Collection {collection} not found."
+
+        ok = await _db.delete_document(col["id"], key)
+        if not ok:
+            return f"Document {key} not found in {collection}."
+        return f"Deleted {collection}/{key}."
 
     @server.tool()
     async def find_duplicates(

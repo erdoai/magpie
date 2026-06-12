@@ -1,3 +1,4 @@
+import json
 import logging
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
@@ -9,6 +10,13 @@ from magpie.db.migrate import run_migrations
 logger = logging.getLogger(__name__)
 
 
+async def _init_connection(conn: asyncpg.Connection) -> None:
+    """Encode/decode JSONB as Python values rather than strings."""
+    await conn.set_type_codec(
+        "jsonb", encoder=json.dumps, decoder=json.loads, schema="pg_catalog"
+    )
+
+
 class Database:
     def __init__(self, pool: asyncpg.Pool, has_vectors: bool = False):
         self._pool = pool
@@ -16,7 +24,7 @@ class Database:
 
     @classmethod
     async def connect(cls, database_url: str) -> "Database":
-        pool = await asyncpg.create_pool(database_url)
+        pool = await asyncpg.create_pool(database_url, init=_init_connection)
         db = cls(pool)
         await run_migrations(pool)
 
@@ -979,6 +987,162 @@ class Database:
 
     async def delete_workspace(self, ws_id: str) -> bool:
         result = await self._pool.execute("DELETE FROM workspaces WHERE id = $1", ws_id)
+        return result == "DELETE 1"
+
+    # -- Collections --
+
+    async def create_collection(
+        self,
+        slug: str,
+        title: str,
+        description: str | None = None,
+        visibility: str = "org",
+        org_id: str | None = None,
+        workspace: str | None = None,
+        project: str | None = None,
+        created_by_user_id: str | None = None,
+    ) -> str:
+        col_id = uuid4().hex
+        now = datetime.now(UTC)
+        await self._pool.execute(
+            """INSERT INTO collections
+               (id, org_id, workspace, project, slug, title, description,
+                visibility, created_by_user_id, created_at, updated_at)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)""",
+            col_id, org_id, workspace, project, slug, title, description,
+            visibility, created_by_user_id, now,
+        )
+        return col_id
+
+    async def get_collection(self, col_id: str) -> dict | None:
+        row = await self._pool.fetchrow(
+            "SELECT * FROM collections WHERE id = $1", col_id
+        )
+        return dict(row) if row else None
+
+    async def find_collection(
+        self,
+        slug: str,
+        org_id: str | None = None,
+        workspace: str | None = None,
+        project: str | None = None,
+    ) -> dict | None:
+        """Find a collection by slug within org visibility.
+
+        workspace/project narrow the match when provided; an exact scope
+        match wins over a broader (NULL-scoped) one.
+        """
+        conditions = ["slug = $1"]
+        params: list = [slug]
+        idx = 1
+
+        if org_id:
+            idx += 1
+            conditions.append(f"(org_id = ${idx} OR org_id IS NULL)")
+            params.append(org_id)
+
+        if workspace:
+            idx += 1
+            conditions.append(f"(workspace = ${idx} OR workspace IS NULL)")
+            params.append(workspace)
+
+        if project:
+            idx += 1
+            conditions.append(f"(project = ${idx} OR project IS NULL)")
+            params.append(project)
+
+        sql = (
+            f"SELECT * FROM collections WHERE {' AND '.join(conditions)}"
+            f" ORDER BY org_id NULLS LAST, workspace NULLS LAST, project NULLS LAST"
+            f" LIMIT 1"
+        )
+        row = await self._pool.fetchrow(sql, *params)
+        return dict(row) if row else None
+
+    async def list_collections(
+        self,
+        org_id: str | None = None,
+        workspace: str | None = None,
+        project: str | None = None,
+    ) -> list[dict]:
+        conditions = []
+        params: list = []
+        idx = 0
+
+        if org_id:
+            idx += 1
+            conditions.append(f"(org_id = ${idx} OR org_id IS NULL)")
+            params.append(org_id)
+
+        idx = self._add_scope(conditions, params, idx, workspace, project)
+
+        where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        rows = await self._pool.fetch(
+            f"SELECT c.*,"
+            f" (SELECT COUNT(*) FROM documents d WHERE d.collection_id = c.id)"
+            f" AS document_count"
+            f" FROM collections c {where} ORDER BY c.slug"
+        , *params)
+        return [dict(r) for r in rows]
+
+    async def delete_collection(self, col_id: str) -> bool:
+        result = await self._pool.execute(
+            "DELETE FROM collections WHERE id = $1", col_id
+        )
+        return result == "DELETE 1"
+
+    # -- Documents --
+
+    async def set_document(
+        self,
+        collection_id: str,
+        key: str,
+        value,
+        value_type: str = "json",
+        summary: str | None = None,
+        org_id: str | None = None,
+        created_by_user_id: str | None = None,
+    ) -> str:
+        doc_id = uuid4().hex
+        now = datetime.now(UTC)
+        row = await self._pool.fetchrow(
+            """INSERT INTO documents
+               (id, org_id, collection_id, key, value, value_type, summary,
+                created_by_user_id, created_at, updated_at)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)
+               ON CONFLICT (collection_id, key) DO UPDATE SET
+                 value = EXCLUDED.value,
+                 value_type = EXCLUDED.value_type,
+                 summary = COALESCE(EXCLUDED.summary, documents.summary),
+                 updated_at = EXCLUDED.updated_at
+               RETURNING id""",
+            doc_id, org_id, collection_id, key, value, value_type, summary,
+            created_by_user_id, now,
+        )
+        await self._pool.execute(
+            "UPDATE collections SET updated_at = $1 WHERE id = $2", now, collection_id
+        )
+        return row["id"]
+
+    async def get_document(self, collection_id: str, key: str) -> dict | None:
+        row = await self._pool.fetchrow(
+            "SELECT * FROM documents WHERE collection_id = $1 AND key = $2",
+            collection_id, key,
+        )
+        return dict(row) if row else None
+
+    async def list_documents(self, collection_id: str) -> list[dict]:
+        rows = await self._pool.fetch(
+            "SELECT * FROM documents WHERE collection_id = $1 ORDER BY key",
+            collection_id,
+        )
+        return [dict(r) for r in rows]
+
+    async def delete_document(self, collection_id: str, key: str) -> bool:
+        result = await self._pool.execute(
+            "DELETE FROM documents WHERE collection_id = $1 AND key = $2",
+            collection_id, key,
+        )
         return result == "DELETE 1"
 
     # -- Email OTP --

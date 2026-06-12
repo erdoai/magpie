@@ -1,5 +1,5 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
-import { Search, Library, Plus, Settings, LogOut, LayoutDashboard } from 'lucide-react';
+import { Search, Library, Plus, Settings, LogOut, LayoutDashboard, FolderKanban } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -7,6 +7,7 @@ import { Separator } from '@/components/ui/separator';
 const NAV = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard },
   { path: '/browse', label: 'Browse', icon: Library },
+  { path: '/collections', label: 'Collections', icon: FolderKanban },
   { path: '/search', label: 'Search', icon: Search },
   { path: '/new', label: 'New', icon: Plus },
   { path: '/settings', label: 'Settings', icon: Settings },

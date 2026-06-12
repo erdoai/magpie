@@ -16,7 +16,7 @@ from magpie.embeddings.openai import OpenAIEmbeddings
 from magpie.mcp.oauth import MagpieOAuthProvider
 from magpie.mcp.server import create_mcp_server, init_mcp
 from magpie.server.auth import AuthMiddleware
-from magpie.server.routes import auth, entries, health, keys, oauth, orgs
+from magpie.server.routes import auth, collections, entries, health, keys, oauth, orgs
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +87,7 @@ def _create_inner_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(auth.router)
     app.include_router(entries.router)
+    app.include_router(collections.router)
     app.include_router(keys.router)
     app.include_router(orgs.router)
     app.include_router(oauth.router)

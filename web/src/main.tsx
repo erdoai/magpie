@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { App } from '@/App';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { BrowsePage } from '@/pages/BrowsePage';
+import { CollectionsPage } from '@/pages/CollectionsPage';
 import { SearchPage } from '@/pages/SearchPage';
 import { EntryPage } from '@/pages/EntryPage';
 import { NewEntryPage } from '@/pages/NewEntryPage';
@@ -54,6 +55,7 @@ function Root() {
         <Route element={<App />}>
           <Route index element={<DashboardPage />} />
           <Route path="browse" element={<BrowsePage />} />
+          <Route path="collections" element={<CollectionsPage />} />
           <Route path="search" element={<SearchPage />} />
           <Route path="entries/:id" element={<EntryPage />} />
           <Route path="new" element={<NewEntryPage />} />

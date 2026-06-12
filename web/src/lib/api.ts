@@ -79,6 +79,33 @@ export interface EntryLinks {
   backlinks: Backlink[];
 }
 
+export interface Collection {
+  id: string;
+  org_id: string | null;
+  workspace: string | null;
+  project: string | null;
+  slug: string;
+  title: string;
+  description: string | null;
+  visibility: string;
+  document_count?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ValueType = 'json' | 'string' | 'integer' | 'float' | 'boolean' | 'datetime';
+
+export interface CollectionDocument {
+  id: string;
+  collection_id: string;
+  key: string;
+  value: unknown;
+  value_type: ValueType;
+  summary: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface User {
   id: string;
   email: string;
@@ -151,6 +178,35 @@ export const api = {
     request<Entry[]>('/api/search', {
       method: 'POST',
       body: JSON.stringify({ query, ...opts }),
+    }),
+
+  // Collections
+  listCollections: (params?: Record<string, string>) => {
+    const qs = params ? '?' + new URLSearchParams(params).toString() : '';
+    return request<Collection[]>(`/api/collections${qs}`);
+  },
+  createCollection: (data: {
+    slug: string; title: string; description?: string;
+    workspace?: string; project?: string;
+  }) =>
+    request<Collection>('/api/collections', {
+      method: 'POST', body: JSON.stringify(data),
+    }),
+  deleteCollection: (id: string) =>
+    request<{ ok: boolean }>(`/api/collections/${id}`, { method: 'DELETE' }),
+  listDocuments: (slug: string) =>
+    request<{ collection: Collection; documents: CollectionDocument[] }>(
+      `/api/collections/${slug}/documents`
+    ),
+  setDocument: (slug: string, key: string, data: {
+    value: unknown; value_type?: ValueType; summary?: string;
+  }) =>
+    request<CollectionDocument>(`/api/collections/${slug}/documents/${key}`, {
+      method: 'PUT', body: JSON.stringify(data),
+    }),
+  deleteDocument: (slug: string, key: string) =>
+    request<{ ok: boolean }>(`/api/collections/${slug}/documents/${key}`, {
+      method: 'DELETE',
     }),
 
   // Keys
