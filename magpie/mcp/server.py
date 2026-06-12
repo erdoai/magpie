@@ -27,6 +27,7 @@ from magpie.db.database import Database
 from magpie.embeddings.base import EmbeddingProvider
 from magpie.links import normalize_target, sync_entry_links
 from magpie.mcp.oauth import MagpieOAuthProvider
+from magpie.resolve import resolve_entry
 from magpie.search.fusion import search as fusion_search
 from magpie.server.context import AuthContext
 
@@ -265,12 +266,15 @@ def _register_tools(server: FastMCP) -> None:
         return f"Created entry {entry_id} in [{scope}]: {title}"
 
     @server.tool()
-    async def read(id: str) -> str:
+    async def read(id: str, resolved: bool = False) -> str:
         """Read a knowledge entry by ID. Use after search/list to
         get full content.
 
         Args:
             id: The entry ID.
+            resolved: Render {{collection.paths}}, {{attachment:...}},
+                and [[wikilinks]] to their current values/links instead
+                of returning the raw Markdown.
         """
         if not _db:
             return "Error: database not initialized"
@@ -279,6 +283,11 @@ def _register_tools(server: FastMCP) -> None:
         entry = await _db.get_entry(id)
         if not entry or not ctx.can_access(entry):
             return f"Entry {id} not found."
+
+        content = entry["content"]
+        if resolved:
+            resolution = await resolve_entry(_db, entry, ctx, _settings)
+            content = resolution["markdown"]
 
         ws = entry.get("workspace") or "general"
         scope = f"{ws}/{entry['project']}" if entry.get("project") else ws
@@ -289,7 +298,7 @@ def _register_tools(server: FastMCP) -> None:
             f"Source: {entry.get('source', 'unknown')} | "
             f"Updated: {entry['updated_at']}\n"
             f"ID: {entry['id']}\n\n"
-            f"{entry['content']}"
+            f"{content}"
         )
 
         outgoing = await _db.get_outgoing_links(id)
@@ -363,6 +372,37 @@ def _register_tools(server: FastMCP) -> None:
                 f" ({short_id}…) {tags_str}"
             )
         return "\n".join(lines)
+
+    @server.tool()
+    async def resolve_knowledge(id: str) -> str:
+        """Resolve an entry's references and return rendered Markdown plus
+        a dependency report. References: {{collection.key.path}} values,
+        {{collection:slug/key#path}}, {{attachment:role}}, [[wikilinks]].
+        Unresolved references appear as ⟦unresolved: ...⟧ with a reason.
+
+        Args:
+            id: The entry ID.
+        """
+        if not _db:
+            return "Error: database not initialized"
+
+        ctx = await _tool_context()
+        entry = await _db.get_entry(id)
+        if not entry or not ctx.can_access(entry):
+            return f"Entry {id} not found."
+
+        resolution = await resolve_entry(_db, entry, ctx, _settings)
+        parts = [resolution["markdown"]]
+        if resolution["dependencies"]:
+            lines = ["## Dependencies"]
+            for dep in resolution["dependencies"]:
+                detail = f" — {dep['detail']}" if dep.get("detail") else ""
+                target = f" (id: {dep['target_id']})" if dep.get("target_id") else ""
+                lines.append(
+                    f"- {dep['ref']} [{dep['kind']}] {dep['status']}{target}{detail}"
+                )
+            parts.append("\n".join(lines))
+        return "\n\n---\n\n".join(parts)
 
     @server.tool()
     async def list_links(id: str) -> str:

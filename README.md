@@ -109,6 +109,14 @@ Markdown entries can reference other knowledge with `[[wikilinks]]`:
 
 Links are reparsed on every save. Reads return outgoing links and backlinks; unresolved titles become backlinks automatically once the target entry exists.
 
+Entries can also embed **value references** that resolve at read time (`POST /api/entries/:id/resolve`, or `read(resolved=true)` over MCP) without mutating the stored Markdown:
+
+- `{{reach.strategy.alertee.positioning.wedge}}` — collection value by dotted path
+- `{{collection:reach.strategy/alertee#positioning.wedge}}` — explicit long form
+- `{{attachment:logo-primary}}` — attachment on the current entry by role/filename
+
+Unresolved or unauthorized references render as visible placeholders and are reported in a dependency list so agents know exactly what's missing.
+
 ## Attachments
 
 Attachments are owned by knowledge entries — logos, screenshots, SQL snippets, briefs, PDFs. Each gets a stable `magpie:<id>` handle; small SQL/text attachments are inlined in reads, binaries get download URLs. Browser-safe images can opt into a stable public URL at `/public/assets/<id>` (never SQL/text/PDF).

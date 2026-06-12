@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from magpie.links import normalize_target, sync_entry_links
+from magpie.resolve import resolve_entry
 from magpie.search.fusion import search
 from magpie.server.context import AuthContext, auth_context
 
@@ -187,6 +188,20 @@ async def get_entry_links(entry_id: str, request: Request):
         org_id=ctx.org_id,
     )
     return {"outgoing": outgoing, "backlinks": backlinks}
+
+
+@router.post("/entries/{entry_id}/resolve")
+async def resolve_entry_refs(entry_id: str, request: Request):
+    """Render the entry's Markdown with [[wikilinks]], {{collection.paths}},
+    and {{attachment:...}} references resolved. Returns the rendered
+    markdown plus a dependency list with per-reference status."""
+    db = request.app.state.db
+    settings = request.app.state.settings
+    ctx = auth_context(request)
+    entry = await _get_accessible_entry(db, entry_id, ctx)
+    if not entry:
+        return _not_found()
+    return await resolve_entry(db, entry, ctx, settings)
 
 
 @router.put("/entries/{entry_id}", response_model=EntryResponse)

@@ -43,7 +43,12 @@ Keep this section current as work lands. Update it in the same change as the wor
   - [x] Role/filename conventions documented in README + MCP tool prompts
   - [x] 11 attachment tests (storage roundtrip, traversal rejection, upload/read/delete, public gating, cross-org isolation); suite at 71
   - Decision (open question resolved): public serving is **attachment-level opt-in** (`public=true` at upload, images only) — simplest and most explicit.
-- [ ] Phase 5: Reference resolution
+- [x] Phase 5: Reference resolution — landed 2026-06-12
+  - [x] Resolver (`magpie/resolve.py`): `{{shorthand.collection.paths}}` (longest slug prefix wins), `{{collection:slug/key#json.path}}`, `{{attachment:role-or-filename}}`, `[[wikilinks]]` → Markdown links. Read-time only; stored Markdown never mutated; code blocks protected.
+  - [x] Permission checks per target; unresolved/unauthorized render as `⟦unresolved: ref⟧` placeholders + status in the dependency list (resolved/not_found/unauthorized/invalid with detail)
+  - [x] `POST /api/entries/:id/resolve` → `{markdown, dependencies}`
+  - [x] MCP `resolve_knowledge` tool + `read(resolved=true)`
+  - [x] 9 resolver tests (shorthand/explicit/scalar/JSON-path, cross-org denial, attachment refs, code-block protection); suite at 80
 - [ ] Phase 6: CLI
 - [ ] Phase 7: Hosted deployment
 - [ ] Phase 8: App integrations
