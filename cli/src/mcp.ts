@@ -257,6 +257,71 @@ export async function runMcpServer(): Promise<void> {
   );
 
   server.tool(
+    'list_links',
+    'List links and backlinks for an entry. Links come from [[wikilinks]]; backlinks are entries that reference this one.',
+    { id: z.string().describe('Entry ID') },
+    async (args) =>
+      guarded(async () => {
+        const { outgoing, backlinks } = await api<{
+          outgoing: {
+            link_text: string; target_type: string;
+            target_title?: string; target_id?: string; target_ref?: string;
+          }[];
+          backlinks: { source_title: string; source_id: string }[];
+        }>(`/api/entries/${args.id}/links`);
+        if (!outgoing.length && !backlinks.length) return text('No links or backlinks.');
+        const parts: string[] = [];
+        if (outgoing.length) {
+          parts.push(
+            '## Links\n' +
+              outgoing
+                .map((l) => {
+                  if (l.target_type === 'entry')
+                    return `- [[${l.link_text}]] → ${l.target_title} (id: ${l.target_id})`;
+                  if (l.target_type === 'url') return `- [[${l.link_text}]] → ${l.target_ref}`;
+                  if (l.target_type === 'resource')
+                    return `- [[${l.link_text}]] → resource ${l.target_ref}`;
+                  return `- [[${l.link_text}]] (unresolved)`;
+                })
+                .join('\n')
+          );
+        }
+        if (backlinks.length) {
+          parts.push(
+            '## Backlinks\n' +
+              backlinks.map((b) => `- ${b.source_title} (id: ${b.source_id})`).join('\n')
+          );
+        }
+        return text(parts.join('\n\n'));
+      })
+  );
+
+  server.tool(
+    'list_collections',
+    'List collections — named JSON document stores for structured context (config, brand tokens, metrics).',
+    { ...scopeArgs },
+    async (args) =>
+      guarded(async () => {
+        const s = applyScope(args);
+        const cols = await api<{
+          slug: string; description: string | null; document_count: number;
+          workspace: string | null; project: string | null;
+        }[]>(`/api/collections${qs({ workspace: s.workspace, project: s.project })}`);
+        if (!cols.length) return text('No collections found.');
+        return text(
+          cols
+            .map((c) => {
+              const ws = c.workspace || 'global';
+              const scope = c.project ? `${ws}/${c.project}` : ws;
+              const desc = c.description ? ` — ${c.description}` : '';
+              return `- **${c.slug}** [${scope}] (${c.document_count} documents)${desc}`;
+            })
+            .join('\n')
+        );
+      })
+  );
+
+  server.tool(
     'get_document',
     'Read a typed document from a collection by key.',
     {
@@ -312,6 +377,54 @@ export async function runMcpServer(): Promise<void> {
           }
         );
         return text(`Set ${args.collection}/${args.key}.`);
+      })
+  );
+
+  server.tool(
+    'delete_document',
+    'Delete a document from a collection by key. Rejected for repo-canonical stores.',
+    { collection: z.string(), key: z.string(), ...scopeArgs },
+    async (args) =>
+      guarded(async () => {
+        const s = applyScope(args);
+        await api(
+          `/api/collections/${args.collection}/documents/${args.key}${qs({
+            workspace: s.workspace,
+            project: s.project,
+          })}`,
+          { method: 'DELETE' }
+        );
+        return text(`Deleted ${args.collection}/${args.key}.`);
+      })
+  );
+
+  server.tool(
+    'upload_attachment',
+    'Attach a file to an entry (logos, screenshots, SQL, briefs). Future agents reuse the real asset via its magpie:<id> handle.',
+    {
+      entry_id: z.string(),
+      filename: z.string().describe('Filename with extension (drives kind/media type)'),
+      content_base64: z.string().describe('File bytes, base64-encoded'),
+      description: z.string().optional().describe('What this is and when to use it'),
+      role: z.string().optional().describe('Role tag, e.g. logo-primary, query-revenue'),
+      public: z.boolean().optional().describe('Serve via stable /public/assets URL (images only)'),
+    },
+    async (args) =>
+      guarded(async () => {
+        const data = Buffer.from(args.content_base64, 'base64');
+        if (!data.length) return text('Error: empty or invalid base64 content.');
+        const form = new FormData();
+        form.append('file', new Blob([new Uint8Array(data)]), args.filename);
+        if (args.role) form.append('role', args.role);
+        if (args.description) form.append('description', args.description);
+        if (args.public) form.append('public', 'true');
+        const att = await api<{ handle: string; kind: string; byte_size: number }>(
+          `/api/entries/${args.entry_id}/attachments`,
+          { method: 'POST', formData: form }
+        );
+        return text(
+          `Attached ${args.filename} (${att.kind}, ${att.byte_size} bytes) to entry ${args.entry_id}. Handle: ${att.handle}`
+        );
       })
   );
 
