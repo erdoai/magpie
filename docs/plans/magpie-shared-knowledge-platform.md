@@ -65,6 +65,13 @@ Keep this section current as work lands. Update it in the same change as the wor
   - [ ] Custom domain (currently Railway-generated; magpie.erdo.ai optional later — requires updating OAUTH_ISSUER_URL/ASSET_PUBLIC_BASE_URL)
   - [ ] Backups, per-org quotas, usage page, hosted onboarding docs, import/export path
 - [ ] Phase 8: App integrations
+- [ ] Phase 9: Repo sync, OKF interop, and viewer — see design section below
+  - [ ] Versioned frontmatter spec (OKF-compatible: `type` required, rest optional)
+  - [ ] One-way `push` from a folder (repo = source of truth for curated content)
+  - [ ] Two collection layers: repo-canonical vs server-canonical (live), source-of-truth flag
+  - [ ] Manifest/catalog + anti-drift checks (reject unknown store/key, near-duplicate detection)
+  - [ ] OKF export/import (closes the Phase 7 lock-in TODO)
+  - [ ] Static zero-backend HTML viewer for an exported bundle
 
 ## Summary
 
@@ -654,6 +661,79 @@ Erdo adoption:
 - Integrate Alertee with opt-in env vars.
 - Keep local fallback paths until Magpie is stable.
 - Migrate old app-specific knowledge incrementally.
+
+## Repo Sync, OKF Interop, and Viewer (Phase 9)
+
+Context: Google published the Open Knowledge Format (OKF) on 2026-06-12 — a vendor-neutral spec for knowledge as a folder of Markdown files with YAML frontmatter, plus a static HTML viewer. It is a *format*, not a runtime: no search, no tenancy, no permissions, no typed value resolution. It overlaps Magpie's entry model (Markdown + frontmatter + links) almost exactly, which validates the model, but it stops where Magpie's value begins. We adopt the parts that are genuinely useful and ignore the rest.
+
+Framing: **the folder gives portability; the server gives coherence.** OKF only has the first half. This phase adds the first half to Magpie without giving up the second.
+
+### Frontmatter spec
+
+Define a small, versioned frontmatter schema for entry Markdown:
+
+- `type` required (matches Magpie's entry-type enum); everything else optional (`title`, `tags`, `summary`, `source`).
+- Keep it a superset-compatible with OKF so a Magpie doc is a valid OKF doc and vice versa — "we interop with OKF" then costs nothing.
+- Version the schema so the loader can evolve it.
+
+### Repo sync
+
+Docs-as-code for knowledge: devs edit Markdown in their editor, review in PRs, CI pushes to the server on merge. Fits the dev-first positioning and is a workflow the Mem0/Letta/Zep crowd does not have.
+
+- **Start one-way: `magpie push ./knowledge`.** Repo is the source of truth for curated content; the server reads the folder, upserts, generates embeddings, and becomes the search/serve index.
+- Do **not** build bidirectional sync first — it needs stable IDs, timestamps, and merge handling. One-way covers ~90% of the value for a fraction of the work. Bidirectional later only if asked.
+
+Folder layout:
+
+```
+knowledge/
+├── <entry>.md                      # markdown + frontmatter (entries)
+├── collections/
+│   ├── _manifest.json              # canonical store/key registry (anti-drift)
+│   └── <slug>.json                 # one file per store: { key: value } (repo-canonical KV only)
+└── attachments/
+    ├── <file>                      # binary
+    └── <file>.json                 # sidecar metadata
+```
+
+### Two collection layers
+
+Collections are **standalone**, not owned by entries (already true in code — scoped to org/workspace/project, referenced via `{{...}}` resolution). Attachments are entry-owned; collections are not. Split them by source of truth:
+
+- **`source: repo`** (curated): config, brand tokens, definitions, positioning. Human-owned, deserves PR history. File is canonical, server mirrors it, agent writes rejected/flagged. Synced via `push`.
+- **`source: server`** (live): metrics, resolved facts, agent-written runtime memory. Changes constantly, agents write it. Committing it is "committing your database" — wrong. Server is canonical, never exported to the repo (or only as a read-only snapshot). Never synced.
+
+Same Collections primitive, a per-store source-of-truth flag, two sync policies. This resolves the live-vs-committed tension: only commit what should have a review history.
+
+On-disk format for repo-canonical KV is **JSON**, one file per store (`collections/<slug>.json`), `{ key: value }` with types mostly inferred from JSON natives (annotate only `datetime` and `integer`-vs-`float`). Escape hatch for big/hot stores: directory form `collections/<slug>/<key>.json`; loader accepts either. No binary store at the repo layer — diffability is the whole point; the optimized store is Postgres JSONB on the server.
+
+### Anti-drift
+
+Drift (near-duplicate store names for the same thing, the same value under different keys) is the real risk — worse than merge conflicts, and the thing a pure folder format cannot fix. The cure is a central registry the server enforces:
+
+- `collections/_manifest.json` (mirrored server-side): canonical stores — slug, title, optional key schema with types.
+- On every write (repo `push` or agent `set_document`): unknown store → reject with nearest-match suggestion; unknown key → warn; fuzzy-match slugs to catch `reach-strategy` vs `reach_strategy`.
+- Creating a store stays deliberate (Phase 3 already ships `create_collection` + missing-key hints — build duplicate detection on top).
+
+### OKF export/import
+
+Closes the open Phase 7 lock-in TODO ("import/export path so hosted users are not locked in").
+
+- `magpie export --okf` → OKF bundle (entries map ~1:1 to Markdown+frontmatter).
+- `magpie import <okf-bundle>` → ingest, embed on the way in, assign scope.
+- Be honest about lossy edges: OKF has no native typed collections (degrade to frontmatter/sidecar), no binary attachments (sidecar + `resource:` URL), no scope/embeddings (assigned on import). Document it; don't pretend it round-trips perfectly.
+
+### Viewer
+
+The one thing worth borrowing from Google's release. A zero-backend static HTML view of an exported bundle:
+
+- Great export artifact and demo: "here's your knowledge as a browsable graph, no server needed."
+- Pairs with OKF export — bundle + self-contained `index.html`, browsable offline.
+- Makes the "you're not locked in" story tangible.
+
+### Parked (not this phase)
+
+- Offline search: a local SQLite mirror (`sqlite-vec` + FTS5) reproducing RRF on a laptop. Real, but a port of fusion to a second engine — separate from sync, only if people want serverless offline search. The mirror is binary; it is not the repo format.
 
 ## Open Questions
 
