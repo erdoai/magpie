@@ -58,18 +58,66 @@ magpie serve                          # REST + MCP + UI on :8200`,
   ];
 }
 
-const COLLECTIONS_EXAMPLE = `# Curated config, owned by your repo (canonical in git)
-magpie collections set config trial_days   --value 14    --type integer
-magpie collections set config signups_open --value true  --type boolean
-magpie collections set config support_email --value '"help@acme.com"' --type string
+const COLLECTIONS_EXAMPLE = `# Curated config — canonical in git, typed on write
+magpie collections set config trial_days    --value 14      --type integer
+magpie collections set config price_monthly  --value '"$29"' --type string
+magpie collections set config signups_open   --value true    --type boolean
 
-# Reference a value from any entry...
-echo "New users get {{config.trial_days}} days free." > onboarding.md
-magpie write --title "Onboarding" --file onboarding.md
+# Read one whole, by key — comes back as the real type
+magpie collections get config trial_days        # → 14  (integer, not "14")`;
 
-# ...and it resolves to a real typed value at read time
-magpie read <entry-id> --resolved
-# → "New users get 14 days free."   (14 is an integer, not "14")`;
+// Before/after for the read-time resolution demo.
+const ENTRY_STORED = `## Acme onboarding
+
+New users get {{config.trial_days}} days free,
+then {{config.price_monthly}}/mo.
+
+Questions? {{config.support_email}}
+
+![logo]({{attachment:logo-primary}})
+
+See [[Pricing policy]] for the edge cases.`;
+
+const ENTRY_RESOLVED = `## Acme onboarding
+
+New users get 14 days free,
+then $29/mo.
+
+Questions? help@acme.com
+
+![logo](https://cdn.acme.com/logo-primary.png)
+
+See [Pricing policy](/entries/abc123) for the edge cases.`;
+
+const STORED_RE = /(\{\{[^}]+\}\}|\[\[[^\]]+\]\])/g;
+const RESOLVED_RE =
+  /(14 days|\$29\/mo|help@acme\.com|https:\/\/cdn\.acme\.com\/logo-primary\.png|\[Pricing policy\]\(\/entries\/abc123\))/g;
+
+function TokenizedCode({
+  text,
+  pattern,
+  tokenClass,
+}: {
+  text: string;
+  pattern: RegExp;
+  tokenClass: string;
+}) {
+  return (
+    <pre className="overflow-x-auto p-4 text-[12.5px] leading-relaxed">
+      <code className="font-mono">
+        {text.split(pattern).map((seg, i) =>
+          i % 2 === 1 ? (
+            <span key={i} className={cn('rounded px-1', tokenClass)}>
+              {seg}
+            </span>
+          ) : (
+            <span key={i}>{seg}</span>
+          ),
+        )}
+      </code>
+    </pre>
+  );
+}
 
 const FEATURES = [
   {
@@ -248,6 +296,59 @@ export function LandingPage() {
           </div>
           <CodeBlock code={COLLECTIONS_EXAMPLE} language="shell" />
         </div>
+      </section>
+
+      {/* Resolve demo — before/after */}
+      <section className="mx-auto max-w-5xl px-6 pb-20">
+        <div className="text-center">
+          <Eyebrow>Resolved at read time</Eyebrow>
+          <h2 className="text-2xl font-semibold">Templates in. Real values out.</h2>
+          <p className="mx-auto mt-3 max-w-2xl text-sm text-muted-foreground">
+            Entries stay clean, reviewable templates — the stored Markdown is never mutated.
+            Read with <code className="rounded bg-muted px-1 py-0.5 text-xs">--resolved</code> and
+            every reference is filled with a live, permission-checked value.
+          </p>
+        </div>
+
+        <div className="mt-8 grid items-stretch gap-3 lg:grid-cols-[1fr_auto_1fr]">
+          <div className="overflow-hidden rounded-xl border border-border bg-card">
+            <div className="flex items-center justify-between border-b border-border px-4 py-2">
+              <span className="font-mono text-xs text-muted-foreground">onboarding.md</span>
+              <span className="text-[10px] uppercase tracking-wide text-muted-foreground/60">stored</span>
+            </div>
+            <TokenizedCode
+              text={ENTRY_STORED}
+              pattern={STORED_RE}
+              tokenClass="bg-[oklch(0.8_0.15_85_/_0.15)] text-[oklch(0.82_0.15_85)]"
+            />
+          </div>
+
+          <div className="grid place-items-center py-2 lg:py-0">
+            <div className="grid h-9 w-9 place-items-center rounded-full border border-border bg-card text-primary">
+              <ArrowRight size={16} className="hidden lg:block" />
+              <ArrowRight size={16} className="rotate-90 lg:hidden" />
+            </div>
+          </div>
+
+          <div className="overflow-hidden rounded-xl border border-primary/30 bg-card">
+            <div className="flex items-center justify-between border-b border-border px-4 py-2">
+              <span className="font-mono text-xs text-muted-foreground">magpie read --resolved</span>
+              <span className="text-[10px] uppercase tracking-wide text-primary/70">resolved</span>
+            </div>
+            <TokenizedCode
+              text={ENTRY_RESOLVED}
+              pattern={RESOLVED_RE}
+              tokenClass="bg-primary/15 text-primary"
+            />
+          </div>
+        </div>
+
+        <p className="mx-auto mt-5 max-w-2xl text-center text-xs text-muted-foreground">
+          Same on every surface — <code className="rounded bg-muted px-1 py-0.5">read(resolved=true)</code> over
+          MCP, <code className="rounded bg-muted px-1 py-0.5">POST /api/entries/{'{id}'}/resolve</code> over REST.
+          Anything missing or unauthorized renders as <code className="rounded bg-muted px-1 py-0.5">⟦unresolved⟧</code> and
+          is reported in a dependency list, so an agent knows exactly what's absent.
+        </p>
       </section>
 
       {/* Features */}
