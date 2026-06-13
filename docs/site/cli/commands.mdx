@@ -1,0 +1,63 @@
+---
+title: Commands
+description: Full reference for the Magpie CLI.
+---
+
+Most commands accept `--workspace` and `--project` to scope, falling back to what you set with `magpie link`.
+
+## Auth & account
+
+```bash
+magpie login              # email one-time code → store an API key
+magpie logout             # remove the stored key
+magpie whoami             # server, auth, linked scope, orgs
+magpie link --workspace reach --project alertee
+magpie org list
+magpie workspace list <orgId>
+```
+
+## Knowledge
+
+```bash
+magpie search "incident runbook" --workspace alertee --category resource
+magpie read <entry-id> --resolved          # resolve {{refs}} and [[links]]
+magpie write --title "Alertee positioning" --file positioning.md \
+  --category resource --tags reach,positioning
+magpie archive <entry-id>
+```
+
+`write` takes `--file <path>` or `--content <text>`; `--category` is one of `project`, `area`, `resource` (default `resource`).
+
+## Collections
+
+```bash
+magpie collections list
+magpie collections get reach.strategy wedge
+magpie collections set reach.strategy mrr --value 4200 --type integer
+```
+
+`set` takes `--value <json>` or `--file <path>`, and `--type` (`json`, `string`, `integer`, `float`, `boolean`, `datetime`). See [Collections](/concepts/collections).
+
+## Attachments
+
+```bash
+magpie attachments add <entry-id> ./logo.svg --role logo-primary --public
+magpie attachments list <entry-id>
+```
+
+## Repo sync
+
+```bash
+magpie push ./knowledge --workspace reach    # repo  → server
+magpie export ./knowledge --workspace reach   # server → repo
+```
+
+`push` validates the whole [bundle](/repo-sync/overview) and aborts on any off-spec file or drift issue. `export` writes entries, repo collections, a manifest, and a self-contained `index.html` viewer. See [Repo sync](/repo-sync/overview).
+
+## MCP
+
+```bash
+magpie mcp                # run a local stdio MCP server over your stored key
+```
+
+See [MCP setup](/mcp/setup).

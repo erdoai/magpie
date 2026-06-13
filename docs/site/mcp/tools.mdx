@@ -1,0 +1,69 @@
+---
+title: Tools reference
+description: The 16 tools exposed by the Magpie MCP server.
+---
+
+Every tool is scoped by the caller's org and role. Most accept `workspace` and `project` to narrow scope.
+
+## Knowledge
+
+### `search`
+Semantic + keyword search across knowledge.
+**Key params:** `query`, `workspace`, `project`, `category`, `limit`.
+**Returns:** ranked entries with scores.
+
+### `read`
+Read one entry by id.
+**Params:** `id`, `resolved` (resolve `{{refs}}` and `[[links]]`, default false).
+**Returns:** the entry, plus links, backlinks, and attachment summaries.
+
+### `write`
+Create a knowledge entry.
+**Key params:** `title`, `content`, `category`, `tags`, `source`, `workspace`, `project`.
+
+### `list_entries`
+Browse and filter entries.
+**Key params:** `category`, `tags`, `workspace`, `project`, `limit`.
+
+### `archive`
+Archive an entry. **Params:** `id`.
+
+### `merge`
+Merge several entries into one; the sources are archived. **Key params:** `source_ids`, target fields.
+
+### `find_duplicates`
+Find clusters of near-duplicate entries by semantic similarity. **Key params:** `threshold`, `limit`.
+
+## Links & references
+
+### `list_links`
+Outgoing links and backlinks for an entry. **Params:** `id`.
+
+### `resolve_knowledge`
+Resolve an entry's `{{value references}}` and `[[wikilinks]]` at read time, with a dependency list. **Params:** `id`.
+
+## Collections
+
+### `list_collections`
+List collections in scope. **Key params:** `workspace`, `project`.
+
+### `get_document`
+Read a document (returns value + `value_type`). **Params:** `collection`, `key`.
+
+### `set_document`
+Write a typed document. **Key params:** `collection`, `key`, `value`, `value_type`, `create_collection`.
+Rejected for [repo-canonical](/repo-sync/collections) stores; refuses a near-duplicate new slug.
+
+### `delete_document`
+Delete a document. **Params:** `collection`, `key`.
+
+## Attachments
+
+### `upload_attachment`
+Attach a base64 file to an entry. **Key params:** `entry_id`, `filename`, `data`, `role`.
+
+### `list_attachments`
+List attachments on an entry. **Params:** `entry_id`.
+
+### `get_attachment`
+Get attachment metadata and content/URL. **Params:** `id`.

@@ -1,0 +1,59 @@
+---
+title: REST API
+description: HTTP endpoints for entries, search, collections, attachments, and bundles.
+---
+
+All endpoints are under `/api`. Authenticate with `Authorization: Bearer <key>` or a session cookie. Where relevant, requests accept `workspace` and `project` to scope. Interactive docs are served at `/docs` on a running server.
+
+## Entries
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/entries` | Create an entry |
+| `GET` | `/api/entries` | List / filter (category, tags, workspace, project) |
+| `GET` | `/api/entries/{id}` | Get one |
+| `PUT` | `/api/entries/{id}` | Update |
+| `DELETE` | `/api/entries/{id}` | Delete |
+| `POST` | `/api/entries/{id}/archive` | Archive |
+| `GET` | `/api/entries/{id}/links` | Outgoing links + backlinks |
+| `POST` | `/api/entries/{id}/resolve` | Resolve `{{references}}` and `[[wikilinks]]` |
+| `POST` | `/api/search` | Dual semantic + keyword search |
+
+## Collections
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/collections` | List collections |
+| `POST` | `/api/collections` | Create a collection |
+| `GET` | `/api/collections/{slug}/documents` | List documents |
+| `GET` | `/api/collections/{slug}/documents/{key}` | Get a document |
+| `PUT` | `/api/collections/{slug}/documents/{key}` | Set a document |
+| `DELETE` | `/api/collections/{slug}/documents/{key}` | Delete a document |
+
+Writes to a `repo`-canonical collection are rejected (the bundle is the source of truth).
+
+## Attachments
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/entries/{id}/attachments` | Upload (multipart) |
+| `GET` | `/api/entries/{id}/attachments` | List for an entry |
+| `GET` | `/api/attachments/{id}` | Metadata / download |
+| `DELETE` | `/api/attachments/{id}` | Delete |
+| `GET` | `/public/assets/{id}` | Public image serving (opt-in) |
+
+## Bundles (repo sync)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/bundle/push` | Validate and apply a bundle. Aborts (422) on off-spec files or drift |
+| `GET` | `/api/bundle/export` | Return a rendered bundle as `{ files: [{ path, content }] }` |
+
+## Account
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/keys` | Create an API key |
+| `GET` | `/api/keys` | List keys |
+| `POST` | `/api/orgs` | Create an org |
+| `GET` | `/api/orgs` | List your orgs |

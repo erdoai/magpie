@@ -1,0 +1,66 @@
+---
+title: Quickstart
+description: Run Magpie, write your first knowledge, and connect an agent.
+---
+
+## 1. Run a server
+
+Magpie needs Postgres (with the `pgvector` extension for semantic search). Embeddings are optional — keyword search works without an OpenAI key.
+
+```bash
+pip install magpie-ai
+
+export DATABASE_URL=postgresql://user:pass@host:5432/magpie
+export OPENAI_API_KEY=sk-...   # optional — enables semantic search
+
+magpie serve
+```
+
+The server starts on `http://localhost:8200`. Interactive API docs are at `/docs`. Migrations run automatically on boot (or run them alone with `magpie migrate`).
+
+<Note>
+Prefer hosted? Point the CLI and MCP client at your hosted Magpie URL instead of localhost — everything below works the same.
+</Note>
+
+## 2. Install the CLI
+
+```bash
+npm install -g @magpie/cli
+magpie login          # email one-time code → stores an API key
+magpie link --workspace general
+```
+
+See [CLI installation](/cli/installation) for details.
+
+## 3. Write and search
+
+```bash
+magpie write --title "Alertee positioning" \
+  --file positioning.md --category resource --tags reach,positioning
+
+magpie search "what's our wedge for alertee?"
+```
+
+Search blends semantic and keyword matching — see [Search](/concepts/search).
+
+## 4. Connect an agent over MCP
+
+Add Magpie to Claude Code:
+
+```bash
+claude mcp add --transport http magpie https://your-magpie-server/mcp \
+  --header "Authorization: Bearer YOUR_API_KEY"
+```
+
+Your agent now has the 16 Magpie [tools](/mcp/tools) — `search`, `write`, `read`, `set_document`, `upload_attachment`, and more. See [MCP setup](/mcp/setup) for hosted (OAuth) and local (stdio) options.
+
+## 5. Author knowledge in git (optional)
+
+Keep curated knowledge as a folder of Markdown + JSON in version control, and sync it:
+
+```bash
+magpie push ./knowledge --workspace reach
+magpie export ./knowledge --workspace reach   # the inverse
+```
+
+See [Repo sync](/repo-sync/overview).

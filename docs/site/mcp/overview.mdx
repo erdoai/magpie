@@ -1,0 +1,22 @@
+---
+title: Overview
+description: Give AI agents Magpie's knowledge tools over the Model Context Protocol.
+---
+
+Magpie ships an MCP server so agents — Claude, Cursor, Claude Code, and anything else that speaks the Model Context Protocol — can search, write, and resolve knowledge directly. It's the canonical agent interface to your store.
+
+There are two ways to run it, both exposing the [same tools](/mcp/tools):
+
+- **Remote server** — the hosted Magpie server exposes `/mcp` with OAuth. Nothing to install.
+- **Local stdio server** — `magpie mcp` runs a local server that proxies to the API with your stored key. Good for local agent setups.
+
+See [Setup](/mcp/setup) to connect.
+
+## What agents can do
+
+- **Find and read** — `search` (semantic + keyword), `read` (with optional resolved references), `list_entries`, `list_links`, `resolve_knowledge`.
+- **Write** — `write`, `archive`, `merge`, `find_duplicates`.
+- **Structured values** — `list_collections`, `get_document`, `set_document`, `delete_document`.
+- **Files** — `upload_attachment`, `list_attachments`, `get_attachment`.
+
+Every call is scoped by the caller's org and role — agents see and change only what they're allowed to, the same rules as the REST API. Writes to [repo-canonical collections](/repo-sync/collections) are rejected, and creating a near-duplicate store is refused.

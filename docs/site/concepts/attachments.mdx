@@ -1,0 +1,29 @@
+---
+title: Attachments
+description: Files owned by an entry — logos, screenshots, SQL snippets, PDFs — with stable handles.
+---
+
+Attachments are files **owned by a knowledge entry** — not loose objects in a bucket, not URLs hotlinked in Markdown. Logos, favicons, product screenshots, SQL snippets, briefs, PDFs, source documents.
+
+```bash
+magpie attachments add <entry-id> ./logo.svg --role logo-primary
+magpie attachments list <entry-id>
+```
+
+Each attachment gets a stable handle, `magpie:<id>`. Small SQL/text attachments are inlined in reads (`content_text`); binaries return signed download URLs.
+
+## Roles
+
+A `role` gives agents deterministic joins — "fetch the brand entry, use its `logo-primary`" — instead of guessing or inventing assets:
+
+`logo-primary`, `logo-mono-white`, `favicon-32x32`, `apple-icon-180x180`, `hero-*`, `product-*`, `customer-logo-*`, `headshot-*`, `screenshot-*`, `query-*`, `source`
+
+## Public serving
+
+Browser-safe images can opt into a stable public URL at `/public/assets/<id>` (set `--public` on upload). This is **images only** — SQL, text, and PDF attachments are never exposed publicly. Public URLs are root-relative (or use `ASSET_PUBLIC_BASE_URL`) so generated pages don't embed expiring signed URLs.
+
+## Storage
+
+Attachments are stored via a pluggable backend — local filesystem by default, or any S3-compatible store (AWS S3, Cloudflare R2, MinIO, Railway). See [Configuration](/reference/configuration).
+
+Over MCP: `upload_attachment`, `list_attachments`, `get_attachment`; attachments are also listed in `read`.

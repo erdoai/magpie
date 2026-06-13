@@ -1,0 +1,41 @@
+---
+title: Links & references
+description: Wikilinks with backlinks, and value references that resolve at read time.
+---
+
+Magpie parses two kinds of references out of an entry's Markdown.
+
+## Wikilinks
+
+`[[wikilinks]]` create durable relationships between entries, reparsed on every save:
+
+| Syntax | Links to |
+|--------|----------|
+| `[[Entry Title]]` | Another entry, resolved within your visibility |
+| `[[Entry Title\|display text]]` | Same, with custom link text |
+| `[[https://example.com]]` | An external URL |
+| `[[alertee:check:42]]` | A product resource, `app:type:id` |
+
+Reads return both **outgoing links** and **backlinks**. A link to a title that doesn't exist yet is kept and becomes a backlink automatically once that entry is created. Over MCP, `read` includes link/backlink summaries and `list_links` returns them explicitly.
+
+## Value references
+
+Entries can embed values that resolve at **read time** — the stored Markdown is never mutated:
+
+| Syntax | Resolves to |
+|--------|-------------|
+| `{{reach.strategy.alertee.wedge}}` | A [collection](/concepts/collections) value by dotted path |
+| `{{collection:reach.strategy/alertee#wedge}}` | The same, explicit long form |
+| `{{attachment:logo-primary}}` | An [attachment](/concepts/attachments) on the entry, by role/filename |
+
+Resolution is permission-checked per target. Anything unresolved or unauthorized renders as a visible placeholder and is reported in a dependency list, so an agent knows exactly what's missing.
+
+```bash
+magpie read <entry-id> --resolved
+```
+
+```json
+POST /api/entries/{id}/resolve   →   { "markdown": "...", "dependencies": [...] }
+```
+
+Over MCP, request `read(resolved=true)` or call `resolve_knowledge`.

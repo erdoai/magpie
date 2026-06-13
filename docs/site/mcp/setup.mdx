@@ -1,0 +1,55 @@
+---
+title: Setup
+description: Connect Magpie to Claude, Claude Code, Cursor, and other assistants.
+---
+
+Both options expose the [same tools](/mcp/tools).
+
+## Remote server
+
+Add your Magpie server's `/mcp` endpoint to your client. With a static API key:
+
+**Claude Code**
+
+```bash
+claude mcp add --transport http magpie https://your-magpie-server/mcp \
+  --header "Authorization: Bearer YOUR_API_KEY"
+```
+
+**Cursor / other clients** — add it as an MCP URL:
+
+```json
+{
+  "mcpServers": {
+    "magpie": {
+      "url": "https://your-magpie-server/mcp",
+      "headers": { "Authorization": "Bearer YOUR_API_KEY" }
+    }
+  }
+}
+```
+
+When the server has `OAUTH_ISSUER_URL` configured, clients that support OAuth (such as Claude's custom connectors) can connect by URL alone and sign in through the browser — no key to paste.
+
+## Local stdio server
+
+If you use the [CLI](/cli/installation), run the MCP server locally — it reuses your stored login:
+
+```bash
+magpie mcp
+```
+
+Wire it into a client that launches stdio servers, for example:
+
+```json
+{
+  "mcpServers": {
+    "magpie": {
+      "command": "magpie",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+The local server proxies to the same REST API with your stored key, so all the same scoping and guards apply.

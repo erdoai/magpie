@@ -1,0 +1,26 @@
+---
+title: Search
+description: Semantic + keyword search, fused with Reciprocal Rank Fusion.
+---
+
+Magpie runs two searches in parallel and merges them:
+
+- **Semantic** — your query is embedded and compared against entry embeddings by vector similarity. Finds matches by *meaning* ("how do we win enterprise" matches an entry about "landing large accounts"). Requires `OPENAI_API_KEY`.
+- **Keyword** — Postgres full-text search over title, content, and tags. Finds matches by *term* — exact names, identifiers, jargon.
+
+The two ranked lists are combined with **Reciprocal Rank Fusion (RRF)**, so an entry that ranks well in either method surfaces, and entries that rank well in both rise to the top. If no embedding key is configured, search falls back to keyword-only.
+
+## Scoping a search
+
+Narrow by workspace, project, category, or tags:
+
+```bash
+magpie search "incident runbook" --workspace alertee --category resource
+```
+
+```json
+POST /api/search
+{ "query": "incident runbook", "workspace": "alertee", "limit": 10 }
+```
+
+Results are always filtered to what you're allowed to see (your entries + your org + global). Over MCP, the same search is the `search` [tool](/mcp/tools).

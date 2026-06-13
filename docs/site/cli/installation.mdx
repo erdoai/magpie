@@ -1,0 +1,46 @@
+---
+title: Installation
+description: Install the Magpie CLI and sign in.
+---
+
+The `@magpie/cli` package is the user-facing CLI — a thin client over the REST API for searching, writing, and syncing knowledge, plus a local MCP server.
+
+```bash
+npm install -g @magpie/cli
+```
+
+Requires Node 18+.
+
+## Sign in
+
+```bash
+magpie login
+```
+
+Enter your email, then the one-time code sent to it. The CLI mints an API key and stores it at `~/.config/magpie/config.json`.
+
+Point at a specific server (hosted or self-hosted) with `--api-url`, or the `MAGPIE_API_URL` environment variable:
+
+```bash
+magpie login --api-url https://your-magpie-server
+```
+
+For CI or scripts, skip login and set `MAGPIE_TOKEN` to an API key directly.
+
+## Set a default scope
+
+```bash
+magpie link --workspace reach --project alertee
+```
+
+This stores a default workspace/project for this machine, so you don't repeat them on every command. Override per command with `--workspace` / `--project`.
+
+```bash
+magpie whoami     # show server, auth, linked scope, and your orgs
+```
+
+Next: the full [command reference](/cli/commands).
+
+<Note>
+There are two CLIs. The `@magpie/cli` documented here is the user client (over REST). The Python `magpie` CLI that ships with the server (`pip install magpie-ai`) handles server operations — `serve`, `migrate`, `import`, `push`, `export` — directly against the database for self-hosted setups.
+</Note>

@@ -1,0 +1,47 @@
+---
+title: Configuration
+description: Environment variables for the Magpie server.
+---
+
+The server is configured with environment variables.
+
+## Core
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DATABASE_URL` | Postgres connection string | **required** |
+| `OPENAI_API_KEY` | Enables semantic search embeddings | *empty (keyword only)* |
+| `API_KEY` | Static auth key | *empty (no auth)* |
+| `SESSION_SECRET` | Secret for session cookies | *empty* |
+| `HOST` | Bind host | `0.0.0.0` |
+| `PORT` | Server port | `8200` |
+
+## Email login (optional)
+
+| Variable | Description |
+|----------|-------------|
+| `RESEND_API_KEY` | Resend key for email one-time-code login |
+| `RESEND_FROM` | Sender address, e.g. `magpie <hi@yourdomain.com>` |
+
+When both `API_KEY` and `RESEND_API_KEY` are empty, auth is disabled — convenient for local single-user dev.
+
+## Attachment storage
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `STORAGE_PROVIDER` | `local` or `s3` | `local` |
+| `STORAGE_DIR` | Local storage directory | `data/attachments` |
+| `STORAGE_BUCKET` | S3 bucket name | *empty* |
+| `STORAGE_ENDPOINT` | S3-compatible endpoint (R2/MinIO/Railway) | *AWS default* |
+| `STORAGE_ACCESS_KEY_ID` | S3 access key | *empty* |
+| `STORAGE_SECRET_ACCESS_KEY` | S3 secret key | *empty* |
+| `STORAGE_REGION` | S3 region | `us-east-1` |
+| `ASSET_PUBLIC_BASE_URL` | Base URL for public asset links | *empty (root-relative)* |
+
+## Auth methods
+
+Magpie accepts three, in this order of precedence per request:
+
+1. **API keys** — `Authorization: Bearer <key>`. For agents and programmatic access. Keys can be scoped to a workspace/project/role.
+2. **Email one-time code** — for human users; sets a session cookie (30-day TTL).
+3. **OAuth** — used by the remote [MCP server](/mcp/setup).

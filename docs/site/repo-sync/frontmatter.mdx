@@ -1,0 +1,38 @@
+---
+title: Frontmatter spec
+description: The strict, versioned, closed schema at the top of every entry file.
+---
+
+Every entry Markdown file in a [bundle](/repo-sync/overview) starts with a frontmatter block fenced by `---`:
+
+```markdown
+---
+magpie_version: 1
+category: resource
+title: Alertee positioning
+tags: [reach, positioning]
+source: strategy-doc
+---
+
+# Alertee positioning
+
+Body markdown here...
+```
+
+## Fields
+
+The schema is **closed** — only these fields are allowed:
+
+| Field | Required | Notes |
+|-------|----------|-------|
+| `magpie_version` | yes | Schema version. Currently `1`. |
+| `category` | yes | `project`, `area`, `resource`, or `archive`. |
+| `title` | no | Falls back to a humanized filename. |
+| `tags` | no | Inline `[a, b]` or a YAML block list. |
+| `source` | no | Where the knowledge came from. |
+
+## Why it's strict
+
+Unknown keys are **rejected** on `push`, not silently stored. This is deliberate: an open frontmatter bag would quietly become a second, unvalidated key/value store and drift against your real [collections](/concepts/collections).
+
+The rule of thumb: **frontmatter describes the entry; structured data belongs in a collection.** If you're reaching to add a field, it's either a genuine schema change (which bumps `magpie_version`) or it's a collection document.

@@ -1,0 +1,31 @@
+---
+title: Anti-drift
+description: The manifest that stops knowledge from fragmenting into near-duplicates.
+---
+
+The real risk in a folder-of-files knowledge store is **drift**: two stores named for the same thing (`reach-strategy` vs `reach_strategy`), or the same value landing under different keys. A folder can't prevent this on its own — a central registry can.
+
+## The manifest
+
+`collections/_manifest.json` declares the canonical stores, and optionally their keys:
+
+```json
+{
+  "stores": {
+    "strategy": { "title": "Reach strategy", "keys": ["wedge", "mrr"] },
+    "brand":    { "title": "Brand tokens" }
+  }
+}
+```
+
+On `push`, Magpie checks every collection against it:
+
+- A collection whose slug **isn't declared** is rejected, with a nearest-match suggestion (`Did you mean 'strategy'?`). Creating a store is a deliberate act, not a side effect of adding a file.
+- Two files whose slugs collapse to the same normalized form (case and separators removed) are rejected as **near-duplicates**.
+- If a store declares `keys`, document keys outside that list produce a **warning** — surfaced, but not blocking — so typo'd keys show up early.
+
+`export` generates a manifest for you from the stores it writes, so a round-trip stays consistent.
+
+## On the server too
+
+The registry isn't only enforced at push time. When an agent creates a new collection over [MCP](/mcp/tools) or the REST API, Magpie refuses a slug that near-duplicates an existing store in the same scope — the same defense, applied to live writes.

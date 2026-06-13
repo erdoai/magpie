@@ -1,0 +1,75 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "Magpie",
+  "colors": {
+    "primary": "#2563EB",
+    "light": "#60A5FA",
+    "dark": "#2563EB"
+  },
+  "favicon": "/favicon.ico",
+  "navbar": {
+    "links": [
+      {
+        "label": "GitHub",
+        "href": "https://github.com/erdoai/magpie"
+      }
+    ]
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/erdoai/magpie"
+    }
+  },
+  "navigation": {
+    "anchors": [
+      {
+        "anchor": "GitHub",
+        "href": "https://github.com/erdoai/magpie",
+        "icon": "github"
+      }
+    ],
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting started",
+            "pages": ["introduction", "quickstart"]
+          },
+          {
+            "group": "Concepts",
+            "pages": [
+              "concepts/entries",
+              "concepts/search",
+              "concepts/collections",
+              "concepts/links",
+              "concepts/attachments"
+            ]
+          },
+          {
+            "group": "Repo sync",
+            "pages": ["repo-sync/overview", "repo-sync/frontmatter", "repo-sync/collections", "repo-sync/anti-drift"]
+          },
+          {
+            "group": "Reference",
+            "pages": ["reference/configuration", "reference/api"]
+          }
+        ]
+      },
+      {
+        "tab": "CLI & MCP",
+        "groups": [
+          {
+            "group": "CLI",
+            "pages": ["cli/installation", "cli/commands"]
+          },
+          {
+            "group": "MCP server",
+            "pages": ["mcp/overview", "mcp/setup", "mcp/tools"]
+          }
+        ]
+      }
+    ]
+  }
+}

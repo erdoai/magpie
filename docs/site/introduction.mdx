@@ -1,0 +1,36 @@
+---
+title: Introduction
+description: A knowledge and context store for AI agents and teams — semantic + keyword search over durable, structured knowledge.
+---
+
+Magpie is a knowledge store built for AI agents and usable by humans. You write durable knowledge — prose, structured values, links, files — once, and agents retrieve it through search, references, and the Model Context Protocol. It's the shared memory layer your apps and agents delegate to instead of each rebuilding their own.
+
+## What it gives you
+
+- **Dual search** — semantic (vector embeddings) and keyword (Postgres full-text), combined with Reciprocal Rank Fusion so results are good whether the query matches by meaning or by exact term.
+- **Knowledge entries** — Markdown with typed metadata, organized by [PARA](/concepts/entries) category and scoped by org / workspace / project.
+- **Collections** — typed JSON key/value stores for structured context an agent resolves by key, not prose. See [Collections](/concepts/collections).
+- **Links & references** — `[[wikilinks]]` between entries with backlinks, and `{{value references}}` that resolve at read time. See [Links](/concepts/links).
+- **Attachments** — logos, screenshots, SQL snippets, PDFs owned by an entry, with stable handles. See [Attachments](/concepts/attachments).
+- **Three surfaces** — a REST API, an [MCP server](/mcp/overview) for agents, and a [CLI](/cli/installation). Plus a management UI.
+
+## How you use it
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Run a server, connect an agent over MCP, write and search your first knowledge.
+  </Card>
+  <Card title="Repo sync" icon="folder-tree" href="/repo-sync/overview">
+    Author knowledge as a folder of files in git, then sync it to the server.
+  </Card>
+  <Card title="MCP server" icon="plug" href="/mcp/overview">
+    Give Claude, Cursor, and other agents the 16 Magpie tools.
+  </Card>
+  <Card title="CLI" icon="terminal" href="/cli/installation">
+    Search, write, push, and export knowledge from your terminal.
+  </Card>
+</CardGroup>
+
+## What it isn't
+
+Not an agent framework, not a chat-history memory system, not a general graph database. Magpie owns reusable, durable context — the things future agents or teammates should remember, search, cite, and reuse. Operational runtime state stays in your app's own database.
