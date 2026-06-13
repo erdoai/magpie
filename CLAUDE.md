@@ -37,11 +37,15 @@ REST client with the same `push`/`export` plus `search`/`read`/`write`/etc.)
 
 ## Config
 
-Environment variables with `MAGPIE_` prefix:
-- `MAGPIE_DATABASE_URL` — Postgres connection string (required)
-- `MAGPIE_OPENAI_API_KEY` — for embeddings (optional, keyword search works without)
-- `MAGPIE_API_KEY` — static auth key (optional, empty = no auth)
-- `MAGPIE_PORT` — server port (default: 8200)
+Environment variables, **no prefix** (`Settings` uses `env_prefix=""`):
+- `DATABASE_URL` — Postgres connection string (required)
+- `OPENAI_API_KEY` — for embeddings (optional, keyword search works without)
+- `API_KEY` — static auth key (optional, empty = no auth). **Unrestricted /
+  single-tenant**: a request bearing it bypasses org isolation. Don't set it on
+  a multi-tenant instance — use per-user keys / session login instead.
+- `PORT` — server port (default: 8200)
+
+Full list in `magpie/config/settings.py` and `docs/site/reference/configuration.mdx`.
 
 ## Data model
 
