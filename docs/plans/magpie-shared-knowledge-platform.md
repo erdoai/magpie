@@ -73,7 +73,8 @@ Keep this section current as work lands. Update it in the same change as the wor
   - [x] Export bundle. `magpie/export.py` (9 tests, round-trips through the scanner) + `magpie export`: entries → md+frontmatter (re-using source_path), repo collections → JSON, generated `_manifest.json`. Live stores excluded. Closes the Phase 7 lock-in TODO. (Attachment binaries + sidecars: follow-up)
   - [x] Static zero-backend HTML viewer. `magpie/viewer.py` (5 tests): self-contained `index.html` (no CDN/network), bundle data embedded as JSON (script-breakout escaped), entry list by category + collections, minimal Markdown render, `[[wikilink]]` graph with computed backlinks, typed collection tables. Written by `export` (toggle via `viewer=False`)
   - [ ] (Optional, later) OKF export as a 1-line compatibility footnote if it ever gets adoption
-  - [ ] Follow-ups: attachment binaries+sidecars in export; `--prune` for push (delete entries removed from the repo); TS CLI `push`/`export` via REST
+  - [x] CLI/MCP/API/Docs parity (landed 2026-06-13): parity rule in CLAUDE.md+AGENTS.md; single-sourced sync logic (`magpie/sync.py`, `render_bundle`, in-memory bundle parse); REST `POST /api/bundle/push` + `GET /api/bundle/export` (7 tests); TS `@magpie/cli` `push`/`export` (v0.2.0, thin REST client); near-dup guard added to REST `create_collection`; full Mintlify docs site at `docs/site/` (18 pages: concepts, repo-sync, CLI, MCP, API). Suite 132 → 141.
+  - [ ] Follow-ups: attachment binaries+sidecars in export; `--prune` for push (delete entries removed from the repo); publish `@magpie/cli` to npm; deploy `docs/site` to Mintlify; `push`/`export` deliberately not MCP tools (bulk dev ops)
 
 ## Summary
 

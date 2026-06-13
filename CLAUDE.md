@@ -26,8 +26,14 @@ Search: Reciprocal Rank Fusion combining semantic (vector similarity) and keywor
 ```bash
 magpie serve              # start server on :8200
 magpie migrate            # run migrations only
+magpie push ./bundle      # sync a knowledge bundle (repo -> server)
+magpie export ./bundle    # write entries + repo collections to a bundle (server -> repo)
+magpie import markdown .  # import foreign markdown/claude memories
 magpie version            # show version
 ```
+
+(Server-side ops against the DB. The user-facing `@magpie/cli` in `cli/` is a thin
+REST client with the same `push`/`export` plus `search`/`read`/`write`/etc.)
 
 ## Config
 
