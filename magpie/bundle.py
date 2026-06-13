@@ -124,31 +124,21 @@ def load_manifest(root: str | Path) -> tuple[dict | None, BundleError | None]:
         return None, BundleError(rel, f"Invalid JSON: {exc}")
 
 
-def scan_collections(root: str | Path) -> CollectionScanResult:
-    """Scan ``collections/*.json`` for repo-canonical stores.
+def parse_collection_items(items: list[tuple[str, str]]) -> CollectionScanResult:
+    """Parse ``(slug, json_text)`` pairs into repo-canonical collections.
 
-    Each file is a flat ``{ key: value }`` map of native JSON values; the slug
-    is the filename stem and value types are inferred. ``_manifest.json`` is not
-    a store and is skipped here (it drives anti-drift checks separately).
+    The in-memory core shared by the disk scanner and the REST push endpoint, so
+    validation and type inference live in exactly one place.
     """
-    root = Path(root)
-    col_dir = root / COLLECTIONS_DIR
     collections: list[BundleCollection] = []
     errors: list[BundleError] = []
-
-    if not col_dir.is_dir():
-        return CollectionScanResult([], [])
-
-    for path in sorted(col_dir.glob("*.json")):
-        rel = path.relative_to(root).as_posix()
-        if path.name == MANIFEST_FILE:
-            continue
-        slug = path.stem
+    for slug, text in items:
+        rel = f"{COLLECTIONS_DIR}/{slug}.json"
         if not _valid_slug(slug):
             errors.append(BundleError(rel, f"Invalid collection slug {slug!r}"))
             continue
         try:
-            data = json.loads(path.read_text())
+            data = json.loads(text)
         except json.JSONDecodeError as exc:
             errors.append(BundleError(rel, f"Invalid JSON: {exc}"))
             continue
@@ -160,8 +150,25 @@ def scan_collections(root: str | Path) -> CollectionScanResult:
             for key, value in data.items()
         ]
         collections.append(BundleCollection(slug=slug, documents=docs))
-
     return CollectionScanResult(collections=collections, errors=errors)
+
+
+def scan_collections(root: str | Path) -> CollectionScanResult:
+    """Scan ``collections/*.json`` for repo-canonical stores.
+
+    Each file is a flat ``{ key: value }`` map of native JSON values; the slug
+    is the filename stem and value types are inferred. ``_manifest.json`` is not
+    a store and is skipped here (it drives anti-drift checks separately).
+    """
+    col_dir = Path(root) / COLLECTIONS_DIR
+    if not col_dir.is_dir():
+        return CollectionScanResult([], [])
+    items = [
+        (path.stem, path.read_text())
+        for path in sorted(col_dir.glob("*.json"))
+        if path.name != MANIFEST_FILE
+    ]
+    return parse_collection_items(items)
 
 
 def _iter_markdown(root: Path):
@@ -173,22 +180,15 @@ def _iter_markdown(root: Path):
         yield path
 
 
-def scan_entries(root: str | Path) -> ScanResult:
-    """Scan a bundle directory for entry Markdown files.
+def parse_entry_items(items: list[tuple[str, str]]) -> ScanResult:
+    """Parse ``(relpath, text)`` pairs into entries.
 
-    Every ``*.md`` file (outside reserved dirs) must carry valid Magpie
-    frontmatter; files that don't are reported as errors, not silently skipped.
+    The in-memory core shared by the disk scanner and the REST push endpoint —
+    frontmatter validation lives in exactly one place.
     """
-    root = Path(root)
-    if not root.is_dir():
-        return ScanResult([], [BundleError(str(root), "Bundle directory not found")])
-
     entries: list[BundleEntry] = []
     errors: list[BundleError] = []
-
-    for path in _iter_markdown(root):
-        rel = path.relative_to(root).as_posix()
-        text = path.read_text()
+    for rel, text in items:
         if not text.strip():
             errors.append(BundleError(rel, "Empty file"))
             continue
@@ -201,5 +201,17 @@ def scan_entries(root: str | Path) -> ScanResult:
             errors.append(BundleError(rel, "Entry has frontmatter but no body content"))
             continue
         entries.append(BundleEntry(path=rel, frontmatter=meta, body=body))
-
     return ScanResult(entries=entries, errors=errors)
+
+
+def scan_entries(root: str | Path) -> ScanResult:
+    """Scan a bundle directory for entry Markdown files.
+
+    Every ``*.md`` file (outside reserved dirs) must carry valid Magpie
+    frontmatter; files that don't are reported as errors, not silently skipped.
+    """
+    root = Path(root)
+    if not root.is_dir():
+        return ScanResult([], [BundleError(str(root), "Bundle directory not found")])
+    items = [(p.relative_to(root).as_posix(), p.read_text()) for p in _iter_markdown(root)]
+    return parse_entry_items(items)

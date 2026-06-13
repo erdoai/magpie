@@ -89,43 +89,55 @@ def _unique_path(rel: str, used: set[str]) -> str:
         n += 1
 
 
-def write_bundle(
-    root: str | Path,
+def render_bundle(
     entries: list[dict],
     collections: list[dict],
     viewer: bool = True,
-) -> dict:
-    """Write a bundle to ``root``.
+) -> dict[str, str]:
+    """Render a whole bundle in memory as ``{relative_path: file_content}``.
 
-    ``collections`` is a list of ``{"slug", "title", "documents"}`` dicts (only
-    repo-canonical stores). When ``viewer`` is set, also writes a self-contained
-    ``index.html``. Returns a summary dict of what was written.
+    The single source of bundle rendering, shared by the local writer
+    (``write_bundle``) and the REST export endpoint (which returns these files
+    for a thin client to write). ``collections`` is a list of
+    ``{"slug", "title", "documents"}`` dicts (repo-canonical only).
     """
-    root = Path(root)
-    (root / "collections").mkdir(parents=True, exist_ok=True)
+    files: dict[str, str] = {}
 
     used: set[str] = set()
     for entry in entries:
         rel = _unique_path(entry_path(entry), used)
-        path = root / rel
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(render_entry(entry))
+        files[rel] = render_entry(entry)
 
     manifest_cols = []
     for col in collections:
         docs = col["documents"]
-        (root / "collections" / f"{col['slug']}.json").write_text(render_collection(docs))
+        files[f"collections/{col['slug']}.json"] = render_collection(docs)
         manifest_cols.append(
             {"slug": col["slug"], "title": col.get("title"), "keys": [d["key"] for d in docs]}
         )
 
     if manifest_cols:
         manifest = build_manifest(manifest_cols)
-        (root / "collections" / "_manifest.json").write_text(
+        files["collections/_manifest.json"] = (
             json.dumps(manifest, indent=2, ensure_ascii=False) + "\n"
         )
 
     if viewer:
-        (root / "index.html").write_text(render_viewer(entries, collections))
+        files["index.html"] = render_viewer(entries, collections)
 
+    return files
+
+
+def write_bundle(
+    root: str | Path,
+    entries: list[dict],
+    collections: list[dict],
+    viewer: bool = True,
+) -> dict:
+    """Write a bundle to ``root`` on disk. Returns a summary of what was written."""
+    root = Path(root)
+    for rel, content in render_bundle(entries, collections, viewer=viewer).items():
+        path = root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content)
     return {"entries": len(entries), "collections": len(collections)}

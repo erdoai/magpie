@@ -23,6 +23,7 @@ from magpie.export import write_bundle
 from magpie.links import sync_entry_links
 from magpie.manifest import check_drift
 from magpie.storage import create_storage
+from magpie.sync import apply_push, gather_export
 
 app = typer.Typer(help="magpie — knowledge store with semantic + keyword search")
 attachments_app = typer.Typer(help="Manage entry attachments")
@@ -235,28 +236,6 @@ def push(
     async def _run():
         db = await Database.connect(settings.database_url)
 
-        # Pre-flight: a repo collection must not clobber a live server-canonical
-        # store of the same slug. Detect before writing anything.
-        conflicts = []
-        existing_cols = {}
-        for col in col_result.collections:
-            found = await db.find_collection(
-                col.slug, org_id=org_id, workspace=workspace, project=project
-            )
-            if found and found.get("org_id") == org_id:
-                if found.get("source") != "repo":
-                    conflicts.append(col.slug)
-                existing_cols[col.slug] = found
-        if conflicts:
-            await db.close()
-            console.print(
-                "[red]Refusing to push — these collections already exist as "
-                "server-canonical (live) stores:[/red]"
-            )
-            for slug in conflicts:
-                console.print(f"  [red]{slug}[/red]: edit it via the API/agent, not the repo")
-            raise typer.Exit(1)
-
         embedder = None
         if settings.openai_api_key:
             embedder = OpenAIEmbeddings(
@@ -265,66 +244,31 @@ def push(
                 dims=settings.embedding_dimensions,
             )
 
-        created = updated = 0
-        for entry in result.entries:
-            fm = entry.frontmatter
-            embedding = None
-            if embedder:
-                try:
-                    embedding = await embedder.embed(f"{entry.title}\n{entry.body}")
-                except Exception:
-                    pass
-
-            entry_id, was_updated = await db.upsert_entry_by_path(
-                source_path=entry.path,
-                title=entry.title,
-                content=entry.body,
-                category=fm.category,
-                tags=fm.tags,
-                source=fm.source or "bundle",
-                embedding=embedding,
-                org_id=org_id,
-                workspace=workspace,
-                project=project,
-            )
-            await sync_entry_links(db, entry_id)
-            updated += was_updated
-            created += not was_updated
-            verb = "updated" if was_updated else "created"
-            console.print(f"  {verb}: {entry.path}")
-
-        doc_count = 0
-        for col in col_result.collections:
-            existing = existing_cols.get(col.slug)
-            if existing:
-                col_id = existing["id"]
-            else:
-                col_id = await db.create_collection(
-                    slug=col.slug,
-                    title=col.slug,
-                    org_id=org_id,
-                    workspace=workspace,
-                    project=project,
-                    source="repo",
-                )
-            for doc in col.documents:
-                await db.set_document(
-                    collection_id=col_id,
-                    key=doc.key,
-                    value=doc.value,
-                    value_type=doc.value_type,
-                    org_id=org_id,
-                )
-                doc_count += 1
-            console.print(f"  collection: {col.slug} ({len(col.documents)} docs)")
+        outcome = await apply_push(
+            db, embedder, result.entries, col_result.collections,
+            org_id=org_id, workspace=workspace, project=project,
+        )
 
         if embedder:
             await embedder.close()
         await db.close()
+
+        if not outcome.ok:
+            console.print(
+                "[red]Refusing to push — these collections already exist as "
+                "server-canonical (live) stores:[/red]"
+            )
+            for slug in outcome.conflicts:
+                console.print(f"  [red]{slug}[/red]: edit it via the API/agent, not the repo")
+            raise typer.Exit(1)
+
+        for verb, path in outcome.entry_log:
+            console.print(f"  {verb}: {path}")
         console.print(
             f"[green]Pushed {len(result.entries)} entries "
-            f"({created} created, {updated} updated) and {len(col_result.collections)} "
-            f"repo collections ({doc_count} docs) into '{workspace}'[/green]"
+            f"({outcome.created} created, {outcome.updated} updated) and "
+            f"{outcome.collections} repo collections ({outcome.documents} docs) "
+            f"into '{workspace}'[/green]"
         )
 
     asyncio.run(_run())
@@ -353,30 +297,9 @@ def export(
 
     async def _run():
         db = await Database.connect(settings.database_url)
-
-        entries = []
-        offset = 0
-        while True:
-            batch = await db.list_entries(
-                org_id=org_id, workspace=workspace, project=project,
-                offset=offset, limit=200,
-            )
-            if not batch:
-                break
-            entries.extend(batch)
-            offset += len(batch)
-
-        collections = []
-        for col in await db.list_collections(
-            org_id=org_id, workspace=workspace, project=project
-        ):
-            if col.get("source") != "repo":
-                continue  # live stores are not exported
-            documents = await db.list_documents(col["id"])
-            collections.append(
-                {"slug": col["slug"], "title": col.get("title"), "documents": documents}
-            )
-
+        entries, collections = await gather_export(
+            db, org_id=org_id, workspace=workspace, project=project
+        )
         await db.close()
         summary = write_bundle(directory, entries, collections)
         console.print(

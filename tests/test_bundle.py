@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from magpie.bundle import scan_entries
+from magpie.bundle import parse_collection_items, parse_entry_items, scan_entries
 
 
 def write(root: Path, rel: str, text: str) -> None:
@@ -79,3 +79,19 @@ def test_missing_directory_is_an_error(tmp_path):
     result = scan_entries(tmp_path / "does-not-exist")
     assert not result.ok
     assert "not found" in result.errors[0].message
+
+
+# In-memory entry points (shared with the REST push endpoint) --------------
+
+
+def test_parse_entry_items_from_memory():
+    result = parse_entry_items([("a.md", VALID), ("bad.md", "no frontmatter")])
+    assert [e.path for e in result.entries] == ["a.md"]
+    assert result.errors[0].path == "bad.md"
+
+
+def test_parse_collection_items_from_memory():
+    result = parse_collection_items([("strategy", '{"mrr": 4200}'), ("bad", "{nope")])
+    assert result.collections[0].slug == "strategy"
+    assert result.collections[0].documents[0].value_type == "integer"
+    assert result.errors[0].path == "collections/bad.json"

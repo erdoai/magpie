@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from magpie.collections import VALUE_TYPES, validate_value
+from magpie.manifest import normalize_slug
 from magpie.server.context import AuthContext, auth_context
 
 logger = logging.getLogger(__name__)
@@ -97,6 +98,23 @@ async def create_collection(body: CollectionCreate, request: Request):
     if existing and existing.get("org_id") == ctx.org_id:
         return JSONResponse(
             status_code=409, content={"error": "Collection slug already exists"}
+        )
+
+    # Anti-drift: refuse a slug that near-duplicates an existing store in scope
+    # (e.g. "reach_strategy" when "reach-strategy" exists).
+    norm = normalize_slug(body.slug)
+    siblings = await db.list_collections(
+        org_id=ctx.org_id, workspace=workspace, project=project
+    )
+    dup = next(
+        (c for c in siblings
+         if c["slug"] != body.slug and normalize_slug(c["slug"]) == norm),
+        None,
+    )
+    if dup:
+        return _bad_request(
+            f"Near-duplicate of existing collection '{dup['slug']}'. "
+            "Use that slug, or pick a clearly distinct name."
         )
 
     col_id = await db.create_collection(
