@@ -31,7 +31,7 @@ from magpie.manifest import normalize_slug
 from magpie.mcp.oauth import MagpieOAuthProvider
 from magpie.resolve import resolve_entry
 from magpie.search.fusion import search as fusion_search
-from magpie.server.context import AuthContext
+from magpie.server.context import AuthContext, resolve_active_org
 
 logger = logging.getLogger(__name__)
 
@@ -106,10 +106,10 @@ async def _tool_context() -> AuthContext:
     user_id = getattr(token, "user_id", None) if token else None
     if not user_id or not _db:
         return AuthContext()
-    orgs = await _db.list_user_orgs(user_id)
-    if orgs:
-        return AuthContext(user_id=user_id, org_id=orgs[0]["id"], role=orgs[0].get("role"))
-    return AuthContext(user_id=user_id)
+    # No per-request header over MCP — use the saved default org (falling back
+    # to first membership), consistent with the REST session path.
+    org_id, role = await resolve_active_org(_db, user_id, None)
+    return AuthContext(user_id=user_id, org_id=org_id, role=role)
 
 
 def _format_link(link: dict) -> str:
@@ -283,7 +283,7 @@ def _register_tools(server: FastMCP) -> None:
             return "Error: database not initialized"
 
         ctx = await _tool_context()
-        entry = await _db.get_entry(id)
+        entry = await _db.get_entry(id, **ctx.view_filter)
         if not entry or not ctx.can_access(entry):
             return f"Entry {id} not found."
 
@@ -390,7 +390,7 @@ def _register_tools(server: FastMCP) -> None:
             return "Error: database not initialized"
 
         ctx = await _tool_context()
-        entry = await _db.get_entry(id)
+        entry = await _db.get_entry(id, **ctx.view_filter)
         if not entry or not ctx.can_access(entry):
             return f"Entry {id} not found."
 
@@ -422,7 +422,7 @@ def _register_tools(server: FastMCP) -> None:
             return "Error: database not initialized"
 
         ctx = await _tool_context()
-        entry = await _db.get_entry(id)
+        entry = await _db.get_entry(id, **ctx.view_filter)
         if not entry or not ctx.can_access(entry):
             return f"Entry {id} not found."
 
@@ -459,7 +459,7 @@ def _register_tools(server: FastMCP) -> None:
         if not ctx.has_role("editor"):
             return "Error: your role does not allow archiving knowledge."
 
-        entry = await _db.get_entry(id)
+        entry = await _db.get_entry(id, **ctx.view_filter)
         if not entry or not ctx.can_access(entry):
             return f"Entry {id} not found."
 
@@ -501,7 +501,7 @@ def _register_tools(server: FastMCP) -> None:
         if not ctx.has_role("editor"):
             return "Error: your role does not allow uploading attachments."
 
-        entry = await _db.get_entry(entry_id)
+        entry = await _db.get_entry(entry_id, **ctx.view_filter)
         if not entry or not ctx.can_access(entry):
             return f"Entry {entry_id} not found."
 
@@ -550,7 +550,7 @@ def _register_tools(server: FastMCP) -> None:
             return "Error: database not initialized"
 
         ctx = await _tool_context()
-        entry = await _db.get_entry(entry_id)
+        entry = await _db.get_entry(entry_id, **ctx.view_filter)
         if not entry or not ctx.can_access(entry):
             return f"Entry {entry_id} not found."
 
@@ -575,7 +575,7 @@ def _register_tools(server: FastMCP) -> None:
         ctx = await _tool_context()
         att = await _db.get_attachment(att_id)
         if att:
-            entry = await _db.get_entry(att["entry_id"])
+            entry = await _db.get_entry(att["entry_id"], **ctx.view_filter)
             if not entry or not ctx.can_access(entry):
                 att = None
         if not att:
@@ -662,7 +662,7 @@ def _register_tools(server: FastMCP) -> None:
         if not col or not ctx.can_access({"user_id": None, "org_id": col.get("org_id")}):
             return f"Collection {collection} not found."
 
-        doc = await _db.get_document(col["id"], key)
+        doc = await _db.get_document(col["id"], key, **ctx.view_filter)
         if not doc:
             keys = [d["key"] for d in await _db.list_documents(col["id"])]
             hint = f" Available keys: {', '.join(keys)}" if keys else ""
@@ -759,7 +759,7 @@ def _register_tools(server: FastMCP) -> None:
                 project=project,
                 created_by_user_id=ctx.user_id,
             )
-            col = await _db.get_collection(col_id)
+            col = await _db.get_collection(col_id, trusted=True)  # just created above
 
         await _db.set_document(
             collection_id=col["id"],
@@ -903,7 +903,7 @@ def _register_tools(server: FastMCP) -> None:
 
         # Every source entry must be visible to the caller
         for source_id in source_ids:
-            entry = await _db.get_entry(source_id)
+            entry = await _db.get_entry(source_id, **ctx.view_filter)
             if not entry or not ctx.can_access(entry):
                 return f"Entry {source_id} not found."
 

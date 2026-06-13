@@ -7,7 +7,13 @@ from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
+from magpie.server.context import ORG_FORBIDDEN, cap_role, resolve_active_org
+
 logger = logging.getLogger(__name__)
+
+# Client-supplied hint for which org a multi-org user is acting in. Validated
+# against membership server-side — never trusted as-is.
+ORG_HEADER = "x-organization-id"
 
 PUBLIC_PATHS = {"/health", "/docs", "/openapi.json", "/redoc"}
 
@@ -61,11 +67,27 @@ class AuthMiddleware(BaseHTTPMiddleware):
             key_record = await db.get_api_key_by_hash(hash_key(token))
             if key_record:
                 await db.touch_api_key(key_record["id"])
-                request.state.user_id = key_record.get("user_id")
-                request.state.org_id = key_record.get("org_id")
-                request.state.role = key_record.get("role") or "editor"
+                key_user = key_record.get("user_id")
+                key_role = key_record.get("role") or "editor"
+                request.state.user_id = key_user
+                request.state.role = key_role
                 request.state.auth_workspace = key_record.get("workspace")
                 request.state.auth_project = key_record.get("project")
+                # A user key can switch active org via X-Organization-ID to any
+                # org the user belongs to; the key's role caps the result so a
+                # switch never escalates. No header -> the key's pinned org.
+                requested = request.headers.get(ORG_HEADER) or None
+                if requested and key_user:
+                    role = await db.get_org_role(requested, key_user)
+                    if role is None:
+                        return JSONResponse(
+                            status_code=403,
+                            content={"error": "Not a member of the requested organization"},
+                        )
+                    request.state.org_id = requested
+                    request.state.role = cap_role(key_role, role)
+                else:
+                    request.state.org_id = key_record.get("org_id")
                 return await call_next(request)
 
         # 2. Session cookie
@@ -75,10 +97,20 @@ class AuthMiddleware(BaseHTTPMiddleware):
             session = await db.get_session(session_id)
             if session:
                 request.state.user_id = session["user_id"]
-                # Resolve org from user's memberships (use first org)
-                orgs = await db.list_user_orgs(session["user_id"])
-                request.state.org_id = orgs[0]["id"] if orgs else None
-                request.state.role = orgs[0].get("role") if orgs else None
+                # Active org: X-Organization-ID header (validated) > saved
+                # default > first membership. A header naming an org the user
+                # isn't in is rejected, not silently downgraded.
+                requested = request.headers.get(ORG_HEADER) or None
+                org_id, role = await resolve_active_org(
+                    db, session["user_id"], requested
+                )
+                if org_id is ORG_FORBIDDEN:
+                    return JSONResponse(
+                        status_code=403,
+                        content={"error": "Not a member of the requested organization"},
+                    )
+                request.state.org_id = org_id
+                request.state.role = role
                 return await call_next(request)
 
         return JSONResponse(status_code=401, content={"error": "Unauthorized"})

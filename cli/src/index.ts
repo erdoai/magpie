@@ -11,6 +11,7 @@ import {
   clearToken,
   loadConfig,
   resolveApiUrl,
+  resolveOrg,
   resolveToken,
   saveConfig,
 } from './config.js';
@@ -142,14 +143,19 @@ program
       return;
     }
     console.log(`Auth: API key ${token.slice(0, 12)}…`);
+    const activeOrg = resolveOrg();
+    if (activeOrg) console.log(`Active org: ${activeOrg}`);
     if (config.workspace || config.project) {
       console.log(`Linked: workspace=${config.workspace || '-'} project=${config.project || '-'}`);
     }
     try {
-      const orgs = await api<{ name: string; slug: string; role?: string }[]>('/api/orgs');
+      const orgs = await api<{ id: string; name: string; slug: string; role?: string }[]>('/api/orgs');
       if (orgs.length) {
         console.log('Orgs:');
-        for (const org of orgs) console.log(`  - ${org.name} (${org.slug})${org.role ? ` [${org.role}]` : ''}`);
+        for (const org of orgs) {
+          const marker = org.id === activeOrg || org.slug === activeOrg ? '* ' : '  ';
+          console.log(`  ${marker}${org.name} (${org.slug})${org.role ? ` [${org.role}]` : ''}`);
+        }
       }
     } catch {
       /* key without session-user context */
@@ -179,12 +185,94 @@ org
   .action(async () => {
     requireToken();
     try {
+      const active = resolveOrg();
       const orgs = await api<{ id: string; name: string; slug: string; role?: string }[]>('/api/orgs');
       if (!orgs.length) return console.log('No orgs.');
-      for (const o of orgs) console.log(`- ${o.name} (${o.slug})${o.role ? ` [${o.role}]` : ''} id=${o.id}`);
+      for (const o of orgs) {
+        const marker = o.id === active || o.slug === active ? '* ' : '  ';
+        console.log(`${marker}${o.name} (${o.slug})${o.role ? ` [${o.role}]` : ''} id=${o.id}`);
+      }
     } catch (err) {
       fail(err);
     }
+  });
+
+org
+  .command('create <name>')
+  .description('Create an organization and switch to it')
+  .option('--slug <slug>', 'URL slug (defaults to a slugified name)')
+  .action(async (name: string, opts: { slug?: string }) => {
+    requireToken();
+    try {
+      const created = await api<{ id: string; name: string; slug: string }>('/api/orgs', {
+        method: 'POST',
+        body: { name, slug: opts.slug },
+      });
+      console.log(`Created ${created.name} (${created.slug}) id=${created.id}`);
+      // You created it — make it active on this machine.
+      const config = loadConfig();
+      config.org = created.id;
+      saveConfig(config);
+      await api(`/api/orgs/${created.id}/select`, { method: 'POST' }).catch(() => {});
+      console.log(`Active org: ${created.id}`);
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+org
+  .command('invite <org> <email>')
+  .description('Invite a member to an org (admin+)')
+  .option('--role <role>', 'viewer | editor | admin | owner', 'editor')
+  .action(async (orgId: string, email: string, opts: { role: string }) => {
+    requireToken();
+    try {
+      await api(`/api/orgs/${orgId}/members`, {
+        method: 'POST',
+        body: { email, role: opts.role },
+      });
+      console.log(`Invited ${email} to ${orgId} as ${opts.role}.`);
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+org
+  .command('use <org>')
+  .description('Set the active org for this machine (sent as X-Organization-ID)')
+  .action(async (orgId: string) => {
+    requireToken();
+    const config = loadConfig();
+    config.org = orgId;
+    saveConfig(config);
+    console.log(`Active org: ${orgId}`);
+    // Best-effort: also persist as the server-side default (for session logins
+    // and unpinned keys). Membership is enforced server-side.
+    try {
+      await api(`/api/orgs/${orgId}/select`, { method: 'POST' });
+    } catch (err) {
+      if (err instanceof ApiError && (err.status === 404 || err.status === 403)) {
+        console.error(`Warning: you don't appear to be a member of ${orgId}.`);
+      }
+    }
+  });
+
+org
+  .command('current')
+  .description('Show the active org')
+  .action(() => {
+    const active = resolveOrg();
+    console.log(active ? `Active org: ${active}` : 'No active org set (using your default).');
+  });
+
+org
+  .command('clear')
+  .description('Clear the active org override (fall back to your default)')
+  .action(() => {
+    const config = loadConfig();
+    delete config.org;
+    saveConfig(config);
+    console.log('Active org cleared.');
   });
 
 const workspaceCmd = program.command('workspace').description('Workspace commands');
@@ -198,6 +286,23 @@ workspaceCmd
       const list = await api<{ name: string; slug: string }[]>(`/api/orgs/${orgId}/workspaces`);
       if (!list.length) return console.log('No workspaces.');
       for (const ws of list) console.log(`- ${ws.name} (${ws.slug})`);
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+workspaceCmd
+  .command('create <orgId> <name>')
+  .description('Create a workspace in an org (editor+)')
+  .option('--slug <slug>', 'URL slug (defaults to a slugified name)')
+  .action(async (orgId: string, name: string, opts: { slug?: string }) => {
+    requireToken();
+    try {
+      const ws = await api<{ slug: string }>(`/api/orgs/${orgId}/workspaces`, {
+        method: 'POST',
+        body: { name, slug: opts.slug },
+      });
+      console.log(`Created workspace ${name} (${ws.slug}). Use it with: magpie link --workspace ${ws.slug}`);
     } catch (err) {
       fail(err);
     }

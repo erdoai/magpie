@@ -41,6 +41,7 @@
             "group": "Concepts",
             "pages": [
               "concepts/entries",
+              "concepts/multi-tenancy",
               "concepts/search",
               "concepts/collections",
               "concepts/links",
@@ -53,7 +54,7 @@
           },
           {
             "group": "Reference",
-            "pages": ["reference/configuration", "reference/api"]
+            "pages": ["reference/configuration", "reference/auth", "reference/api"]
           }
         ]
       },

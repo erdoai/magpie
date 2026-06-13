@@ -85,6 +85,21 @@ async def list_orgs(request: Request):
     return await db.list_user_orgs(ctx.user_id)
 
 
+@router.post("/orgs/{org_id}/select")
+async def select_org(org_id: str, request: Request):
+    """Persist this org as the caller's default active org (used when no
+    X-Organization-ID header is sent, e.g. cookie sessions). Membership-checked."""
+    ctx = auth_context(request)
+    if not ctx.user_id:
+        return _unauthorized()
+    db = request.app.state.db
+    role = await db.get_org_role(org_id, ctx.user_id)
+    if role is None:
+        return JSONResponse(status_code=404, content={"error": "Not found"})
+    await db.set_user_default_org(ctx.user_id, org_id)
+    return {"ok": True, "org_id": org_id, "role": role}
+
+
 @router.get("/orgs/{org_id}/members")
 async def list_members(org_id: str, request: Request):
     err = await _require_org_role(request, org_id, "viewer")

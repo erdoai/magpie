@@ -3,18 +3,39 @@ title: Commands
 description: Full reference for the Magpie CLI.
 ---
 
-Most commands accept `--workspace` and `--project` to scope, falling back to what you set with `magpie link`.
+Most commands accept `--workspace` and `--project` to scope, falling back to what you set with `magpie link`. They run against your **active org** — see [Authentication & multi-tenancy](/reference/auth).
 
 ## Auth & account
 
 ```bash
 magpie login              # email one-time code → store an API key
 magpie logout             # remove the stored key
-magpie whoami             # server, auth, linked scope, orgs
+magpie whoami             # server, auth, active org, linked scope, orgs
 magpie link --workspace support --project billing
-magpie org list
 magpie workspace list <orgId>
 ```
+
+## Orgs & workspaces
+
+A user can belong to several orgs but acts in one at a time. `org use` sets the active org for this machine — sent as `X-Organization-ID` and saved as your server-side default.
+
+```bash
+magpie org list                       # your orgs (active one marked with *)
+magpie org create <name>              # create an org and switch to it
+magpie org use <org>                  # set the active org (id or slug)
+magpie org current                    # show the active org
+magpie org clear                      # fall back to your default
+magpie org invite <org> <email> --role editor   # add a member (admin+)
+
+magpie workspace list <orgId>
+magpie workspace create <orgId> <name>           # create a workspace (editor+)
+```
+
+Override the active org per-invocation with the `MAGPIE_ORG` environment variable.
+
+<Note>
+**Projects aren't created — they're tags.** A project (and a workspace) springs into existence the moment you write knowledge tagged with it. "Switching" to a workspace/project means setting it as your default scope with `magpie link --workspace <ws> --project <proj>` (or passing `--workspace`/`--project` per command). `workspace create` only pre-registers a workspace for listing; it isn't required before writing.
+</Note>
 
 ## Knowledge
 

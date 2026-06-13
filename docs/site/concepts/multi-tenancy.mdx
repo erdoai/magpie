@@ -1,0 +1,71 @@
+---
+title: Multi-tenancy
+description: How orgs, workspaces, and projects isolate knowledge across companies, products, and teams.
+---
+
+Magpie is built to hold knowledge for **many companies, products, and teams in one store** without leaks or collisions. Three nested scopes do the work, plus a personal scope.
+
+## The four scopes
+
+Every entry, collection, and document carries four optional scope fields. `NULL` means "global".
+
+| Scope | What it is | Enforced? | Example |
+|-------|-----------|-----------|---------|
+| **Org** | Your team/company/account boundary | **Yes — the security wall** | `acme`, `initech` |
+| **Workspace** | A broad app/product namespace within an org | Filter only | `support`, `mobile-app`, `internal-tools` |
+| **Project** | A narrower work area within a workspace | Filter only | a customer slug, a service name |
+| **User** | Personal scope — your private entries | Yes | you |
+
+The distinction that matters most:
+
+<Note>
+**Org is the only real security boundary.** Membership and roles are enforced on every read, search, and write. **Workspace and project are organising tags** — anyone who can see an org can see all of its workspaces and projects. Use them to keep things tidy, not to keep secrets.
+</Note>
+
+## Visibility
+
+For a given caller, a row is visible if it is:
+
+- **global** (no user, no org), or
+- **yours** (its `user_id` is you), or
+- **your active org's** (its `org_id` matches the org you're acting in).
+
+Nothing else is ever returned — the database filters cross-tenant rows out at the query level, not just in the application. A request for another org's entry by ID returns `404`, not the row.
+
+## Mapping your situation
+
+A common shape is **company → product → internal/external**. That maps cleanly:
+
+| Your concept | Magpie scope |
+|--------------|--------------|
+| Each company you work for | a separate **org** |
+| Each product within a company | a **workspace** |
+| Work area, or internal-vs-external split | a **project** |
+
+### When to use a separate org vs a workspace
+
+Decide by the question *"must this knowledge be unable to leak across the boundary?"*
+
+- **Yes, hard wall** → separate **orgs**. Different companies always get different orgs. An external/client product whose knowledge must never bleed into internal work is its own org. Membership is per-org, so a person only sees the orgs they're invited to.
+- **No, same trusted boundary** → same org, split by **workspace** / **project**. Internal products that freely share learnings sit in one org as separate workspaces.
+
+<Warning>
+Don't rely on workspace/project to separate two clients' data inside a single org — a member of that org can read across all of its workspaces. For "must not leak", use separate orgs.
+</Warning>
+
+## Roles
+
+Within an org, membership carries a role. Roles are hierarchical: each includes the ones below it.
+
+| Role | Can |
+|------|-----|
+| `viewer` | Read and search |
+| `editor` | + create, update, archive, merge knowledge |
+| `admin` | + manage members, workspaces, org settings |
+| `owner` | + delete the org |
+
+A user with no org membership can still keep **personal** (user-scoped) and **global** knowledge.
+
+## Active org
+
+A person can belong to several orgs but acts in **one at a time** — the *active org*. See [Authentication & multi-tenancy](/reference/auth) for how the active org is chosen and switched (the `X-Organization-ID` header, a saved default, and `magpie org use`).

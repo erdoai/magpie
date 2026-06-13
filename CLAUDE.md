@@ -37,11 +37,15 @@ REST client with the same `push`/`export` plus `search`/`read`/`write`/etc.)
 
 ## Config
 
-Environment variables with `MAGPIE_` prefix:
-- `MAGPIE_DATABASE_URL` — Postgres connection string (required)
-- `MAGPIE_OPENAI_API_KEY` — for embeddings (optional, keyword search works without)
-- `MAGPIE_API_KEY` — static auth key (optional, empty = no auth)
-- `MAGPIE_PORT` — server port (default: 8200)
+Environment variables, **no prefix** (`Settings` uses `env_prefix=""`):
+- `DATABASE_URL` — Postgres connection string (required)
+- `OPENAI_API_KEY` — for embeddings (optional, keyword search works without)
+- `API_KEY` — static auth key (optional, empty = no auth). **Unrestricted /
+  single-tenant**: a request bearing it bypasses org isolation. Don't set it on
+  a multi-tenant instance — use per-user keys / session login instead.
+- `PORT` — server port (default: 8200)
+
+Full list in `magpie/config/settings.py` and `docs/site/reference/configuration.mdx`.
 
 ## Data model
 
@@ -49,6 +53,14 @@ Entries use PARA categories (Projects / Areas / Resources / Archives).
 Scoped by user_id, org_id, workspace, project (all optional, NULL = global).
 Workspace = broad app/product namespace (e.g. "reach"); project = narrower work
 area within it (e.g. "alertee"). Org roles: owner > admin > editor > viewer.
+
+**Org is the only enforced boundary** (membership + roles). Workspace/project
+are filter tags within a trusted org, not security boundaries. A user can belong
+to many orgs but acts in one **active org** at a time, resolved as:
+`X-Organization-ID` header (membership-validated, 403 if not a member) > saved
+`users.default_org_id` (via `POST /api/orgs/{id}/select`) > first membership.
+Shared resolver: `context.resolve_active_org()`. A user API key can switch among
+the user's orgs via the header, capped by the key's role (`context.cap_role`).
 
 ## Development
 
@@ -69,6 +81,11 @@ pytest
 - Search fusion in `magpie/search/fusion.py` — runs semantic + keyword in parallel, merges with RRF.
 - Migration runner copied from crow pattern — numbered SQL files in `magpie/db/migrations/`.
 - MCP tools initialized with db + embedder at startup via `init_mcp()`.
+- **Fail-closed reads**: `db.get_entry/get_collection/get_document` filter
+  visibility in SQL. Pass `**ctx.view_filter` (REST + both MCP servers) or
+  `trusted=True` for server-internal reads (links, resolve, CLI, post-write
+  round-trips). No scope + not trusted ⇒ only global rows. Don't add a raw
+  by-id read that bypasses this.
 
 ## CLI / MCP / API / Docs parity
 

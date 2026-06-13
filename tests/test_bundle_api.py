@@ -57,7 +57,7 @@ class FakeDB:
         }
         return self.entries[source_path]["id"], was
 
-    async def get_entry(self, entry_id):
+    async def get_entry(self, entry_id, *, user_id=None, org_id=None, trusted=False):
         return next((e for e in self.entries.values() if e["id"] == entry_id), None)
 
     async def find_entries_by_titles(self, titles, user_id=None, org_id=None):

@@ -41,6 +41,8 @@ class FakeDatabase:
         self.collections: dict[str, dict] = {}
         self.documents: dict[tuple[str, str], dict] = {}  # (collection_id, key)
         self.attachments: dict[str, dict] = {}
+        self.sessions: dict[str, dict] = {}  # session_id -> {user_id}
+        self.user_default_org: dict[str, str | None] = {}  # user_id -> org_id
 
     # -- keys --
 
@@ -83,7 +85,13 @@ class FakeDatabase:
     # -- sessions / users / orgs --
 
     async def get_session(self, session_id):
-        return None
+        return self.sessions.get(session_id)
+
+    async def get_user_default_org(self, user_id):
+        return self.user_default_org.get(user_id)
+
+    async def set_user_default_org(self, user_id, org_id):
+        self.user_default_org[user_id] = org_id
 
     async def list_user_orgs(self, user_id):
         return [
@@ -149,8 +157,13 @@ class FakeDatabase:
         }
         return col_id
 
-    async def get_collection(self, col_id):
-        return self.collections.get(col_id)
+    async def get_collection(self, col_id, *, user_id=None, org_id=None, trusted=False):
+        col = self.collections.get(col_id)
+        if col is None or trusted:
+            return col
+        if col.get("org_id") is None or col.get("org_id") == org_id:
+            return col
+        return None
 
     async def find_collection(self, slug, org_id=None, workspace=None, project=None):
         matches = [
@@ -199,8 +212,15 @@ class FakeDatabase:
         }
         return doc_id
 
-    async def get_document(self, collection_id, key):
-        return self.documents.get((collection_id, key))
+    async def get_document(self, collection_id, key, *, user_id=None, org_id=None, trusted=False):
+        doc = self.documents.get((collection_id, key))
+        if doc is None or trusted:
+            return doc
+        col = self.collections.get(collection_id)
+        col_org = col.get("org_id") if col else None
+        if col_org is None or col_org == org_id:
+            return doc
+        return None
 
     async def list_documents(self, collection_id):
         return [d for (cid, _k), d in sorted(self.documents.items())
@@ -259,8 +279,18 @@ class FakeDatabase:
             workspace=workspace, project=project,
         )
 
-    async def get_entry(self, entry_id):
-        return self.entries.get(entry_id)
+    async def get_entry(self, entry_id, *, user_id=None, org_id=None, trusted=False):
+        entry = self.entries.get(entry_id)
+        if entry is None or trusted:
+            return entry
+        # Fail-closed: global, own, or same-org only (mirrors SQL in database.py).
+        if entry.get("user_id") is None and entry.get("org_id") is None:
+            return entry
+        if entry.get("user_id") is not None and entry.get("user_id") == user_id:
+            return entry
+        if entry.get("org_id") is not None and entry.get("org_id") == org_id:
+            return entry
+        return None
 
     async def update_entry(self, entry_id, **fields):
         entry = self.entries.get(entry_id)
@@ -601,6 +631,127 @@ def test_workspace_delete_requires_admin():
     assert client.delete(f"/api/workspaces/{ws_id}", headers=auth("admin-key")).status_code == 200
 
 
+# -- Session org switching (X-Organization-ID + default org) --
+
+
+def _session(db: FakeDatabase, user_id: str, *orgs: tuple[str, str]) -> dict:
+    """Register a session for user_id with the given (org_id, role) memberships
+    (in order — first listed becomes the bootstrap default). Returns request
+    cookies for the session."""
+    for org_id, role in orgs:
+        db.org_roles[(org_id, user_id)] = role
+    db.sessions["sess-1"] = {"user_id": user_id, "expires_at": None}
+    return {"magpie_session": "sess-1"}
+
+
+def test_session_falls_back_to_first_org():
+    db = FakeDatabase()
+    cookies = _session(db, "ua", ("org-a", "editor"), ("org-b", "admin"))
+    in_b = db.add_entry(org_id="org-b", user_id="ub")
+    client = make_client(db)
+
+    # No header, no saved default -> first membership (org-a); org-b is hidden.
+    assert client.get(f"/api/entries/{in_b}", cookies=cookies).status_code == 404
+
+
+def test_org_header_switches_active_org():
+    db = FakeDatabase()
+    cookies = _session(db, "ua", ("org-a", "editor"), ("org-b", "admin"))
+    in_b = db.add_entry(org_id="org-b", user_id="ub")
+    client = make_client(db)
+
+    res = client.get(
+        f"/api/entries/{in_b}", cookies=cookies, headers={"X-Organization-ID": "org-b"}
+    )
+    assert res.status_code == 200
+
+
+def test_org_header_rejected_when_not_a_member():
+    db = FakeDatabase()
+    cookies = _session(db, "ua", ("org-a", "editor"))
+    client = make_client(db)
+
+    res = client.get(
+        "/api/orgs", cookies=cookies, headers={"X-Organization-ID": "org-x"}
+    )
+    assert res.status_code == 403
+
+
+def test_select_org_persists_default_and_is_membership_checked():
+    db = FakeDatabase()
+    cookies = _session(db, "ua", ("org-a", "editor"), ("org-b", "admin"))
+    in_b = db.add_entry(org_id="org-b", user_id="ub")
+    client = make_client(db)
+
+    # Cannot select an org you're not in.
+    assert client.post("/api/orgs/org-x/select", cookies=cookies).status_code == 404
+
+    # Select org-b -> persisted as default; subsequent header-less requests use it.
+    res = client.post("/api/orgs/org-b/select", cookies=cookies)
+    assert res.status_code == 200
+    assert db.user_default_org["ua"] == "org-b"
+    assert client.get(f"/api/entries/{in_b}", cookies=cookies).status_code == 200
+
+
+def test_stale_default_org_self_heals():
+    db = FakeDatabase()
+    cookies = _session(db, "ua", ("org-a", "editor"))
+    db.user_default_org["ua"] = "org-gone"  # membership no longer exists
+    client = make_client(db)
+
+    # Resolves without error (falls back to org-a) and clears the stale default.
+    assert client.get("/api/orgs", cookies=cookies).status_code == 200
+    assert db.user_default_org["ua"] is None
+
+
+# -- API key org switching (X-Organization-ID on a user key) --
+
+
+def test_key_can_switch_org_via_header():
+    db = FakeDatabase()
+    # Key pinned to org-a, but the user is also a member of org-b.
+    add_key(db, "key-a", user_id="ua", org_id="org-a")
+    db.org_roles[("org-a", "ua")] = "editor"
+    db.org_roles[("org-b", "ua")] = "admin"
+    in_b = db.add_entry(org_id="org-b", user_id="ub")
+    client = make_client(db)
+
+    # Without the header the key stays on org-a -> org-b hidden.
+    assert client.get(f"/api/entries/{in_b}", headers=auth("key-a")).status_code == 404
+    # With the header it switches to org-b.
+    res = client.get(
+        f"/api/entries/{in_b}",
+        headers={**auth("key-a"), "X-Organization-ID": "org-b"},
+    )
+    assert res.status_code == 200
+
+
+def test_key_org_switch_is_role_capped():
+    db = FakeDatabase()
+    # Viewer key; user is admin in org-b. Switching must not escalate to admin.
+    add_key(db, "key-a", user_id="ua", org_id="org-a", role="viewer")
+    db.org_roles[("org-b", "ua")] = "admin"
+    client = make_client(db)
+
+    res = client.post(
+        "/api/entries",
+        headers={**auth("key-a"), "X-Organization-ID": "org-b"},
+        json={"title": "t", "content": "c"},
+    )
+    assert res.status_code == 403  # still a viewer despite org-b admin membership
+
+
+def test_key_org_switch_rejected_when_not_member():
+    db = FakeDatabase()
+    add_key(db, "key-a", user_id="ua", org_id="org-a")
+    client = make_client(db)
+
+    res = client.get(
+        "/api/entries", headers={**auth("key-a"), "X-Organization-ID": "org-x"}
+    )
+    assert res.status_code == 403
+
+
 # -- AuthContext unit tests --
 
 
@@ -623,3 +774,31 @@ def test_auth_context_scope_clamping():
     assert ctx.clamp_scope("other", None) == ("reach", "alertee")
     open_ctx = AuthContext(user_id="u", org_id="o")
     assert open_ctx.clamp_scope("reach", "alertee") == ("reach", "alertee")
+
+
+def test_view_filter_maps_context_to_db_kwargs():
+    assert AuthContext().view_filter == {"trusted": True}  # unrestricted reads all
+    scoped = AuthContext(user_id="ua", org_id="org-a", role="viewer")
+    assert scoped.view_filter == {"user_id": "ua", "org_id": "org-a"}
+
+
+async def test_db_get_entry_is_fail_closed_by_default():
+    """The DB layer itself denies cross-tenant reads — not just the routes.
+
+    Mirrors database.py: with neither trusted nor matching scope, only global
+    (untenanted) rows come back; a foreign org/user yields None.
+    """
+    db = FakeDatabase()
+    glob = db.add_entry()  # no user, no org
+    org_a = db.add_entry(org_id="org-a", user_id="ua")
+
+    # No scope, not trusted: only the global entry is visible.
+    assert await db.get_entry(glob) is not None
+    assert await db.get_entry(org_a) is None
+
+    # Foreign viewer: still denied.
+    assert await db.get_entry(org_a, user_id="ub", org_id="org-b") is None
+
+    # Same-org viewer and trusted reads both succeed.
+    assert await db.get_entry(org_a, user_id="ub", org_id="org-a") is not None
+    assert await db.get_entry(org_a, trusted=True) is not None

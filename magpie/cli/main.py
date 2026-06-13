@@ -337,7 +337,8 @@ def attachments_add(
             await db.close()
             raise typer.Exit(1)
 
-        entry = await db.get_entry(entry_id)
+        # Server-side CLI op against the DB — full access by design.
+        entry = await db.get_entry(entry_id, trusted=True)
         if not entry:
             console.print(f"[red]Entry {entry_id} not found[/red]")
             await db.close()

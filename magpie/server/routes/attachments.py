@@ -34,7 +34,7 @@ async def _accessible_attachment(db, att_id: str, ctx: AuthContext) -> dict | No
     att = await db.get_attachment(att_id)
     if not att:
         return None
-    entry = await db.get_entry(att["entry_id"])
+    entry = await db.get_entry(att["entry_id"], **ctx.view_filter)
     if not entry or not ctx.can_access(entry):
         return None
     return att
@@ -61,7 +61,7 @@ async def upload_attachment(
     if not ctx.has_role("editor"):
         return _forbidden("Write access requires editor role")
 
-    entry = await db.get_entry(entry_id)
+    entry = await db.get_entry(entry_id, **ctx.view_filter)
     if not entry or not ctx.can_access(entry):
         return _not_found()
 
@@ -111,7 +111,7 @@ async def list_attachments(entry_id: str, request: Request):
     settings = request.app.state.settings
     ctx = auth_context(request)
 
-    entry = await db.get_entry(entry_id)
+    entry = await db.get_entry(entry_id, **ctx.view_filter)
     if not entry or not ctx.can_access(entry):
         return _not_found()
 

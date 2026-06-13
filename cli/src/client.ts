@@ -1,6 +1,6 @@
 /** Thin REST client for the Magpie API. */
 
-import { resolveApiUrl, resolveToken } from './config.js';
+import { resolveApiUrl, resolveOrg, resolveToken } from './config.js';
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -24,6 +24,10 @@ export async function api<T = unknown>(path: string, opts: RequestOptions = {}):
   if (!opts.noAuth) {
     const token = resolveToken();
     if (token) headers['Authorization'] = `Bearer ${token}`;
+    // Active org override (no-op server-side for org-pinned keys). Let an
+    // explicit per-call header win.
+    const org = resolveOrg();
+    if (org && !headers['X-Organization-ID']) headers['X-Organization-ID'] = org;
   }
 
   let body: BodyInit | undefined;
