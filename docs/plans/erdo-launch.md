@@ -70,6 +70,7 @@ Current auth: email-OTP (Resend) + 30-day session cookies, per-user/scoped **API
 - [ ] 🧑/🤖 Set the Cloudflare CNAME `magpie.erdo.ai` → Railway target (erdo.ai DNS is on Cloudflare).
 - [ ] 🤖 Set `MAGPIE_PUBLIC_URL=https://magpie.erdo.ai`; verify the landing page + app serve there.
 - [ ] 🤝 Mintlify: connect `docs/site`, set `docs.magpie.erdo.ai`, verify build.
+- [ ] 🤖 Once the docs site is live, swap the README's `docs/site/*.mdx` links to absolute `https://docs.magpie.erdo.ai/...` URLs (they point at GitHub-rendered mdx for now).
 - [ ] 🧑 (parallel) Broker outreach for `magpie.ai`.
 
 ## Phase E — Launch-readiness follow-ups (post-cutover)
