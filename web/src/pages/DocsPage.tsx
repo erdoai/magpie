@@ -133,7 +133,7 @@ export function DocsPage() {
           <H3>Hosted</H3>
           <CodeBlock
             language="shell"
-            code={`npx @magpie/cli login --api-url ${origin}
+            code={`npx @erdo/magpie login --api-url ${origin}
 magpie link --workspace my-app --project acme   # defaults for every command
 
 magpie write --title "Acme positioning" --file notes.md
@@ -146,7 +146,7 @@ magpie search "what did we decide about pricing?"`}
 claude mcp add --transport http magpie ${origin}/mcp
 
 # Or stdio, using your CLI credentials
-claude mcp add magpie -- npx @magpie/cli mcp`}
+claude mcp add magpie -- npx @erdo/magpie mcp`}
           />
 
           <H2 id="concepts">Concepts</H2>
@@ -170,7 +170,7 @@ claude mcp add magpie -- npx @magpie/cli mcp`}
           <H2 id="cli">CLI</H2>
           <CodeBlock
             language="shell"
-            code={`npx @magpie/cli login        # email OTP → API key in ~/.config/magpie/
+            code={`npx @erdo/magpie login        # email OTP → API key in ~/.config/magpie/
 magpie logout | whoami | link
 
 magpie search "query" [--workspace W] [--project P] [--category C]
@@ -288,7 +288,7 @@ magpie collections get reach.strategy current`}
           <H2 id="selfhost">Self-hosting</H2>
           <CodeBlock
             language="shell"
-            code={`pip install magpie-ai
+            code={`pip install erdo-magpie
 export DATABASE_URL=postgres://localhost/magpie
 magpie serve    # REST + MCP + UI on :8200`}
           />

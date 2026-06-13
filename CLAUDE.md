@@ -32,7 +32,7 @@ magpie import markdown .  # import foreign markdown/claude memories
 magpie version            # show version
 ```
 
-(Server-side ops against the DB. The user-facing `@magpie/cli` in `cli/` is a thin
+(Server-side ops against the DB. The user-facing `@erdo/magpie` in `cli/` is a thin
 REST client with the same `push`/`export` plus `search`/`read`/`write`/etc.)
 
 ## Config
@@ -103,7 +103,7 @@ same change**:
   new *tool* must be added to both.
 - **Both CLIs**: the Python `magpie` CLI (`magpie/cli/main.py`) is for
   server/self-hosted ops against the DB (`serve`, `migrate`, `import`, `push`,
-  `export`, attachments); the TypeScript `@magpie/cli` (`cli/src/`) is the
+  `export`, attachments); the TypeScript `@erdo/magpie` (`cli/src/`) is the
   user-facing client over REST. A capability that suits both belongs on both.
   Logic stays server-side — clients read/write files and call the API.
 - **Docs** (`docs/site/`, Mintlify): add/update the reference page in the same

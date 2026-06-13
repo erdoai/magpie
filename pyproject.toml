@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "magpie-ai"
+name = "erdo-magpie"
 dynamic = ["version"]
 description = "Knowledge store with semantic + keyword search. Dual search, REST + MCP API, management UI."
 readme = "README.md"

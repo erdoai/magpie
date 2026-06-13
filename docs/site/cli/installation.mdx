@@ -3,10 +3,10 @@ title: Installation
 description: Install the Magpie CLI and sign in.
 ---
 
-The `@magpie/cli` package is the user-facing CLI — a thin client over the REST API for searching, writing, and syncing knowledge, plus a local MCP server.
+The `@erdo/magpie` package is the user-facing CLI — a thin client over the REST API for searching, writing, and syncing knowledge, plus a local MCP server.
 
 ```bash
-npm install -g @magpie/cli
+npm install -g @erdo/magpie
 ```
 
 Requires Node 18+.
@@ -42,5 +42,5 @@ magpie whoami     # show server, auth, linked scope, and your orgs
 Next: the full [command reference](/cli/commands).
 
 <Note>
-There are two CLIs. The `@magpie/cli` documented here is the user client (over REST). The Python `magpie` CLI that ships with the server (`pip install magpie-ai`) handles server operations — `serve`, `migrate`, `import`, `push`, `export` — directly against the database for self-hosted setups.
+There are two CLIs. The `@erdo/magpie` documented here is the user client (over REST). The Python `magpie` CLI that ships with the server (`pip install erdo-magpie`) handles server operations — `serve`, `migrate`, `import`, `push`, `export` — directly against the database for self-hosted setups.
 </Note>

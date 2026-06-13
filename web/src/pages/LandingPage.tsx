@@ -25,7 +25,7 @@ function quickstartTabs(origin: string) {
     {
       id: 'cli',
       label: 'CLI',
-      code: `npx @magpie/cli login --api-url ${origin}
+      code: `npx @erdo/magpie login --api-url ${origin}
 magpie link --workspace my-app --project acme
 
 magpie write --title "Acme positioning" --file notes.md
@@ -39,7 +39,7 @@ magpie read <entry-id> --resolved`,
 claude mcp add --transport http magpie ${origin}/mcp
 
 # or stdio via the CLI
-claude mcp add magpie -- npx @magpie/cli mcp
+claude mcp add magpie -- npx @erdo/magpie mcp
 
 # your agent now has: search, read, write, list_links,
 # resolve_knowledge, get/set_document, upload_attachment, ...`,
@@ -54,7 +54,7 @@ claude mcp add magpie -- npx @magpie/cli mcp
     {
       id: 'selfhost',
       label: 'Self-host',
-      code: `pip install magpie-ai
+      code: `pip install erdo-magpie
 export DATABASE_URL=postgres://...   # pgvector optional
 magpie serve                          # REST + MCP + UI on :8200`,
     },
@@ -260,7 +260,7 @@ export function LandingPage() {
             typed collections, and real files that agents write and read across every product you build.
           </p>
           <div className="mt-9 flex flex-col items-center gap-3">
-            <InlineCommand code="npx @magpie/cli login" />
+            <InlineCommand code="npx @erdo/magpie login" />
             <p className="text-xs text-muted-foreground">
               Then it's all here — your terminal, your agents, or this web UI. Same knowledge, whichever you reach for.
             </p>
@@ -444,7 +444,7 @@ export function LandingPage() {
         </p>
         <div className="mt-6 text-left">
           <CodeBlock
-            code={`pip install magpie-ai
+            code={`pip install erdo-magpie
 export DATABASE_URL=postgres://localhost/magpie
 magpie serve`}
             language="shell"

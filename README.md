@@ -20,7 +20,7 @@ Not an agent framework. Not a chat memory system. Not a knowledge graph.
 ## Quick start
 
 ```bash
-pip install magpie-ai
+pip install erdo-magpie
 
 export DATABASE_URL=postgresql://user:pass@host:5432/magpie
 export OPENAI_API_KEY=sk-...  # optional — keyword search works without it

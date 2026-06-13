@@ -8,7 +8,7 @@ description: Run Magpie, write your first knowledge, and connect an agent.
 Magpie needs Postgres (with the `pgvector` extension for semantic search). Embeddings are optional — keyword search works without an OpenAI key.
 
 ```bash
-pip install magpie-ai
+pip install erdo-magpie
 
 export DATABASE_URL=postgresql://user:pass@host:5432/magpie
 export OPENAI_API_KEY=sk-...   # optional — enables semantic search
@@ -25,7 +25,7 @@ Prefer hosted? Point the CLI and MCP client at your hosted Magpie URL instead of
 ## 2. Install the CLI
 
 ```bash
-npm install -g @magpie/cli
+npm install -g @erdo/magpie
 magpie login          # email one-time code → stores an API key
 magpie link --workspace support
 ```
