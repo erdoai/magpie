@@ -34,7 +34,24 @@ const program = new Command();
 program
   .name('magpie')
   .description('Magpie — knowledge and context store for agents and teams')
-  .version('0.2.0');
+  .version('0.2.0')
+  .showHelpAfterError();
+
+program.addHelpText(
+  'after',
+  `
+Getting started:
+  $ magpie login                       sign in (use --api-url for a self-hosted instance)
+  $ magpie whoami                      show the instance you're connected to + your orgs
+  $ magpie search "<query>"            search your knowledge
+  $ magpie mcp                         run the MCP stdio server for local agents
+
+Self-hosting:
+  Point the CLI at your own instance with --api-url on login, or set
+  MAGPIE_API_URL. Default instance: ${DEFAULT_API_URL}
+
+Docs: ${DEFAULT_API_URL}/docs`,
+);
 
 function scope(opts: { workspace?: string; project?: string }): {
   workspace?: string;
@@ -136,7 +153,9 @@ program
   .description('Show server, auth, and linked scope')
   .action(async () => {
     const config = loadConfig();
-    console.log(`Server: ${resolveApiUrl()}`);
+    const apiUrl = resolveApiUrl();
+    const which = apiUrl === DEFAULT_API_URL ? 'default' : 'self-hosted';
+    console.log(`Instance: ${apiUrl} (${which})`);
     const token = resolveToken();
     if (!token) {
       console.log('Auth: not signed in');
@@ -721,5 +740,10 @@ program
     requireToken();
     await runMcpServer();
   });
+
+if (process.argv.length <= 2) {
+  program.outputHelp();
+  process.exit(0);
+}
 
 program.parseAsync().catch(fail);
