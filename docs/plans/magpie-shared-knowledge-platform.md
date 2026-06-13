@@ -65,14 +65,15 @@ Keep this section current as work lands. Update it in the same change as the wor
   - [ ] Custom domain (currently Railway-generated; magpie.erdo.ai optional later — requires updating OAUTH_ISSUER_URL/ASSET_PUBLIC_BASE_URL)
   - [ ] Backups, per-org quotas, usage page, hosted onboarding docs, import/export path
 - [ ] Phase 8: App integrations
-- [~] Phase 9: Repo sync, format spec, and viewer — see design section below
+- [x] Phase 9: Repo sync, format spec, and viewer — core landed 2026-06-13; see design section below. Suite 80 → 132 tests.
   - [x] Magpie's own strict versioned closed frontmatter spec (`magpie/frontmatter.py`, 14 tests) — `magpie_version`+`category` required, closed field set, unknown keys rejected
   - [x] One-way `push` from a folder (repo = source of truth). `magpie/bundle.py` scanner (8 tests) + migration 011 `source_path` (path-as-identity) + `db.upsert_entry_by_path` + `magpie push`
   - [x] Two collection layers: repo-canonical vs server-canonical (live), source-of-truth flag. Migration 012 `collections.source`; `infer_value_type`; `scan_collections` (flat `{key:value}` JSON, types inferred); push syncs repo collections with server-conflict pre-check; write-guard rejects agent/API writes to repo-canonical stores (REST + MCP set/delete). 7 scan tests
   - [x] Manifest/catalog + anti-drift checks. `magpie/manifest.py` (9 tests): `collections/_manifest.json` registry; push rejects undeclared collections (nearest-match suggestion) + near-duplicate slugs (normalized), warns on undeclared keys; MCP create-collection rejects near-duplicate of an existing store
   - [x] Export bundle. `magpie/export.py` (9 tests, round-trips through the scanner) + `magpie export`: entries → md+frontmatter (re-using source_path), repo collections → JSON, generated `_manifest.json`. Live stores excluded. Closes the Phase 7 lock-in TODO. (Attachment binaries + sidecars: follow-up)
-  - [ ] Static zero-backend HTML viewer for an exported bundle
+  - [x] Static zero-backend HTML viewer. `magpie/viewer.py` (5 tests): self-contained `index.html` (no CDN/network), bundle data embedded as JSON (script-breakout escaped), entry list by category + collections, minimal Markdown render, `[[wikilink]]` graph with computed backlinks, typed collection tables. Written by `export` (toggle via `viewer=False`)
   - [ ] (Optional, later) OKF export as a 1-line compatibility footnote if it ever gets adoption
+  - [ ] Follow-ups: attachment binaries+sidecars in export; `--prune` for push (delete entries removed from the repo); TS CLI `push`/`export` via REST
 
 ## Summary
 

@@ -46,5 +46,10 @@ line-length = 100
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
 
+[tool.ruff.lint.per-file-ignores]
+# viewer.py embeds a static HTML/CSS/JS template; its asset lines are
+# legitimately long and not Python to be reflowed.
+"magpie/viewer.py" = ["E501"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

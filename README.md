@@ -127,6 +127,61 @@ Role/filename conventions give agents deterministic asset joins for brand and la
 
 Storage backends: local filesystem (default) or any S3-compatible store (AWS S3, Cloudflare R2, MinIO, Railway object storage) — see Config.
 
+## Repo sync (bundles)
+
+Author knowledge as a folder of files in git, then sync it to the server —
+docs-as-code for knowledge. The repo is the source of truth; the server is the
+search/serve index.
+
+```bash
+magpie push ./knowledge --workspace reach --project alertee   # repo  -> server
+magpie export ./knowledge --workspace reach                   # server -> repo
+```
+
+Bundle layout:
+
+```
+knowledge/
+├── <entry>.md                  # markdown + strict frontmatter (entries)
+├── collections/
+│   ├── _manifest.json          # canonical store/key registry (anti-drift)
+│   └── <slug>.json             # repo-canonical collection: { key: value }
+└── index.html                  # self-contained offline viewer (written by export)
+```
+
+**Frontmatter** is a strict, versioned, *closed* schema — only these fields,
+unknown keys are rejected so it never drifts into a second KV store:
+
+```markdown
+---
+magpie_version: 1
+category: resource        # project | area | resource | archive
+title: Alertee positioning
+tags: [reach, positioning]
+source: strategy-doc
+---
+
+# Alertee positioning
+
+Body markdown...
+```
+
+Entries are identified by their path in the bundle, so re-pushing updates in
+place instead of duplicating.
+
+**Collections have two layers.** Repo-canonical stores (`collections/<slug>.json`)
+are curated, version-controlled, and synced by `push`; the server rejects agent/API
+writes to them. Server-canonical stores are live, agent-written runtime data and
+are never exported — so runtime values never end up committed to git.
+
+**Anti-drift.** `_manifest.json` declares the canonical stores (and optionally
+their keys). `push` rejects collections that aren't declared (suggesting the
+nearest match) and near-duplicate slugs (`reach-strategy` vs `reach_strategy`);
+the MCP server refuses to create a store that near-duplicates an existing one.
+
+`export` also writes a zero-backend `index.html` — open it offline to browse the
+bundle as a linked knowledge graph.
+
 ## REST API
 
 | Method | Path | Description |

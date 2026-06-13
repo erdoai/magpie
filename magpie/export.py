@@ -17,6 +17,7 @@ import re
 from pathlib import Path
 
 from magpie.frontmatter import CATEGORIES, Frontmatter, serialize
+from magpie.viewer import render_viewer
 
 _SLUG_STRIP = re.compile(r"[^a-z0-9]+")
 
@@ -88,11 +89,17 @@ def _unique_path(rel: str, used: set[str]) -> str:
         n += 1
 
 
-def write_bundle(root: str | Path, entries: list[dict], collections: list[dict]) -> dict:
+def write_bundle(
+    root: str | Path,
+    entries: list[dict],
+    collections: list[dict],
+    viewer: bool = True,
+) -> dict:
     """Write a bundle to ``root``.
 
     ``collections`` is a list of ``{"slug", "title", "documents"}`` dicts (only
-    repo-canonical stores). Returns a summary dict of what was written.
+    repo-canonical stores). When ``viewer`` is set, also writes a self-contained
+    ``index.html``. Returns a summary dict of what was written.
     """
     root = Path(root)
     (root / "collections").mkdir(parents=True, exist_ok=True)
@@ -117,5 +124,8 @@ def write_bundle(root: str | Path, entries: list[dict], collections: list[dict])
         (root / "collections" / "_manifest.json").write_text(
             json.dumps(manifest, indent=2, ensure_ascii=False) + "\n"
         )
+
+    if viewer:
+        (root / "index.html").write_text(render_viewer(entries, collections))
 
     return {"entries": len(entries), "collections": len(collections)}
