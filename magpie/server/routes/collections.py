@@ -127,7 +127,7 @@ async def create_collection(body: CollectionCreate, request: Request):
         project=project,
         created_by_user_id=ctx.user_id,
     )
-    return await db.get_collection(col_id)
+    return await db.get_collection(col_id, trusted=True)  # just created by caller
 
 
 @router.get("/collections")
@@ -153,7 +153,7 @@ async def delete_collection(col_id: str, request: Request):
     if not ctx.has_role("editor"):
         return _forbidden("Write access requires editor role")
 
-    col = await db.get_collection(col_id)
+    col = await db.get_collection(col_id, **ctx.view_filter)
     if not col or not _collection_visible(col, ctx):
         return _not_found()
 
@@ -193,7 +193,7 @@ async def get_document(
     col = await _find_visible_collection(db, slug, ctx, workspace, project)
     if not col:
         return _not_found()
-    doc = await db.get_document(col["id"], key)
+    doc = await db.get_document(col["id"], key, **ctx.view_filter)
     if not doc:
         return _not_found()
     return doc
@@ -239,7 +239,7 @@ async def set_document(
         org_id=col.get("org_id"),
         created_by_user_id=ctx.user_id,
     )
-    return await db.get_document(col["id"], key)
+    return await db.get_document(col["id"], key, trusted=True)  # just written by caller
 
 
 @router.delete("/collections/{slug}/documents/{key}")

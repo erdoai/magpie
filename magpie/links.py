@@ -74,7 +74,8 @@ def parse_wikilinks(markdown: str) -> list[ParsedLink]:
 
 async def sync_entry_links(db, entry_id: str) -> None:
     """Reparse an entry's Markdown and replace its outgoing link edges."""
-    entry = await db.get_entry(entry_id)
+    # Server-internal link maintenance for an already-authorized entry.
+    entry = await db.get_entry(entry_id, trusted=True)
     if not entry:
         return
 

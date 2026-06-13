@@ -227,7 +227,8 @@ class Resolver:
             ))
             return _placeholder(ref)
 
-        doc = await self._db.get_document(col["id"], key)
+        # Collection visibility already enforced by _find_collection above.
+        doc = await self._db.get_document(col["id"], key, trusted=True)
         if not doc:
             self.dependencies.append(Dependency(
                 ref=ref, kind="collection", status="not_found",

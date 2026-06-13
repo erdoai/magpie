@@ -105,12 +105,36 @@ class Database:
             )
         return entry_id
 
-    async def get_entry(self, entry_id: str) -> dict | None:
-        row = await self._pool.fetchrow(
-            "SELECT id, title, content, category, tags, source, user_id, org_id,"
-            " workspace, project, created_at, updated_at FROM entries WHERE id = $1",
-            entry_id,
+    async def get_entry(
+        self,
+        entry_id: str,
+        *,
+        user_id: str | None = None,
+        org_id: str | None = None,
+        trusted: bool = False,
+    ) -> dict | None:
+        """Fetch an entry by id, enforcing visibility unless ``trusted``.
+
+        Fail-closed: callers pass the viewer's scope (user_id/org_id) or
+        ``trusted=True`` for server-internal reads. With neither, only global
+        (untenanted) entries are returned. A NULL user_id/org_id never matches
+        a tenanted row, so cross-tenant reads return None rather than leaking.
+        """
+        cols = (
+            "id, title, content, category, tags, source, user_id, org_id,"
+            " workspace, project, created_at, updated_at"
         )
+        if trusted:
+            row = await self._pool.fetchrow(
+                f"SELECT {cols} FROM entries WHERE id = $1", entry_id
+            )
+        else:
+            row = await self._pool.fetchrow(
+                f"SELECT {cols} FROM entries WHERE id = $1"
+                " AND ((user_id IS NULL AND org_id IS NULL)"
+                " OR user_id = $2 OR org_id = $3)",
+                entry_id, user_id, org_id,
+            )
         return dict(row) if row else None
 
     async def update_entry(self, entry_id: str, **fields) -> bool:
@@ -1092,10 +1116,30 @@ class Database:
         )
         return col_id
 
-    async def get_collection(self, col_id: str) -> dict | None:
-        row = await self._pool.fetchrow(
-            "SELECT * FROM collections WHERE id = $1", col_id
-        )
+    async def get_collection(
+        self,
+        col_id: str,
+        *,
+        user_id: str | None = None,  # noqa: ARG002 — call-site uniformity; collections aren't user-scoped
+        org_id: str | None = None,
+        trusted: bool = False,
+    ) -> dict | None:
+        """Fetch a collection by id, enforcing org visibility unless ``trusted``.
+
+        Collections are visible to their org plus global (org_id NULL). Pass
+        ``**ctx.view_filter``; the user_id kwarg is accepted but unused so the
+        same call shape works for entries and collections.
+        """
+        if trusted:
+            row = await self._pool.fetchrow(
+                "SELECT * FROM collections WHERE id = $1", col_id
+            )
+        else:
+            row = await self._pool.fetchrow(
+                "SELECT * FROM collections WHERE id = $1"
+                " AND (org_id IS NULL OR org_id = $2)",
+                col_id, org_id,
+            )
         return dict(row) if row else None
 
     async def find_collection(
@@ -1202,11 +1246,30 @@ class Database:
         )
         return row["id"]
 
-    async def get_document(self, collection_id: str, key: str) -> dict | None:
-        row = await self._pool.fetchrow(
-            "SELECT * FROM documents WHERE collection_id = $1 AND key = $2",
-            collection_id, key,
-        )
+    async def get_document(
+        self,
+        collection_id: str,
+        key: str,
+        *,
+        user_id: str | None = None,  # noqa: ARG002 — call-site uniformity; documents inherit collection scope
+        org_id: str | None = None,
+        trusted: bool = False,
+    ) -> dict | None:
+        """Fetch a document, enforcing its collection's org visibility unless
+        ``trusted``. Pass ``**ctx.view_filter``."""
+        if trusted:
+            row = await self._pool.fetchrow(
+                "SELECT * FROM documents WHERE collection_id = $1 AND key = $2",
+                collection_id, key,
+            )
+        else:
+            row = await self._pool.fetchrow(
+                "SELECT d.* FROM documents d"
+                " JOIN collections c ON c.id = d.collection_id"
+                " WHERE d.collection_id = $1 AND d.key = $2"
+                " AND (c.org_id IS NULL OR c.org_id = $3)",
+                collection_id, key, org_id,
+            )
         return dict(row) if row else None
 
     async def list_documents(self, collection_id: str) -> list[dict]:

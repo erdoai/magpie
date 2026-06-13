@@ -27,7 +27,8 @@ def _forbidden(message: str = "Forbidden") -> JSONResponse:
 
 async def _get_accessible_entry(db, entry_id: str, ctx: AuthContext) -> dict | None:
     """Fetch an entry the caller is allowed to see. Inaccessible == not found."""
-    entry = await db.get_entry(entry_id)
+    # DB enforces visibility (fail-closed); can_access is belt-and-braces.
+    entry = await db.get_entry(entry_id, **ctx.view_filter)
     if not entry or not ctx.can_access(entry):
         return None
     return entry
@@ -131,7 +132,7 @@ async def create_entry(body: EntryCreate, request: Request):
         )
 
     await sync_entry_links(db, entry_id)
-    entry = await db.get_entry(entry_id)
+    entry = await db.get_entry(entry_id, trusted=True)  # just authored by caller
     return entry
 
 
@@ -235,7 +236,7 @@ async def update_entry(entry_id: str, body: EntryUpdate, request: Request):
     if "content" in fields:
         await sync_entry_links(db, entry_id)
 
-    return await db.get_entry(entry_id)
+    return await db.get_entry(entry_id, trusted=True)  # caller just updated it
 
 
 @router.delete("/entries/{entry_id}")
@@ -357,7 +358,7 @@ async def merge_entries(body: MergeRequest, request: Request):
     )
 
     await sync_entry_links(db, new_id)
-    entry = await db.get_entry(new_id)
+    entry = await db.get_entry(new_id, trusted=True)  # just created by caller
     return entry
 
 

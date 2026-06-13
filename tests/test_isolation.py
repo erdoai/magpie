@@ -149,8 +149,13 @@ class FakeDatabase:
         }
         return col_id
 
-    async def get_collection(self, col_id):
-        return self.collections.get(col_id)
+    async def get_collection(self, col_id, *, user_id=None, org_id=None, trusted=False):
+        col = self.collections.get(col_id)
+        if col is None or trusted:
+            return col
+        if col.get("org_id") is None or col.get("org_id") == org_id:
+            return col
+        return None
 
     async def find_collection(self, slug, org_id=None, workspace=None, project=None):
         matches = [
@@ -199,8 +204,15 @@ class FakeDatabase:
         }
         return doc_id
 
-    async def get_document(self, collection_id, key):
-        return self.documents.get((collection_id, key))
+    async def get_document(self, collection_id, key, *, user_id=None, org_id=None, trusted=False):
+        doc = self.documents.get((collection_id, key))
+        if doc is None or trusted:
+            return doc
+        col = self.collections.get(collection_id)
+        col_org = col.get("org_id") if col else None
+        if col_org is None or col_org == org_id:
+            return doc
+        return None
 
     async def list_documents(self, collection_id):
         return [d for (cid, _k), d in sorted(self.documents.items())
@@ -259,8 +271,18 @@ class FakeDatabase:
             workspace=workspace, project=project,
         )
 
-    async def get_entry(self, entry_id):
-        return self.entries.get(entry_id)
+    async def get_entry(self, entry_id, *, user_id=None, org_id=None, trusted=False):
+        entry = self.entries.get(entry_id)
+        if entry is None or trusted:
+            return entry
+        # Fail-closed: global, own, or same-org only (mirrors SQL in database.py).
+        if entry.get("user_id") is None and entry.get("org_id") is None:
+            return entry
+        if entry.get("user_id") is not None and entry.get("user_id") == user_id:
+            return entry
+        if entry.get("org_id") is not None and entry.get("org_id") == org_id:
+            return entry
+        return None
 
     async def update_entry(self, entry_id, **fields):
         entry = self.entries.get(entry_id)
@@ -623,3 +645,31 @@ def test_auth_context_scope_clamping():
     assert ctx.clamp_scope("other", None) == ("reach", "alertee")
     open_ctx = AuthContext(user_id="u", org_id="o")
     assert open_ctx.clamp_scope("reach", "alertee") == ("reach", "alertee")
+
+
+def test_view_filter_maps_context_to_db_kwargs():
+    assert AuthContext().view_filter == {"trusted": True}  # unrestricted reads all
+    scoped = AuthContext(user_id="ua", org_id="org-a", role="viewer")
+    assert scoped.view_filter == {"user_id": "ua", "org_id": "org-a"}
+
+
+async def test_db_get_entry_is_fail_closed_by_default():
+    """The DB layer itself denies cross-tenant reads — not just the routes.
+
+    Mirrors database.py: with neither trusted nor matching scope, only global
+    (untenanted) rows come back; a foreign org/user yields None.
+    """
+    db = FakeDatabase()
+    glob = db.add_entry()  # no user, no org
+    org_a = db.add_entry(org_id="org-a", user_id="ua")
+
+    # No scope, not trusted: only the global entry is visible.
+    assert await db.get_entry(glob) is not None
+    assert await db.get_entry(org_a) is None
+
+    # Foreign viewer: still denied.
+    assert await db.get_entry(org_a, user_id="ub", org_id="org-b") is None
+
+    # Same-org viewer and trusted reads both succeed.
+    assert await db.get_entry(org_a, user_id="ub", org_id="org-a") is not None
+    assert await db.get_entry(org_a, trusted=True) is not None
