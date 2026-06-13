@@ -11,6 +11,7 @@ import {
   clearToken,
   loadConfig,
   resolveApiUrl,
+  resolveOrg,
   resolveToken,
   saveConfig,
 } from './config.js';
@@ -142,14 +143,19 @@ program
       return;
     }
     console.log(`Auth: API key ${token.slice(0, 12)}…`);
+    const activeOrg = resolveOrg();
+    if (activeOrg) console.log(`Active org: ${activeOrg}`);
     if (config.workspace || config.project) {
       console.log(`Linked: workspace=${config.workspace || '-'} project=${config.project || '-'}`);
     }
     try {
-      const orgs = await api<{ name: string; slug: string; role?: string }[]>('/api/orgs');
+      const orgs = await api<{ id: string; name: string; slug: string; role?: string }[]>('/api/orgs');
       if (orgs.length) {
         console.log('Orgs:');
-        for (const org of orgs) console.log(`  - ${org.name} (${org.slug})${org.role ? ` [${org.role}]` : ''}`);
+        for (const org of orgs) {
+          const marker = org.id === activeOrg || org.slug === activeOrg ? '* ' : '  ';
+          console.log(`  ${marker}${org.name} (${org.slug})${org.role ? ` [${org.role}]` : ''}`);
+        }
       }
     } catch {
       /* key without session-user context */
@@ -179,12 +185,54 @@ org
   .action(async () => {
     requireToken();
     try {
+      const active = resolveOrg();
       const orgs = await api<{ id: string; name: string; slug: string; role?: string }[]>('/api/orgs');
       if (!orgs.length) return console.log('No orgs.');
-      for (const o of orgs) console.log(`- ${o.name} (${o.slug})${o.role ? ` [${o.role}]` : ''} id=${o.id}`);
+      for (const o of orgs) {
+        const marker = o.id === active || o.slug === active ? '* ' : '  ';
+        console.log(`${marker}${o.name} (${o.slug})${o.role ? ` [${o.role}]` : ''} id=${o.id}`);
+      }
     } catch (err) {
       fail(err);
     }
+  });
+
+org
+  .command('use <org>')
+  .description('Set the active org for this machine (sent as X-Organization-ID)')
+  .action(async (orgId: string) => {
+    requireToken();
+    const config = loadConfig();
+    config.org = orgId;
+    saveConfig(config);
+    console.log(`Active org: ${orgId}`);
+    // Best-effort: also persist as the server-side default (for session logins
+    // and unpinned keys). Membership is enforced server-side.
+    try {
+      await api(`/api/orgs/${orgId}/select`, { method: 'POST' });
+    } catch (err) {
+      if (err instanceof ApiError && (err.status === 404 || err.status === 403)) {
+        console.error(`Warning: you don't appear to be a member of ${orgId}.`);
+      }
+    }
+  });
+
+org
+  .command('current')
+  .description('Show the active org')
+  .action(() => {
+    const active = resolveOrg();
+    console.log(active ? `Active org: ${active}` : 'No active org set (using your default).');
+  });
+
+org
+  .command('clear')
+  .description('Clear the active org override (fall back to your default)')
+  .action(() => {
+    const config = loadConfig();
+    delete config.org;
+    saveConfig(config);
+    console.log('Active org cleared.');
   });
 
 const workspaceCmd = program.command('workspace').description('Workspace commands');

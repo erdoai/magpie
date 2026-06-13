@@ -17,6 +17,16 @@ from fastapi import Request
 ROLE_LEVELS = {"viewer": 1, "editor": 2, "admin": 3, "owner": 4}
 
 
+def cap_role(a: str | None, b: str | None) -> str | None:
+    """Return the lesser of two roles. Used so switching a key's active org
+    can never grant more than the key itself was issued with."""
+    if a is None:
+        return b
+    if b is None:
+        return a
+    return a if ROLE_LEVELS.get(a, 0) <= ROLE_LEVELS.get(b, 0) else b
+
+
 @dataclass
 class AuthContext:
     user_id: str | None = None

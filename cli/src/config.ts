@@ -4,6 +4,7 @@
  * Precedence for each value: env var > config file > default.
  *  - API URL: MAGPIE_API_URL > config.apiUrl > https://magpie.erdo.ai
  *  - Token:   MAGPIE_TOKEN  > config.token
+ *  - org:     MAGPIE_ORG    > config.org (set via `magpie org use`)
  *  - workspace/project: per-command flags > config (set via `magpie link`)
  */
 
@@ -14,6 +15,7 @@ import { join } from 'node:path';
 export interface MagpieConfig {
   apiUrl?: string;
   token?: string;
+  org?: string;
   workspace?: string;
   project?: string;
 }
@@ -53,4 +55,10 @@ export function resolveApiUrl(): string {
 
 export function resolveToken(): string | undefined {
   return process.env.MAGPIE_TOKEN || loadConfig().token;
+}
+
+/** Active org sent as X-Organization-ID. Lets a multi-org user point a single
+ *  key at different orgs. Ignored server-side for org-pinned keys. */
+export function resolveOrg(): string | undefined {
+  return process.env.MAGPIE_ORG || loadConfig().org;
 }

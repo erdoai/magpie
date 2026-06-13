@@ -704,6 +704,54 @@ def test_stale_default_org_self_heals():
     assert db.user_default_org["ua"] is None
 
 
+# -- API key org switching (X-Organization-ID on a user key) --
+
+
+def test_key_can_switch_org_via_header():
+    db = FakeDatabase()
+    # Key pinned to org-a, but the user is also a member of org-b.
+    add_key(db, "key-a", user_id="ua", org_id="org-a")
+    db.org_roles[("org-a", "ua")] = "editor"
+    db.org_roles[("org-b", "ua")] = "admin"
+    in_b = db.add_entry(org_id="org-b", user_id="ub")
+    client = make_client(db)
+
+    # Without the header the key stays on org-a -> org-b hidden.
+    assert client.get(f"/api/entries/{in_b}", headers=auth("key-a")).status_code == 404
+    # With the header it switches to org-b.
+    res = client.get(
+        f"/api/entries/{in_b}",
+        headers={**auth("key-a"), "X-Organization-ID": "org-b"},
+    )
+    assert res.status_code == 200
+
+
+def test_key_org_switch_is_role_capped():
+    db = FakeDatabase()
+    # Viewer key; user is admin in org-b. Switching must not escalate to admin.
+    add_key(db, "key-a", user_id="ua", org_id="org-a", role="viewer")
+    db.org_roles[("org-b", "ua")] = "admin"
+    client = make_client(db)
+
+    res = client.post(
+        "/api/entries",
+        headers={**auth("key-a"), "X-Organization-ID": "org-b"},
+        json={"title": "t", "content": "c"},
+    )
+    assert res.status_code == 403  # still a viewer despite org-b admin membership
+
+
+def test_key_org_switch_rejected_when_not_member():
+    db = FakeDatabase()
+    add_key(db, "key-a", user_id="ua", org_id="org-a")
+    client = make_client(db)
+
+    res = client.get(
+        "/api/entries", headers={**auth("key-a"), "X-Organization-ID": "org-x"}
+    )
+    assert res.status_code == 403
+
+
 # -- AuthContext unit tests --
 
 
