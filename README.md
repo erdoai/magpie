@@ -7,9 +7,9 @@ Postgres + pgvector. REST API + MCP server. Management UI.
 ## What it does
 
 - **Dual search** — semantic (vector embeddings) + keyword (Postgres full-text), combined with Reciprocal Rank Fusion
-- **Workspaces** — organize knowledge by project (devbot, crow, general, etc.)
+- **Workspaces** — organize knowledge by project (support, engineering, general, etc.)
 - **Orgs + teams** — share knowledge within your team, invite members
-- **MCP server** — connect AI agents (Claude Code, Crow, etc.) via the Model Context Protocol
+- **MCP server** — connect AI agents (Claude Code, Cursor, etc.) via the Model Context Protocol
 - **REST API** — use from any HTTP client
 - **Management UI** — browse, search, edit, create, archive entries
 
@@ -49,11 +49,11 @@ This gives Claude Code these tools:
 | `list_entries` | Browse/filter entries |
 | `archive` | Archive an entry |
 
-**Workspace pattern**: When writing knowledge, you specify which project it relates to (`workspace: "devbot"`, `workspace: "crow"`, etc.). When searching, you can scope to a workspace or search across all.
+**Workspace pattern**: When writing knowledge, you specify which project it relates to (`workspace: "support"`, `workspace: "engineering"`, etc.). When searching, you can scope to a workspace or search across all.
 
-### Crow
+### YAML-configured clients
 
-Add to `crow.yml`:
+Agents that take a YAML MCP config:
 
 ```yaml
 mcp:
@@ -88,7 +88,7 @@ When `API_KEY` is empty and `RESEND_API_KEY` is empty, auth is disabled (local d
 ## Orgs + workspaces
 
 - **Org** = your team. Members share knowledge within the org. Roles: owner > admin > editor > viewer.
-- **Workspace** = a broad app/product namespace (e.g. "reach", "alertee", "general").
+- **Workspace** = a broad app/product namespace (e.g. "support", "engineering", "general").
 - **Project** = a narrower work area within a workspace (e.g. a customer or product slug). Entries, collections, and searches accept both.
 - **Visibility**: you see your entries + your org's entries + global entries.
 
@@ -105,14 +105,14 @@ Markdown entries can reference other knowledge with `[[wikilinks]]`:
 - `[[Entry Title]]` — link to another entry (resolved within your visibility)
 - `[[Entry Title|display text]]`
 - `[[https://example.com]]` — external URL
-- `[[alertee:check:42]]` — product resource reference (`app:type:id`)
+- `[[service:ticket:1024]]` — product resource reference (`app:type:id`)
 
 Links are reparsed on every save. Reads return outgoing links and backlinks; unresolved titles become backlinks automatically once the target entry exists.
 
 Entries can also embed **value references** that resolve at read time (`POST /api/entries/:id/resolve`, or `read(resolved=true)` over MCP) without mutating the stored Markdown:
 
-- `{{reach.strategy.alertee.positioning.wedge}}` — collection value by dotted path
-- `{{collection:reach.strategy/alertee#positioning.wedge}}` — explicit long form
+- `{{config.trial_days}}` — collection value by dotted path
+- `{{collection:config#trial_days}}` — explicit long form
 - `{{attachment:logo-primary}}` — attachment on the current entry by role/filename
 
 Unresolved or unauthorized references render as visible placeholders and are reported in a dependency list so agents know exactly what's missing.
@@ -134,8 +134,8 @@ docs-as-code for knowledge. The repo is the source of truth; the server is the
 search/serve index.
 
 ```bash
-magpie push ./knowledge --workspace reach --project alertee   # repo  -> server
-magpie export ./knowledge --workspace reach                   # server -> repo
+magpie push ./knowledge --workspace support --project billing   # repo  -> server
+magpie export ./knowledge --workspace support                   # server -> repo
 ```
 
 Bundle layout:
@@ -156,12 +156,12 @@ unknown keys are rejected so it never drifts into a second KV store:
 ---
 magpie_version: 1
 category: resource        # project | area | resource | archive
-title: Alertee positioning
-tags: [reach, positioning]
-source: strategy-doc
+title: Refund policy
+tags: [policy, billing]
+source: handbook
 ---
 
-# Alertee positioning
+# Refund policy
 
 Body markdown...
 ```
@@ -176,7 +176,7 @@ are never exported — so runtime values never end up committed to git.
 
 **Anti-drift.** `_manifest.json` declares the canonical stores (and optionally
 their keys). `push` rejects collections that aren't declared (suggesting the
-nearest match) and near-duplicate slugs (`reach-strategy` vs `reach_strategy`);
+nearest match) and near-duplicate slugs (`brand-tokens` vs `brand_tokens`);
 the MCP server refuses to create a store that near-duplicates an existing one.
 
 `export` also writes a zero-backend `index.html` — open it offline to browse the
