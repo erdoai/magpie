@@ -108,6 +108,22 @@ def _valid_slug(slug: str) -> bool:
     return all(c.islower() or c.isdigit() or c in "._-" for c in slug)
 
 
+def load_manifest(root: str | Path) -> tuple[dict | None, BundleError | None]:
+    """Load ``collections/_manifest.json`` if present.
+
+    Returns (manifest, error). Both None means there is no manifest (allowed —
+    drift checks then fall back to near-duplicate detection only).
+    """
+    path = Path(root) / COLLECTIONS_DIR / MANIFEST_FILE
+    if not path.is_file():
+        return None, None
+    rel = path.relative_to(root).as_posix()
+    try:
+        return json.loads(path.read_text()), None
+    except json.JSONDecodeError as exc:
+        return None, BundleError(rel, f"Invalid JSON: {exc}")
+
+
 def scan_collections(root: str | Path) -> CollectionScanResult:
     """Scan ``collections/*.json`` for repo-canonical stores.
 

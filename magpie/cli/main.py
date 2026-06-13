@@ -14,12 +14,13 @@ from rich.console import Console
 
 from magpie.__version__ import __version__
 from magpie.attachments import handle_for, infer_kind, storage_key_for
-from magpie.bundle import scan_collections, scan_entries
+from magpie.bundle import load_manifest, scan_collections, scan_entries
 from magpie.config.settings import Settings
 from magpie.db.database import Database
 from magpie.db.migrate import run_migrations
 from magpie.embeddings.openai import OpenAIEmbeddings
 from magpie.links import sync_entry_links
+from magpie.manifest import check_drift
 from magpie.storage import create_storage
 
 app = typer.Typer(help="magpie — knowledge store with semantic + keyword search")
@@ -206,12 +207,26 @@ def push(
 
     result = scan_entries(directory)
     col_result = scan_collections(directory)
-    file_errors = result.errors + col_result.errors
+    manifest, manifest_err = load_manifest(directory)
+    file_errors = list(result.errors) + list(col_result.errors)
+    if manifest_err:
+        file_errors.append(manifest_err)
     if file_errors:
         console.print(f"[red]Refusing to push — {len(file_errors)} file(s) off-spec:[/red]")
         for err in file_errors:
             console.print(f"  [red]{err.path}[/red]: {err.message}")
         raise typer.Exit(1)
+
+    # Anti-drift: reject undeclared/near-duplicate collections before any writes.
+    drift = check_drift(col_result.collections, manifest)
+    for warning in drift.warnings:
+        console.print(f"  [yellow]warning[/yellow]: {warning}")
+    if not drift.ok:
+        console.print(f"[red]Refusing to push — {len(drift.errors)} drift issue(s):[/red]")
+        for err in drift.errors:
+            console.print(f"  [red]{err}[/red]")
+        raise typer.Exit(1)
+
     if not result.entries and not col_result.collections:
         console.print("[yellow]No entries or collections found in bundle.[/yellow]")
         return

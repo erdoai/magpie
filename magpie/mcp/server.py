@@ -27,6 +27,7 @@ from magpie.collections import VALUE_TYPES, validate_value
 from magpie.db.database import Database
 from magpie.embeddings.base import EmbeddingProvider
 from magpie.links import normalize_target, sync_entry_links
+from magpie.manifest import normalize_slug
 from magpie.mcp.oauth import MagpieOAuthProvider
 from magpie.resolve import resolve_entry
 from magpie.search.fusion import search as fusion_search
@@ -733,6 +734,22 @@ def _register_tools(server: FastMCP) -> None:
                 return (
                     f"Collection {collection} not found."
                     f" Pass create_collection=true to create it."
+                )
+            # Anti-drift: don't let a new store shadow an existing near-duplicate
+            # (e.g. creating "reach_strategy" when "reach-strategy" exists).
+            norm = normalize_slug(collection)
+            siblings = await _db.list_collections(
+                org_id=ctx.org_id, workspace=workspace, project=project
+            )
+            dup = next(
+                (c for c in siblings
+                 if c["slug"] != collection and normalize_slug(c["slug"]) == norm),
+                None,
+            )
+            if dup:
+                return (
+                    f"Refusing to create {collection!r} — near-duplicate of existing "
+                    f"{dup['slug']!r}. Use that slug, or pick a clearly distinct name."
                 )
             col_id = await _db.create_collection(
                 slug=collection,
