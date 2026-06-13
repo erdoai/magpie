@@ -327,6 +327,41 @@ workspaceCmd
     }
   });
 
+const projectCmd = program.command('project').description('Project commands');
+
+projectCmd
+  .command('list <workspaceId>')
+  .description('List projects in a workspace')
+  .action(async (workspaceId: string) => {
+    requireToken();
+    try {
+      const list = await api<{ name: string; slug: string }[]>(
+        `/api/workspaces/${workspaceId}/projects`,
+      );
+      if (!list.length) return console.log('No projects.');
+      for (const p of list) console.log(`- ${p.name} (${p.slug})`);
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+projectCmd
+  .command('create <workspaceId> <name>')
+  .description('Create a project in a workspace (editor+)')
+  .option('--slug <slug>', 'URL slug (defaults to a slugified name)')
+  .action(async (workspaceId: string, name: string, opts: { slug?: string }) => {
+    requireToken();
+    try {
+      const p = await api<{ slug: string }>(`/api/workspaces/${workspaceId}/projects`, {
+        method: 'POST',
+        body: { name, slug: opts.slug },
+      });
+      console.log(`Created project ${name} (${p.slug}). Use it with: magpie link --project ${p.slug}`);
+    } catch (err) {
+      fail(err);
+    }
+  });
+
 // -- Knowledge --
 
 program

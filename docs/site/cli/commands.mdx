@@ -15,7 +15,7 @@ magpie link --workspace support --project billing
 magpie workspace list <orgId>
 ```
 
-## Orgs & workspaces
+## Orgs, workspaces & projects
 
 A user can belong to several orgs but acts in one at a time. `org use` sets the active org for this machine — sent as `X-Organization-ID` and saved as your server-side default.
 
@@ -29,12 +29,15 @@ magpie org invite <org> <email> --role editor   # add a member (admin+)
 
 magpie workspace list <orgId>
 magpie workspace create <orgId> <name>           # create a workspace (editor+)
+
+magpie project list <workspaceId>
+magpie project create <workspaceId> <name>       # create a project (editor+)
 ```
 
 Override the active org per-invocation with the `MAGPIE_ORG` environment variable.
 
 <Note>
-**Projects aren't created — they're tags.** A project (and a workspace) springs into existence the moment you write knowledge tagged with it. "Switching" to a workspace/project means setting it as your default scope with `magpie link --workspace <ws> --project <proj>` (or passing `--workspace`/`--project` per command). `workspace create` only pre-registers a workspace for listing; it isn't required before writing.
+**The hierarchy is org → workspace → project.** Workspaces and projects are registries you can pre-create for listing and navigation, but neither is required before writing — tagging an entry with a new workspace/project slug is enough to start using it. "Switching" means setting your default scope with `magpie link --workspace <ws> --project <proj>` (or passing `--workspace`/`--project` per command). They organise knowledge within a trusted org; they are **not** security boundaries — see [multi-tenancy](/concepts/multi-tenancy).
 </Note>
 
 ## Knowledge

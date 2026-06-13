@@ -181,3 +181,50 @@ async def delete_workspace(ws_id: str, request: Request):
     if not ok:
         return JSONResponse(status_code=404, content={"error": "Not found"})
     return {"ok": True}
+
+
+# -- Projects --
+
+
+@router.post("/workspaces/{ws_id}/projects")
+async def create_project(ws_id: str, body: CreateProjectRequest, request: Request):
+    db = request.app.state.db
+    ws = await db.get_workspace(ws_id)
+    if not ws:
+        return JSONResponse(status_code=404, content={"error": "Not found"})
+    err = await _require_org_role(request, ws["org_id"], "editor")
+    if err:
+        return err
+    slug = body.slug or slugify(body.name)
+    proj_id = await db.create_project(ws_id, body.name, slug)
+    return {"id": proj_id, "workspace_id": ws_id, "name": body.name, "slug": slug}
+
+
+@router.get("/workspaces/{ws_id}/projects")
+async def list_projects(ws_id: str, request: Request):
+    db = request.app.state.db
+    ws = await db.get_workspace(ws_id)
+    if not ws:
+        return JSONResponse(status_code=404, content={"error": "Not found"})
+    err = await _require_org_role(request, ws["org_id"], "viewer")
+    if err:
+        return err
+    return await db.list_projects(ws_id)
+
+
+@router.delete("/projects/{proj_id}")
+async def delete_project(proj_id: str, request: Request):
+    db = request.app.state.db
+    proj = await db.get_project(proj_id)
+    if not proj:
+        return JSONResponse(status_code=404, content={"error": "Not found"})
+    ws = await db.get_workspace(proj["workspace_id"])
+    if not ws:
+        return JSONResponse(status_code=404, content={"error": "Not found"})
+    err = await _require_org_role(request, ws["org_id"], "admin")
+    if err:
+        return err
+    ok = await db.delete_project(proj_id)
+    if not ok:
+        return JSONResponse(status_code=404, content={"error": "Not found"})
+    return {"ok": True}

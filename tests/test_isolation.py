@@ -34,6 +34,7 @@ class FakeDatabase:
         self.api_keys: dict[str, dict] = {}  # key_hash -> record
         self.org_roles: dict[tuple[str, str], str] = {}  # (org_id, user_id) -> role
         self.workspaces: dict[str, dict] = {}
+        self.projects: dict[str, dict] = {}
         self.members_removed: list[tuple[str, str]] = []
         self.invited: list[tuple[str, str, str]] = []
         self.search_calls: list[dict] = []
@@ -140,6 +141,24 @@ class FakeDatabase:
 
     async def delete_workspace(self, ws_id):
         return self.workspaces.pop(ws_id, None) is not None
+
+    # -- projects --
+
+    async def get_project(self, proj_id):
+        return self.projects.get(proj_id)
+
+    async def list_projects(self, ws_id):
+        return [p for p in self.projects.values() if p["workspace_id"] == ws_id]
+
+    async def create_project(self, ws_id, name, slug):
+        proj_id = uuid4().hex
+        self.projects[proj_id] = {
+            "id": proj_id, "workspace_id": ws_id, "name": name, "slug": slug,
+        }
+        return proj_id
+
+    async def delete_project(self, proj_id):
+        return self.projects.pop(proj_id, None) is not None
 
     # -- collections / documents --
 
@@ -629,6 +648,55 @@ def test_workspace_delete_requires_admin():
 
     assert client.delete(f"/api/workspaces/{ws_id}", headers=auth("editor-key")).status_code == 403
     assert client.delete(f"/api/workspaces/{ws_id}", headers=auth("admin-key")).status_code == 200
+
+
+def test_project_create_list_delete_roles():
+    db = FakeDatabase()
+    add_key(db, "viewer-key", user_id="uv", org_id="org-a", role="viewer")
+    add_key(db, "editor-key", user_id="ue", org_id="org-a", role="editor")
+    add_key(db, "admin-key", user_id="ua", org_id="org-a", role="admin")
+    db.org_roles[("org-a", "uv")] = "viewer"
+    db.org_roles[("org-a", "ue")] = "editor"
+    db.org_roles[("org-a", "ua")] = "admin"
+    ws_id = uuid4().hex
+    db.workspaces[ws_id] = {"id": ws_id, "org_id": "org-a", "name": "W", "slug": "w"}
+    client = make_client(db)
+
+    # create requires editor+
+    assert client.post(
+        f"/api/workspaces/{ws_id}/projects", json={"name": "Billing"},
+        headers=auth("viewer-key"),
+    ).status_code == 403
+    res = client.post(
+        f"/api/workspaces/{ws_id}/projects", json={"name": "Billing"},
+        headers=auth("editor-key"),
+    )
+    assert res.status_code == 200
+    proj = res.json()
+    assert proj["slug"] == "billing" and proj["workspace_id"] == ws_id
+
+    # list is viewer+ and scoped to the workspace
+    listed = client.get(f"/api/workspaces/{ws_id}/projects", headers=auth("viewer-key"))
+    assert listed.status_code == 200
+    assert [p["slug"] for p in listed.json()] == ["billing"]
+
+    # delete requires admin+
+    assert client.delete(
+        f"/api/projects/{proj['id']}", headers=auth("editor-key"),
+    ).status_code == 403
+    assert client.delete(
+        f"/api/projects/{proj['id']}", headers=auth("admin-key"),
+    ).status_code == 200
+
+
+def test_project_endpoints_404_on_unknown_workspace():
+    db = FakeDatabase()
+    add_key(db, "admin-key", user_id="ua", org_id="org-a", role="admin")
+    db.org_roles[("org-a", "ua")] = "admin"
+    client = make_client(db)
+    assert client.get(
+        "/api/workspaces/nope/projects", headers=auth("admin-key"),
+    ).status_code == 404
 
 
 # -- Session org switching (X-Organization-ID + default org) --

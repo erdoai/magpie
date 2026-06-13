@@ -66,3 +66,7 @@ Writes to a `repo`-canonical collection are rejected (the bundle is the source o
 | `DELETE` | `/api/orgs/{id}/members/{user_id}` | Remove a member (admin+) |
 | `GET` | `/api/orgs/{id}/workspaces` | List workspaces |
 | `POST` | `/api/orgs/{id}/workspaces` | Create a workspace (editor+) |
+| `DELETE` | `/api/workspaces/{id}` | Delete a workspace (admin+) |
+| `GET` | `/api/workspaces/{id}/projects` | List projects in a workspace |
+| `POST` | `/api/workspaces/{id}/projects` | Create a project (editor+) |
+| `DELETE` | `/api/projects/{id}` | Delete a project (admin+) |
