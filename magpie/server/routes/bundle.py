@@ -64,7 +64,9 @@ async def push_bundle(body: PushRequest, request: Request):
         {"path": e.path, "message": e.message} for e in entry_scan.errors + col_scan.errors
     ]
     if file_errors:
-        return JSONResponse(status_code=422, content={"error": "off-spec files", "files": file_errors})
+        return JSONResponse(
+            status_code=422, content={"error": "off-spec files", "files": file_errors}
+        )
 
     drift = check_drift(col_scan.collections, body.manifest)
     if not drift.ok:
@@ -79,7 +81,10 @@ async def push_bundle(body: PushRequest, request: Request):
     if not outcome.ok:
         return JSONResponse(
             status_code=409,
-            content={"error": "server-canonical collection conflict", "conflicts": outcome.conflicts},
+            content={
+                "error": "server-canonical collection conflict",
+                "conflicts": outcome.conflicts,
+            },
         )
 
     return {

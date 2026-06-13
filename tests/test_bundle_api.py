@@ -45,7 +45,7 @@ class FakeDB:
         return self.api_keys and "editor"
 
     # entries
-    async def upsert_entry_by_path(self, source_path, title, content, category="resource",
+    async def upsert_entry_by_path(self, source_path, title, content, category="resource",  # noqa: E501
                                    tags=None, source=None, embedding=None, org_id=None,
                                    workspace=None, project=None):
         was = source_path in self.entries
@@ -66,7 +66,8 @@ class FakeDB:
     async def replace_entry_links(self, entry_id, org_id, links):
         pass
 
-    async def list_entries(self, org_id=None, workspace=None, project=None, offset=0, limit=200, **kw):
+    async def list_entries(self, org_id=None, workspace=None, project=None,  # noqa: E501
+                           offset=0, limit=200, **kw):
         rows = list(self.entries.values())
         return rows[offset:offset + limit]
 
@@ -89,7 +90,9 @@ class FakeDB:
 
     async def set_document(self, collection_id, key, value, value_type="json",
                            summary=None, org_id=None, created_by_user_id=None):
-        self.documents[(collection_id, key)] = {"key": key, "value": value, "value_type": value_type}
+        self.documents[(collection_id, key)] = {
+            "key": key, "value": value, "value_type": value_type,
+        }
         return uuid4().hex
 
     async def list_documents(self, collection_id):
@@ -119,7 +122,10 @@ def auth(token):
     return {"Authorization": f"Bearer {token}"}
 
 
-ENTRY = {"path": "orders.md", "text": "---\nmagpie_version: 1\ncategory: resource\ntitle: Orders\n---\n\nOne row per order."}
+ENTRY = {
+    "path": "orders.md",
+    "text": "---\nmagpie_version: 1\ncategory: resource\ntitle: Orders\n---\n\nOne row per order.",
+}
 
 
 def test_push_creates_entries_and_repo_collection():
