@@ -63,3 +63,32 @@ pytest
 - Search fusion in `magpie/search/fusion.py` — runs semantic + keyword in parallel, merges with RRF.
 - Migration runner copied from crow pattern — numbered SQL files in `magpie/db/migrations/`.
 - MCP tools initialized with db + embedder at startup via `init_mcp()`.
+
+## CLI / MCP / API / Docs parity
+
+**The surfaces are one product — keep them in lockstep.** When you change a tool,
+command, or user-facing capability, update every surface it belongs on **in the
+same change**:
+
+- **REST API** (`magpie/server/routes/*`) — the source of truth. Business logic,
+  validation, role/visibility checks, and anti-drift guards live here (and in the
+  shared `magpie/sync.py` / `magpie/bundle.py` / `magpie/export.py` helpers), once.
+  Clients are thin.
+- **Both MCP servers** must expose the same agent tool set: the remote/hosted
+  server (`magpie/mcp/server.py`) and the local stdio proxy (`cli/src/mcp.ts`).
+  The stdio server proxies REST, so server-side guards apply automatically — but a
+  new *tool* must be added to both.
+- **Both CLIs**: the Python `magpie` CLI (`magpie/cli/main.py`) is for
+  server/self-hosted ops against the DB (`serve`, `migrate`, `import`, `push`,
+  `export`, attachments); the TypeScript `@magpie/cli` (`cli/src/`) is the
+  user-facing client over REST. A capability that suits both belongs on both.
+  Logic stays server-side — clients read/write files and call the API.
+- **Docs** (`docs/site/`, Mintlify): add/update the reference page in the same
+  change — a user-facing feature isn't done until it's documented. New page →
+  also add it to `docs/site/docs.json` nav. Don't pin CLI/API versions in prose.
+  **The Mintlify content root must stay `docs/site/`** so `docs/plans/` (internal
+  strategy) can never be published.
+
+Shipping a capability on only one surface (CLI without docs, a guard in the remote
+MCP but not REST, a tool in one MCP server but not the other) is incomplete —
+finish the whole surface. Keep this file and `AGENTS.md` in sync.

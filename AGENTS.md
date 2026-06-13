@@ -53,6 +53,18 @@ Never `git push -f` — ask first if a force push seems necessary (a rebase that
 - When that happens, do not stop and complain about GitHub auth. Retry the push outside the sandbox (escalated, with the justification that the push needs the host Git credentials). The normal host environment can push successfully even when sandboxed GitHub auth fails.
 - Only ask the user for help if the escalated push also fails.
 
+## CLI / MCP / API / Docs parity
+
+The REST API, both MCP servers (remote `magpie/mcp/server.py` + local stdio
+`cli/src/mcp.ts`), both CLIs (Python `magpie/cli/main.py` server-ops + TS
+`cli/src` user client), and the docs are one surface — keep them in lockstep.
+Change a capability → update every surface it belongs on, and its docs, in the
+same change. Business logic is single-sourced server-side (REST + the shared
+`magpie/sync.py`/`bundle.py`/`export.py` helpers); clients stay thin. A
+user-facing feature isn't done until it's documented. Public docs are Mintlify
+under `docs/site/` — the content root must stay `docs/site/` so `docs/plans/`
+(internal) never publishes. Full detail in `CLAUDE.md`; keep the two in sync.
+
 ## Autonomy
 
 - Default to doing the work end-to-end. Do not pause to ask for confirmation when the next step is obvious from the user's goal.
