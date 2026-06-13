@@ -148,7 +148,7 @@ const FEATURES = [
   {
     icon: Terminal,
     title: 'Every surface',
-    body: 'REST, CLI, MCP, and a web UI — one product kept in lockstep. The UI is there when you want it; you never need it.',
+    body: 'REST, CLI, MCP, and a web UI — one product kept in lockstep, so the same knowledge is one command, one call, or one click away.',
   },
 ];
 
@@ -229,7 +229,7 @@ export function LandingPage() {
           <div className="mt-9 flex flex-col items-center gap-3">
             <InlineCommand code="npx @magpie/cli login" />
             <p className="text-xs text-muted-foreground">
-              Then everything works from your terminal. There's a web UI — you just won't need it.
+              Then it's all here — your terminal, your agents, or this web UI. Same knowledge, whichever you reach for.
             </p>
           </div>
         </div>
