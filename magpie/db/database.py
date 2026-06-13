@@ -1050,6 +1050,17 @@ class Database:
         )
         return row["role"] if row else None
 
+    async def get_user_default_org(self, user_id: str) -> str | None:
+        row = await self._pool.fetchrow(
+            "SELECT default_org_id FROM users WHERE id = $1", user_id
+        )
+        return row["default_org_id"] if row else None
+
+    async def set_user_default_org(self, user_id: str, org_id: str | None) -> None:
+        await self._pool.execute(
+            "UPDATE users SET default_org_id = $2 WHERE id = $1", user_id, org_id
+        )
+
     async def list_org_members(self, org_id: str) -> list[dict]:
         rows = await self._pool.fetch(
             "SELECT u.id, u.email, u.display_name, om.role, om.joined_at"

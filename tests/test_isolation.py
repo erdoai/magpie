@@ -41,6 +41,8 @@ class FakeDatabase:
         self.collections: dict[str, dict] = {}
         self.documents: dict[tuple[str, str], dict] = {}  # (collection_id, key)
         self.attachments: dict[str, dict] = {}
+        self.sessions: dict[str, dict] = {}  # session_id -> {user_id}
+        self.user_default_org: dict[str, str | None] = {}  # user_id -> org_id
 
     # -- keys --
 
@@ -83,7 +85,13 @@ class FakeDatabase:
     # -- sessions / users / orgs --
 
     async def get_session(self, session_id):
-        return None
+        return self.sessions.get(session_id)
+
+    async def get_user_default_org(self, user_id):
+        return self.user_default_org.get(user_id)
+
+    async def set_user_default_org(self, user_id, org_id):
+        self.user_default_org[user_id] = org_id
 
     async def list_user_orgs(self, user_id):
         return [
@@ -621,6 +629,79 @@ def test_workspace_delete_requires_admin():
 
     assert client.delete(f"/api/workspaces/{ws_id}", headers=auth("editor-key")).status_code == 403
     assert client.delete(f"/api/workspaces/{ws_id}", headers=auth("admin-key")).status_code == 200
+
+
+# -- Session org switching (X-Organization-ID + default org) --
+
+
+def _session(db: FakeDatabase, user_id: str, *orgs: tuple[str, str]) -> dict:
+    """Register a session for user_id with the given (org_id, role) memberships
+    (in order — first listed becomes the bootstrap default). Returns request
+    cookies for the session."""
+    for org_id, role in orgs:
+        db.org_roles[(org_id, user_id)] = role
+    db.sessions["sess-1"] = {"user_id": user_id, "expires_at": None}
+    return {"magpie_session": "sess-1"}
+
+
+def test_session_falls_back_to_first_org():
+    db = FakeDatabase()
+    cookies = _session(db, "ua", ("org-a", "editor"), ("org-b", "admin"))
+    in_b = db.add_entry(org_id="org-b", user_id="ub")
+    client = make_client(db)
+
+    # No header, no saved default -> first membership (org-a); org-b is hidden.
+    assert client.get(f"/api/entries/{in_b}", cookies=cookies).status_code == 404
+
+
+def test_org_header_switches_active_org():
+    db = FakeDatabase()
+    cookies = _session(db, "ua", ("org-a", "editor"), ("org-b", "admin"))
+    in_b = db.add_entry(org_id="org-b", user_id="ub")
+    client = make_client(db)
+
+    res = client.get(
+        f"/api/entries/{in_b}", cookies=cookies, headers={"X-Organization-ID": "org-b"}
+    )
+    assert res.status_code == 200
+
+
+def test_org_header_rejected_when_not_a_member():
+    db = FakeDatabase()
+    cookies = _session(db, "ua", ("org-a", "editor"))
+    client = make_client(db)
+
+    res = client.get(
+        "/api/orgs", cookies=cookies, headers={"X-Organization-ID": "org-x"}
+    )
+    assert res.status_code == 403
+
+
+def test_select_org_persists_default_and_is_membership_checked():
+    db = FakeDatabase()
+    cookies = _session(db, "ua", ("org-a", "editor"), ("org-b", "admin"))
+    in_b = db.add_entry(org_id="org-b", user_id="ub")
+    client = make_client(db)
+
+    # Cannot select an org you're not in.
+    assert client.post("/api/orgs/org-x/select", cookies=cookies).status_code == 404
+
+    # Select org-b -> persisted as default; subsequent header-less requests use it.
+    res = client.post("/api/orgs/org-b/select", cookies=cookies)
+    assert res.status_code == 200
+    assert db.user_default_org["ua"] == "org-b"
+    assert client.get(f"/api/entries/{in_b}", cookies=cookies).status_code == 200
+
+
+def test_stale_default_org_self_heals():
+    db = FakeDatabase()
+    cookies = _session(db, "ua", ("org-a", "editor"))
+    db.user_default_org["ua"] = "org-gone"  # membership no longer exists
+    client = make_client(db)
+
+    # Resolves without error (falls back to org-a) and clears the stale default.
+    assert client.get("/api/orgs", cookies=cookies).status_code == 200
+    assert db.user_default_org["ua"] is None
 
 
 # -- AuthContext unit tests --

@@ -31,7 +31,7 @@ from magpie.manifest import normalize_slug
 from magpie.mcp.oauth import MagpieOAuthProvider
 from magpie.resolve import resolve_entry
 from magpie.search.fusion import search as fusion_search
-from magpie.server.context import AuthContext
+from magpie.server.context import AuthContext, resolve_active_org
 
 logger = logging.getLogger(__name__)
 
@@ -106,10 +106,10 @@ async def _tool_context() -> AuthContext:
     user_id = getattr(token, "user_id", None) if token else None
     if not user_id or not _db:
         return AuthContext()
-    orgs = await _db.list_user_orgs(user_id)
-    if orgs:
-        return AuthContext(user_id=user_id, org_id=orgs[0]["id"], role=orgs[0].get("role"))
-    return AuthContext(user_id=user_id)
+    # No per-request header over MCP — use the saved default org (falling back
+    # to first membership), consistent with the REST session path.
+    org_id, role = await resolve_active_org(_db, user_id, None)
+    return AuthContext(user_id=user_id, org_id=org_id, role=role)
 
 
 def _format_link(link: dict) -> str:

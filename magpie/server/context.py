@@ -78,3 +78,36 @@ def auth_context(request: Request) -> AuthContext:
         workspace=getattr(request.state, "auth_workspace", None),
         project=getattr(request.state, "auth_project", None),
     )
+
+
+# Sentinel: the caller named an org they are not a member of. Distinct from
+# "no active org" (None) so callers can reject a forged request with 403.
+ORG_FORBIDDEN = object()
+
+
+async def resolve_active_org(db, user_id: str, requested_org_id: str | None):
+    """Pick a user's active org and role, mirroring alertee's resolution:
+    explicit request (membership-validated) > saved default (validated,
+    self-healing if stale) > first membership.
+
+    Returns ``(org_id, role)``. If ``requested_org_id`` is given but the user
+    is not a member, returns ``(ORG_FORBIDDEN, None)`` so the caller can 403
+    rather than silently fall back to another org.
+    """
+    if requested_org_id:
+        role = await db.get_org_role(requested_org_id, user_id)
+        if role is None:
+            return ORG_FORBIDDEN, None
+        return requested_org_id, role
+
+    default_org = await db.get_user_default_org(user_id)
+    if default_org:
+        role = await db.get_org_role(default_org, user_id)
+        if role is not None:
+            return default_org, role
+        await db.set_user_default_org(user_id, None)  # self-heal stale default
+
+    orgs = await db.list_user_orgs(user_id)
+    if orgs:
+        return orgs[0]["id"], orgs[0].get("role")
+    return None, None
