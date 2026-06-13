@@ -29,3 +29,5 @@ On `push`, Magpie checks every collection against it:
 ## On the server too
 
 The registry isn't only enforced at push time. When an agent creates a new collection over [MCP](/mcp/tools) or the REST API, Magpie refuses a slug that near-duplicates an existing store in the same scope — the same defense, applied to live writes.
+
+The manifest is the collections half of a broader story. Entries have their own defenses — dedupe-on-write, duplicate detection, and merge. See [Staying coherent](/concepts/coherence) for the full picture.

@@ -362,11 +362,12 @@ program
   .option('--content <content>', 'Inline content')
   .option('--category <category>', 'project | area | resource', 'resource')
   .option('--tags <tags>', 'Comma-separated tags')
+  .option('--dedupe', 'Update an existing similar entry instead of creating a duplicate')
   .option('--workspace <workspace>')
   .option('--project <project>')
   .action(async (opts: {
     title: string; file?: string; content?: string; category: string;
-    tags?: string; workspace?: string; project?: string;
+    tags?: string; dedupe?: boolean; workspace?: string; project?: string;
   }) => {
     requireToken();
     try {
@@ -379,10 +380,11 @@ program
           content,
           category: opts.category,
           tags: opts.tags ? opts.tags.split(',').map((t) => t.trim()) : [],
+          dedupe: opts.dedupe || false,
           ...scope(opts),
         },
       });
-      console.log(`Created entry ${entry.id}: ${entry.title}`);
+      console.log(`${opts.dedupe ? 'Saved' : 'Created'} entry ${entry.id}: ${entry.title}`);
     } catch (err) {
       fail(err);
     }
@@ -396,6 +398,78 @@ program
     try {
       await api(`/api/entries/${entryId}/archive`, { method: 'POST' });
       console.log(`Archived ${entryId}.`);
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+interface DuplicateEntry {
+  id: string;
+  title: string;
+  workspace: string | null;
+  tags: string[];
+  content: string;
+  min_distance: number;
+}
+
+program
+  .command('duplicates')
+  .description('Find clusters of near-duplicate entries by semantic similarity')
+  .option('--workspace <workspace>')
+  .option('--project <project>')
+  .option('--threshold <n>', 'Cosine distance threshold — lower is stricter', '0.12')
+  .option('--limit <n>', 'Max pairs to consider', '50')
+  .action(async (opts: { workspace?: string; project?: string; threshold: string; limit: string }) => {
+    requireToken();
+    try {
+      const { clusters } = await api<{ clusters: DuplicateEntry[][] }>('/api/entries/find-duplicates', {
+        method: 'POST',
+        body: { ...scope(opts), threshold: parseFloat(opts.threshold), limit: parseInt(opts.limit, 10) },
+      });
+      if (!clusters.length) return console.log('No duplicate clusters found.');
+      clusters.forEach((cluster, i) => {
+        console.log(`\nCluster ${i + 1} (${cluster.length} entries):`);
+        for (const e of cluster) {
+          const ws = e.workspace || 'general';
+          console.log(`  - ${e.title} [${ws}] (dist: ${e.min_distance.toFixed(3)})\n    id: ${e.id}`);
+        }
+      });
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+program
+  .command('merge <ids...>')
+  .description('Merge entries into one (sources archived with lineage)')
+  .requiredOption('--title <title>')
+  .option('--file <path>', 'Markdown file with the merged content')
+  .option('--content <content>', 'Inline merged content')
+  .option('--category <category>', 'project | area | resource', 'resource')
+  .option('--tags <tags>', 'Comma-separated tags')
+  .option('--workspace <workspace>')
+  .option('--project <project>')
+  .action(async (ids: string[], opts: {
+    title: string; file?: string; content?: string; category: string;
+    tags?: string; workspace?: string; project?: string;
+  }) => {
+    requireToken();
+    try {
+      if (ids.length < 2) fail(new Error('Provide at least 2 entry IDs to merge'));
+      const content = opts.file ? readFileSync(opts.file, 'utf-8') : opts.content;
+      if (!content) fail(new Error('Provide --file or --content for the merged entry'));
+      const entry = await api<Entry>('/api/entries/merge', {
+        method: 'POST',
+        body: {
+          source_ids: ids,
+          title: opts.title,
+          content,
+          category: opts.category,
+          tags: opts.tags ? opts.tags.split(',').map((t) => t.trim()) : [],
+          ...scope(opts),
+        },
+      });
+      console.log(`Merged ${ids.length} entries into ${entry.id}: ${entry.title}`);
     } catch (err) {
       fail(err);
     }

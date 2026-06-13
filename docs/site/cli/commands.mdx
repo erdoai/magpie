@@ -44,10 +44,21 @@ magpie search "incident runbook" --workspace support --category resource
 magpie read <entry-id> --resolved          # resolve {{refs}} and [[links]]
 magpie write --title "Refund policy" --file refund-policy.md \
   --category resource --tags policy,billing
+magpie write --title "Refund policy" --file refund-policy.md --dedupe   # update closest match
 magpie archive <entry-id>
 ```
 
-`write` takes `--file <path>` or `--content <text>`; `--category` is one of `project`, `area`, `resource` (default `resource`).
+`write` takes `--file <path>` or `--content <text>`; `--category` is one of `project`, `area`, `resource` (default `resource`). Pass `--dedupe` to update the closest existing entry instead of creating a near-duplicate.
+
+### Staying coherent
+
+```bash
+magpie duplicates --workspace support               # cluster near-duplicate entries
+magpie duplicates --threshold 0.08 --limit 100      # stricter, wider scan
+magpie merge <id-a> <id-b> --title "Refunds" --file merged.md
+```
+
+`duplicates` reports clusters of entries that cover the same ground by semantic similarity (lower `--threshold` is stricter). `merge` collapses two or more into one — you supply the synthesized `--title` and `--file`/`--content`, and the sources are archived with lineage. See [Staying coherent](/concepts/coherence).
 
 ## Collections
 

@@ -8,11 +8,14 @@ import {
   ArrowRight,
   BookOpen,
   Boxes,
+  CopyCheck,
   FileText,
   GitBranch,
+  GitMerge,
   Link2,
   Paperclip,
   Search,
+  ShieldCheck,
   Terminal,
   Users,
 } from 'lucide-react';
@@ -65,6 +68,36 @@ magpie collections set config signups_open   --value true    --type boolean
 
 # Read one whole, by key — comes back as the real type
 magpie collections get config trial_days        # → 14  (integer, not "14")`;
+
+const COHERENCE_EXAMPLE = `# Don't fork a near-duplicate — update the closest match
+magpie write --title "Pricing decision" --file note.md --dedupe
+
+# Surface entries that already cover the same ground
+magpie duplicates --workspace acme
+#   Cluster 1 (2 entries):
+#     - Pricing decision         (dist: 0.04)
+#     - Pricing for enterprise   (dist: 0.04)
+
+# Collapse them into one — sources archived with lineage
+magpie merge <id-a> <id-b> --title "Pricing" --file merged.md`;
+
+const COHERENCE_POINTS = [
+  {
+    icon: CopyCheck,
+    title: 'Dedupe on write',
+    body: 'A write with dedupe updates the closest existing entry instead of forking a new one — agents stop re-recording what they already know.',
+  },
+  {
+    icon: GitMerge,
+    title: 'Find & merge',
+    body: 'Semantic find_duplicates surfaces clusters covering the same topic; merge collapses them into one, archiving the sources with lineage.',
+  },
+  {
+    icon: ShieldCheck,
+    title: "Collections can't drift",
+    body: 'A manifest registry rejects undeclared or near-duplicate stores ("Did you mean \'config\'?") — at push time and on live writes.',
+  },
+];
 
 // Before/after for the read-time resolution demo.
 const ENTRY_STORED = `## Acme onboarding
@@ -349,6 +382,37 @@ export function LandingPage() {
           Anything missing or unauthorized renders as <code className="rounded bg-muted px-1 py-0.5">⟦unresolved⟧</code> and
           is reported in a dependency list, so an agent knows exactly what's absent.
         </p>
+      </section>
+
+      {/* Coherence spotlight */}
+      <section className="mx-auto max-w-5xl px-6 pb-20">
+        <div className="grid items-center gap-8 rounded-2xl border border-border bg-card/40 p-6 sm:p-8 lg:grid-cols-2">
+          <div>
+            <Eyebrow>Stays coherent</Eyebrow>
+            <h2 className="text-2xl font-semibold">Knowledge that doesn't fragment</h2>
+            <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+              Every memory store rots the same way: agents pile up near-duplicates and the same
+              fact drifts across half a dozen entries. Magpie fights it at every layer — so what
+              you've stored stays one coherent source of truth, not a pile of slop.
+            </p>
+            <ul className="mt-5 space-y-3 text-sm">
+              {COHERENCE_POINTS.map(({ icon: Icon, title, body }) => (
+                <li key={title} className="flex gap-3">
+                  <Icon size={16} className="mt-0.5 shrink-0 text-primary" />
+                  <span className="text-muted-foreground">
+                    <span className="text-foreground">{title}</span> — {body}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <Link to="/docs" className="mt-6 inline-flex">
+              <Button variant="outline" size="sm">
+                Staying coherent <ArrowRight size={14} className="ml-1.5" />
+              </Button>
+            </Link>
+          </div>
+          <CodeBlock code={COHERENCE_EXAMPLE} language="shell" />
+        </div>
       </section>
 
       {/* Features */}

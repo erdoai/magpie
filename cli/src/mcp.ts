@@ -172,6 +172,71 @@ export async function runMcpServer(): Promise<void> {
   );
 
   server.tool(
+    'find_duplicates',
+    'Find clusters of near-duplicate entries by semantic similarity. Use before merging to spot consolidation opportunities.',
+    {
+      ...scopeArgs,
+      threshold: z.number().optional().describe('Cosine distance threshold — lower is stricter (default 0.12)'),
+      limit: z.number().optional().describe('Max pairs to consider (default 50)'),
+    },
+    async (args) =>
+      guarded(async () => {
+        const s = applyScope(args);
+        const { clusters } = await api<{
+          clusters: {
+            id: string; title: string; workspace: string | null;
+            tags: string[]; content: string; min_distance: number;
+          }[][];
+        }>('/api/entries/find-duplicates', {
+          method: 'POST',
+          body: { workspace: s.workspace, project: s.project, threshold: args.threshold ?? 0.12, limit: args.limit ?? 50 },
+        });
+        if (!clusters.length) return text('No duplicate clusters found.');
+        const parts = clusters.map((cluster, i) => {
+          const lines = [`## Cluster ${i + 1} (${cluster.length} entries)`];
+          for (const e of cluster) {
+            const ws = e.workspace || 'general';
+            const snippet = (e.content || '').slice(0, 120).replace(/\n/g, ' ');
+            lines.push(
+              `- **${e.title}** [${ws}] (id: ${e.id}, dist: ${(e.min_distance ?? 0).toFixed(3)})\n` +
+                `  Tags: ${(e.tags || []).join(', ')}\n  ${snippet}…`
+            );
+          }
+          return lines.join('\n');
+        });
+        return text(parts.join('\n\n'));
+      })
+  );
+
+  server.tool(
+    'merge',
+    'Merge several entries into one; the sources are archived with lineage. You provide the synthesized title and content.',
+    {
+      source_ids: z.array(z.string()).describe('Entry IDs to merge (2+, archived after)'),
+      title: z.string(),
+      content: z.string().describe('Synthesized merged content (markdown)'),
+      category: z.string().optional().describe('project | area | resource (default resource)'),
+      tags: z.array(z.string()).optional(),
+      ...scopeArgs,
+    },
+    async (args) =>
+      guarded(async () => {
+        const entry = await api<Entry>('/api/entries/merge', {
+          method: 'POST',
+          body: {
+            source_ids: args.source_ids,
+            title: args.title,
+            content: args.content,
+            category: args.category || 'resource',
+            tags: args.tags || [],
+            ...applyScope(args),
+          },
+        });
+        return text(`Merged ${args.source_ids.length} entries into ${entry.id} [${entryScope(entry)}]: ${entry.title}`);
+      })
+  );
+
+  server.tool(
     'resolve_knowledge',
     'Resolve an entry\'s {{references}} and [[wikilinks]]; returns rendered Markdown plus a dependency report.',
     { id: z.string().describe('Entry ID') },
