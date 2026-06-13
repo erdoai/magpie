@@ -14,6 +14,7 @@ from rich.console import Console
 
 from magpie.__version__ import __version__
 from magpie.attachments import handle_for, infer_kind, storage_key_for
+from magpie.bundle import scan_entries
 from magpie.config.settings import Settings
 from magpie.db.database import Database
 from magpie.db.migrate import run_migrations
@@ -180,6 +181,87 @@ async def _import_markdown_file(db, embedder, file_path, workspace, project, sou
 
     console.print(f"  Imported: {title}")
     return 1
+
+
+@app.command()
+def push(
+    directory: str = typer.Argument(".", help="Bundle directory to push"),
+    workspace: str = typer.Option("general", help="Workspace to sync into"),
+    project: str = typer.Option(None, help="Project within the workspace"),
+    org_id: str = typer.Option(None, help="Org to own the entries (NULL = global)"),
+):
+    """Sync a knowledge bundle to the server (repo = source of truth).
+
+    Entries are matched by their relative path within the bundle, so re-running
+    updates in place instead of creating duplicates. Every Markdown file must
+    carry valid Magpie frontmatter; if any file is off-spec the push aborts and
+    reports every problem, leaving the server untouched.
+    """
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(name)s: %(message)s")
+
+    settings = Settings()
+    if not settings.database_url:
+        console.print("[red]DATABASE_URL is not set[/red]")
+        raise typer.Exit(1)
+
+    result = scan_entries(directory)
+    if not result.ok:
+        console.print(f"[red]Refusing to push — {len(result.errors)} file(s) off-spec:[/red]")
+        for err in result.errors:
+            console.print(f"  [red]{err.path}[/red]: {err.message}")
+        raise typer.Exit(1)
+    if not result.entries:
+        console.print("[yellow]No entries found in bundle.[/yellow]")
+        return
+
+    async def _run():
+        db = await Database.connect(settings.database_url)
+
+        embedder = None
+        if settings.openai_api_key:
+            embedder = OpenAIEmbeddings(
+                api_key=settings.openai_api_key,
+                model=settings.embedding_model,
+                dims=settings.embedding_dimensions,
+            )
+
+        created = updated = 0
+        for entry in result.entries:
+            fm = entry.frontmatter
+            embedding = None
+            if embedder:
+                try:
+                    embedding = await embedder.embed(f"{entry.title}\n{entry.body}")
+                except Exception:
+                    pass
+
+            entry_id, was_updated = await db.upsert_entry_by_path(
+                source_path=entry.path,
+                title=entry.title,
+                content=entry.body,
+                category=fm.category,
+                tags=fm.tags,
+                source=fm.source or "bundle",
+                embedding=embedding,
+                org_id=org_id,
+                workspace=workspace,
+                project=project,
+            )
+            await sync_entry_links(db, entry_id)
+            updated += was_updated
+            created += not was_updated
+            verb = "updated" if was_updated else "created"
+            console.print(f"  {verb}: {entry.path}")
+
+        if embedder:
+            await embedder.close()
+        await db.close()
+        console.print(
+            f"[green]Pushed {len(result.entries)} entries "
+            f"({created} created, {updated} updated) into '{workspace}'[/green]"
+        )
+
+    asyncio.run(_run())
 
 
 @attachments_app.command("add")

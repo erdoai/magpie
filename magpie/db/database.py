@@ -715,6 +715,83 @@ class Database:
         )
         return entry_id, False
 
+    async def upsert_entry_by_path(
+        self,
+        source_path: str,
+        title: str,
+        content: str,
+        category: str = "resource",
+        tags: list[str] | None = None,
+        source: str | None = None,
+        embedding: list[float] | None = None,
+        user_id: str | None = None,
+        org_id: str | None = None,
+        workspace: str | None = None,
+        project: str | None = None,
+    ) -> tuple[str, bool]:
+        """Create or update the entry identified by ``source_path`` within scope.
+
+        Identity is the bundle-relative path, scoped to (org, workspace,
+        project) — deterministic, so re-pushing a bundle updates in place rather
+        than duplicating. Returns (entry_id, was_updated).
+        """
+        existing = await self._pool.fetchval(
+            """SELECT id FROM entries
+               WHERE source_path = $1
+                 AND COALESCE(org_id, '') = COALESCE($2, '')
+                 AND COALESCE(workspace, '') = COALESCE($3, '')
+                 AND COALESCE(project, '') = COALESCE($4, '')""",
+            source_path,
+            org_id,
+            workspace,
+            project,
+        )
+
+        use_vec = bool(embedding) and self.has_vectors
+        if existing:
+            if use_vec:
+                await self._pool.execute(
+                    """UPDATE entries
+                       SET title=$2, content=$3, category=$4, tags=$5, source=$6,
+                           embedding=$7, updated_at=$8
+                       WHERE id=$1""",
+                    existing, title, content, category, tags or [], source,
+                    str(embedding), datetime.now(UTC),
+                )
+            else:
+                await self._pool.execute(
+                    """UPDATE entries
+                       SET title=$2, content=$3, category=$4, tags=$5, source=$6,
+                           updated_at=$7
+                       WHERE id=$1""",
+                    existing, title, content, category, tags or [], source,
+                    datetime.now(UTC),
+                )
+            return existing, True
+
+        entry_id = uuid4().hex
+        now = datetime.now(UTC)
+        if use_vec:
+            await self._pool.execute(
+                """INSERT INTO entries
+                   (id, title, content, category, tags, source, source_path,
+                    embedding, user_id, org_id, workspace, project,
+                    created_at, updated_at)
+                   VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)""",
+                entry_id, title, content, category, tags or [], source, source_path,
+                str(embedding), user_id, org_id, workspace, project, now, now,
+            )
+        else:
+            await self._pool.execute(
+                """INSERT INTO entries
+                   (id, title, content, category, tags, source, source_path,
+                    user_id, org_id, workspace, project, created_at, updated_at)
+                   VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)""",
+                entry_id, title, content, category, tags or [], source, source_path,
+                user_id, org_id, workspace, project, now, now,
+            )
+        return entry_id, False
+
     # -- Links --
 
     async def find_entries_by_titles(

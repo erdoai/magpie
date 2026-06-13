@@ -65,9 +65,9 @@ Keep this section current as work lands. Update it in the same change as the wor
   - [ ] Custom domain (currently Railway-generated; magpie.erdo.ai optional later — requires updating OAUTH_ISSUER_URL/ASSET_PUBLIC_BASE_URL)
   - [ ] Backups, per-org quotas, usage page, hosted onboarding docs, import/export path
 - [ ] Phase 8: App integrations
-- [ ] Phase 9: Repo sync, format spec, and viewer — see design section below
-  - [ ] Magpie's own versioned frontmatter spec (`type` required, rest optional)
-  - [ ] One-way `push` from a folder (repo = source of truth for curated content)
+- [~] Phase 9: Repo sync, format spec, and viewer — see design section below
+  - [x] Magpie's own strict versioned closed frontmatter spec (`magpie/frontmatter.py`, 14 tests) — `magpie_version`+`category` required, closed field set, unknown keys rejected
+  - [x] One-way `push` from a folder (repo = source of truth). `magpie/bundle.py` scanner (8 tests) + migration 011 `source_path` (path-as-identity) + `db.upsert_entry_by_path` + `magpie push`
   - [ ] Two collection layers: repo-canonical vs server-canonical (live), source-of-truth flag
   - [ ] Manifest/catalog + anti-drift checks (reject unknown store/key, near-duplicate detection)
   - [ ] Static zero-backend HTML viewer for an exported bundle
@@ -672,10 +672,12 @@ Framing: **the folder gives portability; the server gives coherence.** A folder 
 
 ### Frontmatter spec
 
-Define Magpie's own small, versioned frontmatter schema for entry Markdown:
+Define Magpie's own small, versioned, **closed** frontmatter schema for entry Markdown. This is a strict contract, not a free-for-all bag of keys.
 
-- `type` required (matches Magpie's entry-type enum); everything else optional (`title`, `tags`, `summary`, `source`).
-- Version the schema so the loader can evolve it.
+- A fixed, known set of entry-describing fields only. Proposed: `magpie_version` (schema version, required), `type` (required, matches Magpie's entry-type enum), `title`, `tags`, `summary`, `source`, `status`.
+- **Unknown keys are rejected on `push`** (with a clear error), not silently stored. This is deliberate: an open frontmatter bag would drift against collections and turn into a second, messy, unvalidated KV store. We already have a typed, validated KV store — that's collections.
+- Hard boundary: frontmatter describes the *entry*; any structured data/values belong in a **collection**, never the frontmatter. If you're tempted to add a field, it's either a real schema change (bump `magpie_version`) or it's a collection document.
+- Version the schema (`magpie_version`) so the loader can evolve it and migrate older bundles.
 
 ### Repo sync
 
