@@ -6,8 +6,8 @@ description: Author knowledge as a folder of files in git, then sync it to the s
 Repo sync is docs-as-code for knowledge. You author entries and curated collections as plain files, review them in pull requests, and sync them to Magpie. **The repo is the source of truth; the server is the search and serving index.**
 
 ```bash
-magpie push ./knowledge --workspace reach     # repo  → server
-magpie export ./knowledge --workspace reach    # server → repo
+magpie push ./knowledge --workspace support     # repo  → server
+magpie export ./knowledge --workspace support    # server → repo
 ```
 
 Both commands exist in the [CLI](/cli/commands) and as REST endpoints (`POST /api/bundle/push`, `GET /api/bundle/export`). All parsing, validation, and anti-drift logic runs server-side — the clients only read and write files.

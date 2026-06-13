@@ -27,7 +27,7 @@ Prefer hosted? Point the CLI and MCP client at your hosted Magpie URL instead of
 ```bash
 npm install -g @magpie/cli
 magpie login          # email one-time code → stores an API key
-magpie link --workspace general
+magpie link --workspace support
 ```
 
 See [CLI installation](/cli/installation) for details.
@@ -35,10 +35,10 @@ See [CLI installation](/cli/installation) for details.
 ## 3. Write and search
 
 ```bash
-magpie write --title "Alertee positioning" \
-  --file positioning.md --category resource --tags reach,positioning
+magpie write --title "Refund policy" \
+  --file refund-policy.md --category resource --tags policy,billing
 
-magpie search "what's our wedge for alertee?"
+magpie search "how do we handle refunds?"
 ```
 
 Search blends semantic and keyword matching — see [Search](/concepts/search).
@@ -59,8 +59,8 @@ Your agent now has the 16 Magpie [tools](/mcp/tools) — `search`, `write`, `rea
 Keep curated knowledge as a folder of Markdown + JSON in version control, and sync it:
 
 ```bash
-magpie push ./knowledge --workspace reach
-magpie export ./knowledge --workspace reach   # the inverse
+magpie push ./knowledge --workspace support
+magpie export ./knowledge --workspace support   # the inverse
 ```
 
 See [Repo sync](/repo-sync/overview).

@@ -3,14 +3,15 @@ title: Collections
 description: Typed JSON key/value stores for structured context read whole by key.
 ---
 
-Some knowledge isn't prose — it's a **value**. The current MRR, a brand color, a positioning statement, a config blob. A **collection** is a named key/value store for exactly that: structured context an agent reads whole by key, not by search.
+Some knowledge isn't prose — it's a **value**. A feature flag, a rate limit, a support email, a set of brand colors, the current pricing tier. A **collection** is a named key/value store for exactly that: structured context an agent reads whole by key, not by search.
 
 Collections are standalone (not owned by an entry) and scoped by org / workspace / project, addressed by a `slug`.
 
 ```bash
-magpie collections set reach.strategy wedge --value '"simplicity"' --type string
-magpie collections set reach.strategy mrr --value 4200 --type integer
-magpie collections get reach.strategy wedge
+magpie collections set config support_email --value '"help@example.com"' --type string
+magpie collections set config trial_days --value 14 --type integer
+magpie collections set config signups_open --value true --type boolean
+magpie collections get config trial_days
 ```
 
 ## Typed values
@@ -26,7 +27,7 @@ Each document declares a `value_type`, validated on write and returned on read, 
 | `boolean` | `true` / `false` |
 | `datetime` | An ISO 8601 string |
 
-A value reference like `{{reach.strategy.mrr}}` in an entry then resolves to an actual number, not a string — see [Links & references](/concepts/links).
+A value reference like `{{config.trial_days}}` in an entry then resolves to an actual number, not a string — see [Links & references](/concepts/links).
 
 ## Two layers: live vs curated
 

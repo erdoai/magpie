@@ -21,19 +21,19 @@ Every entry has a `category` from the [PARA](https://fortelabs.com/blog/para/) s
 Entries are scoped so a team — and multiple apps within it — can share one store without collisions:
 
 - **Org** — your team/account boundary. Members share knowledge within the org. Roles: `owner` > `admin` > `editor` > `viewer`.
-- **Workspace** — a broad app/product namespace, e.g. `reach`, `alertee`, `general`.
+- **Workspace** — a broad app/product namespace, e.g. `support`, `engineering`, `general`.
 - **Project** — a narrower work area within a workspace, e.g. a customer or product slug.
 
 All of these are optional; a `NULL` field means "global". **Visibility:** you see your own entries, your org's entries, and global entries.
 
 ```json
 {
-  "title": "Alertee positioning",
-  "content": "# Wedge\n\nSimplicity is the wedge...",
+  "title": "Refund policy",
+  "content": "# Refunds\n\nFull refund within 30 days...",
   "category": "resource",
-  "tags": ["reach", "positioning"],
-  "workspace": "reach",
-  "project": "alertee"
+  "tags": ["policy", "billing"],
+  "workspace": "support",
+  "project": "billing"
 }
 ```
 

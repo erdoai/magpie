@@ -3,7 +3,7 @@ title: Anti-drift
 description: The manifest that stops knowledge from fragmenting into near-duplicates.
 ---
 
-The real risk in a folder-of-files knowledge store is **drift**: two stores named for the same thing (`reach-strategy` vs `reach_strategy`), or the same value landing under different keys. A folder can't prevent this on its own — a central registry can.
+The real risk in a folder-of-files knowledge store is **drift**: two stores named for the same thing (`brand-tokens` vs `brand_tokens`), or the same value landing under different keys. A folder can't prevent this on its own — a central registry can.
 
 ## The manifest
 
@@ -12,15 +12,15 @@ The real risk in a folder-of-files knowledge store is **drift**: two stores name
 ```json
 {
   "stores": {
-    "strategy": { "title": "Reach strategy", "keys": ["wedge", "mrr"] },
-    "brand":    { "title": "Brand tokens" }
+    "config": { "title": "Service config", "keys": ["support_email", "trial_days"] },
+    "brand":  { "title": "Brand tokens" }
   }
 }
 ```
 
 On `push`, Magpie checks every collection against it:
 
-- A collection whose slug **isn't declared** is rejected, with a nearest-match suggestion (`Did you mean 'strategy'?`). Creating a store is a deliberate act, not a side effect of adding a file.
+- A collection whose slug **isn't declared** is rejected, with a nearest-match suggestion (`Did you mean 'config'?`). Creating a store is a deliberate act, not a side effect of adding a file.
 - Two files whose slugs collapse to the same normalized form (case and separators removed) are rejected as **near-duplicates**.
 - If a store declares `keys`, document keys outside that list produce a **warning** — surfaced, but not blocking — so typo'd keys show up early.
 

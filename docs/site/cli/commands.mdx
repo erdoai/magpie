@@ -11,7 +11,7 @@ Most commands accept `--workspace` and `--project` to scope, falling back to wha
 magpie login              # email one-time code → store an API key
 magpie logout             # remove the stored key
 magpie whoami             # server, auth, linked scope, orgs
-magpie link --workspace reach --project alertee
+magpie link --workspace support --project billing
 magpie org list
 magpie workspace list <orgId>
 ```
@@ -19,10 +19,10 @@ magpie workspace list <orgId>
 ## Knowledge
 
 ```bash
-magpie search "incident runbook" --workspace alertee --category resource
+magpie search "incident runbook" --workspace support --category resource
 magpie read <entry-id> --resolved          # resolve {{refs}} and [[links]]
-magpie write --title "Alertee positioning" --file positioning.md \
-  --category resource --tags reach,positioning
+magpie write --title "Refund policy" --file refund-policy.md \
+  --category resource --tags policy,billing
 magpie archive <entry-id>
 ```
 
@@ -32,8 +32,8 @@ magpie archive <entry-id>
 
 ```bash
 magpie collections list
-magpie collections get reach.strategy wedge
-magpie collections set reach.strategy mrr --value 4200 --type integer
+magpie collections get config trial_days
+magpie collections set config trial_days --value 14 --type integer
 ```
 
 `set` takes `--value <json>` or `--file <path>`, and `--type` (`json`, `string`, `integer`, `float`, `boolean`, `datetime`). See [Collections](/concepts/collections).
@@ -48,8 +48,8 @@ magpie attachments list <entry-id>
 ## Repo sync
 
 ```bash
-magpie push ./knowledge --workspace reach    # repo  → server
-magpie export ./knowledge --workspace reach   # server → repo
+magpie push ./knowledge --workspace support    # repo  → server
+magpie export ./knowledge --workspace support   # server → repo
 ```
 
 `push` validates the whole [bundle](/repo-sync/overview) and aborts on any off-spec file or drift issue. `export` writes entries, repo collections, a manifest, and a self-contained `index.html` viewer. See [Repo sync](/repo-sync/overview).
