@@ -1078,16 +1078,17 @@ class Database:
         workspace: str | None = None,
         project: str | None = None,
         created_by_user_id: str | None = None,
+        source: str = "server",
     ) -> str:
         col_id = uuid4().hex
         now = datetime.now(UTC)
         await self._pool.execute(
             """INSERT INTO collections
                (id, org_id, workspace, project, slug, title, description,
-                visibility, created_by_user_id, created_at, updated_at)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)""",
+                visibility, created_by_user_id, source, created_at, updated_at)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11)""",
             col_id, org_id, workspace, project, slug, title, description,
-            visibility, created_by_user_id, now,
+            visibility, created_by_user_id, source, now,
         )
         return col_id
 

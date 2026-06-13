@@ -68,7 +68,7 @@ Keep this section current as work lands. Update it in the same change as the wor
 - [~] Phase 9: Repo sync, format spec, and viewer — see design section below
   - [x] Magpie's own strict versioned closed frontmatter spec (`magpie/frontmatter.py`, 14 tests) — `magpie_version`+`category` required, closed field set, unknown keys rejected
   - [x] One-way `push` from a folder (repo = source of truth). `magpie/bundle.py` scanner (8 tests) + migration 011 `source_path` (path-as-identity) + `db.upsert_entry_by_path` + `magpie push`
-  - [ ] Two collection layers: repo-canonical vs server-canonical (live), source-of-truth flag
+  - [x] Two collection layers: repo-canonical vs server-canonical (live), source-of-truth flag. Migration 012 `collections.source`; `infer_value_type`; `scan_collections` (flat `{key:value}` JSON, types inferred); push syncs repo collections with server-conflict pre-check; write-guard rejects agent/API writes to repo-canonical stores (REST + MCP set/delete). 7 scan tests
   - [ ] Manifest/catalog + anti-drift checks (reject unknown store/key, near-duplicate detection)
   - [ ] Static zero-backend HTML viewer for an exported bundle
   - [ ] (Optional, later) OKF export as a 1-line compatibility footnote if it ever gets adoption

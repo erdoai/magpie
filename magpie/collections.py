@@ -13,6 +13,25 @@ from datetime import datetime
 VALUE_TYPES = ("json", "string", "integer", "float", "boolean", "datetime")
 
 
+def infer_value_type(value) -> str:
+    """Infer a ``value_type`` from a native JSON value.
+
+    Used when loading repo-canonical collection files, where documents are
+    written as plain JSON. ``datetime`` is never inferred (it is a string on
+    the wire and indistinguishable from a plain string) — declare it explicitly
+    if needed. ``bool`` is checked before ``int`` because ``True`` is an int.
+    """
+    if isinstance(value, bool):
+        return "boolean"
+    if isinstance(value, int):
+        return "integer"
+    if isinstance(value, float):
+        return "float"
+    if isinstance(value, str):
+        return "string"
+    return "json"  # objects, arrays, null
+
+
 def validate_value(value, value_type: str) -> str | None:
     """Return an error message if the value doesn't match the declared type."""
     if value_type not in VALUE_TYPES:

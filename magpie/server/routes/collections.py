@@ -35,6 +35,17 @@ def _collection_visible(col: dict, ctx: AuthContext) -> bool:
     return ctx.can_access({"user_id": None, "org_id": col.get("org_id")})
 
 
+def _repo_locked(col: dict) -> JSONResponse | None:
+    """Reject writes to repo-canonical collections — the bundle is the source
+    of truth, so they're edited in the repo and synced with `magpie push`."""
+    if col.get("source") == "repo":
+        return _forbidden(
+            "Collection is repo-canonical; edit the bundle file and run "
+            "`magpie push` (server writes are rejected to prevent drift)"
+        )
+    return None
+
+
 async def _find_visible_collection(
     db, slug: str, ctx: AuthContext, workspace: str | None, project: str | None
 ) -> dict | None:
@@ -197,6 +208,9 @@ async def set_document(
     col = await _find_visible_collection(db, slug, ctx, workspace, project)
     if not col:
         return _not_found()
+    locked = _repo_locked(col)
+    if locked:
+        return locked
 
     await db.set_document(
         collection_id=col["id"],
@@ -227,6 +241,9 @@ async def delete_document(
     col = await _find_visible_collection(db, slug, ctx, workspace, project)
     if not col:
         return _not_found()
+    locked = _repo_locked(col)
+    if locked:
+        return locked
 
     ok = await db.delete_document(col["id"], key)
     if not ok:

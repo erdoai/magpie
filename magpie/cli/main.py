@@ -14,7 +14,7 @@ from rich.console import Console
 
 from magpie.__version__ import __version__
 from magpie.attachments import handle_for, infer_kind, storage_key_for
-from magpie.bundle import scan_entries
+from magpie.bundle import scan_collections, scan_entries
 from magpie.config.settings import Settings
 from magpie.db.database import Database
 from magpie.db.migrate import run_migrations
@@ -205,17 +205,41 @@ def push(
         raise typer.Exit(1)
 
     result = scan_entries(directory)
-    if not result.ok:
-        console.print(f"[red]Refusing to push — {len(result.errors)} file(s) off-spec:[/red]")
-        for err in result.errors:
+    col_result = scan_collections(directory)
+    file_errors = result.errors + col_result.errors
+    if file_errors:
+        console.print(f"[red]Refusing to push — {len(file_errors)} file(s) off-spec:[/red]")
+        for err in file_errors:
             console.print(f"  [red]{err.path}[/red]: {err.message}")
         raise typer.Exit(1)
-    if not result.entries:
-        console.print("[yellow]No entries found in bundle.[/yellow]")
+    if not result.entries and not col_result.collections:
+        console.print("[yellow]No entries or collections found in bundle.[/yellow]")
         return
 
     async def _run():
         db = await Database.connect(settings.database_url)
+
+        # Pre-flight: a repo collection must not clobber a live server-canonical
+        # store of the same slug. Detect before writing anything.
+        conflicts = []
+        existing_cols = {}
+        for col in col_result.collections:
+            found = await db.find_collection(
+                col.slug, org_id=org_id, workspace=workspace, project=project
+            )
+            if found and found.get("org_id") == org_id:
+                if found.get("source") != "repo":
+                    conflicts.append(col.slug)
+                existing_cols[col.slug] = found
+        if conflicts:
+            await db.close()
+            console.print(
+                "[red]Refusing to push — these collections already exist as "
+                "server-canonical (live) stores:[/red]"
+            )
+            for slug in conflicts:
+                console.print(f"  [red]{slug}[/red]: edit it via the API/agent, not the repo")
+            raise typer.Exit(1)
 
         embedder = None
         if settings.openai_api_key:
@@ -253,12 +277,38 @@ def push(
             verb = "updated" if was_updated else "created"
             console.print(f"  {verb}: {entry.path}")
 
+        doc_count = 0
+        for col in col_result.collections:
+            existing = existing_cols.get(col.slug)
+            if existing:
+                col_id = existing["id"]
+            else:
+                col_id = await db.create_collection(
+                    slug=col.slug,
+                    title=col.slug,
+                    org_id=org_id,
+                    workspace=workspace,
+                    project=project,
+                    source="repo",
+                )
+            for doc in col.documents:
+                await db.set_document(
+                    collection_id=col_id,
+                    key=doc.key,
+                    value=doc.value,
+                    value_type=doc.value_type,
+                    org_id=org_id,
+                )
+                doc_count += 1
+            console.print(f"  collection: {col.slug} ({len(col.documents)} docs)")
+
         if embedder:
             await embedder.close()
         await db.close()
         console.print(
             f"[green]Pushed {len(result.entries)} entries "
-            f"({created} created, {updated} updated) into '{workspace}'[/green]"
+            f"({created} created, {updated} updated) and {len(col_result.collections)} "
+            f"repo collections ({doc_count} docs) into '{workspace}'[/green]"
         )
 
     asyncio.run(_run())

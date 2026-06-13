@@ -723,6 +723,11 @@ def _register_tools(server: FastMCP) -> None:
         )
         if col and not ctx.can_access({"user_id": None, "org_id": col.get("org_id")}):
             col = None
+        if col and col.get("source") == "repo":
+            return (
+                f"Collection {collection} is repo-canonical; edit the bundle file"
+                f" and run `magpie push` (agent writes are rejected to avoid drift)."
+            )
         if not col:
             if not create_collection:
                 return (
@@ -777,6 +782,11 @@ def _register_tools(server: FastMCP) -> None:
         )
         if not col or not ctx.can_access({"user_id": None, "org_id": col.get("org_id")}):
             return f"Collection {collection} not found."
+        if col.get("source") == "repo":
+            return (
+                f"Collection {collection} is repo-canonical; edit the bundle file"
+                f" and run `magpie push` (agent writes are rejected to avoid drift)."
+            )
 
         ok = await _db.delete_document(col["id"], key)
         if not ok:

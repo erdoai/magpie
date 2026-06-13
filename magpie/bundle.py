@@ -23,13 +23,19 @@ error reporting can be tested without a database.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import json
+from dataclasses import dataclass, field
 from pathlib import Path
 
+from magpie.collections import infer_value_type
 from magpie.frontmatter import Frontmatter, FrontmatterError, parse
 
 # Subdirectories under a bundle root that are not entry Markdown.
 RESERVED_DIRS = ("collections", "attachments")
+
+# Files in collections/ that are not collection stores.
+COLLECTIONS_DIR = "collections"
+MANIFEST_FILE = "_manifest.json"
 
 
 @dataclass
@@ -66,6 +72,80 @@ class ScanResult:
     @property
     def ok(self) -> bool:
         return not self.errors
+
+
+@dataclass
+class BundleDocument:
+    """One typed key/value in a repo-canonical collection."""
+
+    key: str
+    value: object
+    value_type: str
+
+
+@dataclass
+class BundleCollection:
+    """A repo-canonical collection parsed from ``collections/<slug>.json``."""
+
+    slug: str
+    documents: list[BundleDocument] = field(default_factory=list)
+
+
+@dataclass
+class CollectionScanResult:
+    collections: list[BundleCollection]
+    errors: list[BundleError]
+
+    @property
+    def ok(self) -> bool:
+        return not self.errors
+
+
+# Reuse the slug grammar the server enforces (lowercase, dots, dashes, scores).
+def _valid_slug(slug: str) -> bool:
+    if not slug or not (slug[0].islower() or slug[0].isdigit()):
+        return False
+    return all(c.islower() or c.isdigit() or c in "._-" for c in slug)
+
+
+def scan_collections(root: str | Path) -> CollectionScanResult:
+    """Scan ``collections/*.json`` for repo-canonical stores.
+
+    Each file is a flat ``{ key: value }`` map of native JSON values; the slug
+    is the filename stem and value types are inferred. ``_manifest.json`` is not
+    a store and is skipped here (it drives anti-drift checks separately).
+    """
+    root = Path(root)
+    col_dir = root / COLLECTIONS_DIR
+    collections: list[BundleCollection] = []
+    errors: list[BundleError] = []
+
+    if not col_dir.is_dir():
+        return CollectionScanResult([], [])
+
+    for path in sorted(col_dir.glob("*.json")):
+        rel = path.relative_to(root).as_posix()
+        if path.name == MANIFEST_FILE:
+            continue
+        slug = path.stem
+        if not _valid_slug(slug):
+            errors.append(BundleError(rel, f"Invalid collection slug {slug!r}"))
+            continue
+        try:
+            data = json.loads(path.read_text())
+        except json.JSONDecodeError as exc:
+            errors.append(BundleError(rel, f"Invalid JSON: {exc}"))
+            continue
+        if not isinstance(data, dict):
+            errors.append(BundleError(rel, "Collection file must be a JSON object of key/value"))
+            continue
+        docs = [
+            BundleDocument(key=key, value=value, value_type=infer_value_type(value))
+            for key, value in data.items()
+        ]
+        collections.append(BundleCollection(slug=slug, documents=docs))
+
+    return CollectionScanResult(collections=collections, errors=errors)
 
 
 def _iter_markdown(root: Path):
