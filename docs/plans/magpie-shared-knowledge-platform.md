@@ -65,13 +65,13 @@ Keep this section current as work lands. Update it in the same change as the wor
   - [ ] Custom domain (currently Railway-generated; magpie.erdo.ai optional later — requires updating OAUTH_ISSUER_URL/ASSET_PUBLIC_BASE_URL)
   - [ ] Backups, per-org quotas, usage page, hosted onboarding docs, import/export path
 - [ ] Phase 8: App integrations
-- [ ] Phase 9: Repo sync, OKF interop, and viewer — see design section below
-  - [ ] Versioned frontmatter spec (OKF-compatible: `type` required, rest optional)
+- [ ] Phase 9: Repo sync, format spec, and viewer — see design section below
+  - [ ] Magpie's own versioned frontmatter spec (`type` required, rest optional)
   - [ ] One-way `push` from a folder (repo = source of truth for curated content)
   - [ ] Two collection layers: repo-canonical vs server-canonical (live), source-of-truth flag
   - [ ] Manifest/catalog + anti-drift checks (reject unknown store/key, near-duplicate detection)
-  - [ ] OKF export/import (closes the Phase 7 lock-in TODO)
   - [ ] Static zero-backend HTML viewer for an exported bundle
+  - [ ] (Optional, later) OKF export as a 1-line compatibility footnote if it ever gets adoption
 
 ## Summary
 
@@ -662,18 +662,19 @@ Erdo adoption:
 - Keep local fallback paths until Magpie is stable.
 - Migrate old app-specific knowledge incrementally.
 
-## Repo Sync, OKF Interop, and Viewer (Phase 9)
+## Repo Sync, Format Spec, and Viewer (Phase 9)
 
-Context: Google published the Open Knowledge Format (OKF) on 2026-06-12 — a vendor-neutral spec for knowledge as a folder of Markdown files with YAML frontmatter, plus a static HTML viewer. It is a *format*, not a runtime: no search, no tenancy, no permissions, no typed value resolution. It overlaps Magpie's entry model (Markdown + frontmatter + links) almost exactly, which validates the model, but it stops where Magpie's value begins. We adopt the parts that are genuinely useful and ignore the rest.
+This is Magpie's own design. We give devs a git-native way to author knowledge locally, sync it to the server, browse it offline, and never lose it to lock-in. Our reasons, our format.
 
-Framing: **the folder gives portability; the server gives coherence.** OKF only has the first half. This phase adds the first half to Magpie without giving up the second.
+Framing: **the folder gives portability; the server gives coherence.** A folder of Markdown can't search, scope, resolve typed values, or stop drift — that's the whole reason Magpie exists. This phase adds the portability half without giving up the coherence half.
+
+(Context only, not a driver: Google published the Open Knowledge Format on 2026-06-12 — a folder-of-Markdown spec with no runtime. Independent convergence on Markdown+frontmatter validates the model, nothing more. We are not building to their template. If OKF ever gets real adoption, our format is already shaped such that emitting it is a 1-line export — see footnote at the end.)
 
 ### Frontmatter spec
 
-Define a small, versioned frontmatter schema for entry Markdown:
+Define Magpie's own small, versioned frontmatter schema for entry Markdown:
 
 - `type` required (matches Magpie's entry-type enum); everything else optional (`title`, `tags`, `summary`, `source`).
-- Keep it a superset-compatible with OKF so a Magpie doc is a valid OKF doc and vice versa — "we interop with OKF" then costs nothing.
 - Version the schema so the loader can evolve it.
 
 ### Repo sync
@@ -715,25 +716,28 @@ Drift (near-duplicate store names for the same thing, the same value under diffe
 - On every write (repo `push` or agent `set_document`): unknown store → reject with nearest-match suggestion; unknown key → warn; fuzzy-match slugs to catch `reach-strategy` vs `reach_strategy`.
 - Creating a store stays deliberate (Phase 3 already ships `create_collection` + missing-key hints — build duplicate detection on top).
 
-### OKF export/import
+### Export / import (our format)
 
-Closes the open Phase 7 lock-in TODO ("import/export path so hosted users are not locked in").
+Closes the open Phase 7 lock-in TODO ("import/export path so hosted users are not locked in"). This is our bundle format — the same folder layout `push` reads.
 
-- `magpie export --okf` → OKF bundle (entries map ~1:1 to Markdown+frontmatter).
-- `magpie import <okf-bundle>` → ingest, embed on the way in, assign scope.
-- Be honest about lossy edges: OKF has no native typed collections (degrade to frontmatter/sidecar), no binary attachments (sidecar + `resource:` URL), no scope/embeddings (assigned on import). Document it; don't pretend it round-trips perfectly.
+- `magpie export` → full bundle: entries (Markdown+frontmatter), repo-canonical collections (JSON), attachments (binary + sidecar), manifest.
+- `magpie import <bundle>` → ingest, embed on the way in, assign scope.
 
 ### Viewer
 
-The one thing worth borrowing from Google's release. A zero-backend static HTML view of an exported bundle:
+A zero-backend static HTML view of an exported bundle:
 
 - Great export artifact and demo: "here's your knowledge as a browsable graph, no server needed."
-- Pairs with OKF export — bundle + self-contained `index.html`, browsable offline.
+- Pairs with `export` — bundle + self-contained `index.html`, browsable offline.
 - Makes the "you're not locked in" story tangible.
 
 ### Parked (not this phase)
 
 - Offline search: a local SQLite mirror (`sqlite-vec` + FTS5) reproducing RRF on a laptop. Real, but a port of fusion to a second engine — separate from sync, only if people want serverless offline search. The mirror is binary; it is not the repo format.
+
+### Footnote: OKF compatibility
+
+Not a goal and not a driver. Because our bundle is already Markdown+frontmatter + JSON, emitting an OKF-shaped export is a near-trivial adapter we can add *only if* OKF ever gets real adoption. Until then, ignore it. Our format leads; OKF is at most a free side-export later.
 
 ## Open Questions
 
