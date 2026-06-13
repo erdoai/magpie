@@ -1101,6 +1101,30 @@ class Database:
         result = await self._pool.execute("DELETE FROM workspaces WHERE id = $1", ws_id)
         return result == "DELETE 1"
 
+    # -- Projects --
+
+    async def create_project(self, ws_id: str, name: str, slug: str) -> str:
+        proj_id = uuid4().hex
+        await self._pool.execute(
+            "INSERT INTO projects (id, workspace_id, name, slug) VALUES ($1, $2, $3, $4)",
+            proj_id, ws_id, name, slug,
+        )
+        return proj_id
+
+    async def get_project(self, proj_id: str) -> dict | None:
+        row = await self._pool.fetchrow("SELECT * FROM projects WHERE id = $1", proj_id)
+        return dict(row) if row else None
+
+    async def list_projects(self, ws_id: str) -> list[dict]:
+        rows = await self._pool.fetch(
+            "SELECT * FROM projects WHERE workspace_id = $1 ORDER BY name", ws_id
+        )
+        return [dict(r) for r in rows]
+
+    async def delete_project(self, proj_id: str) -> bool:
+        result = await self._pool.execute("DELETE FROM projects WHERE id = $1", proj_id)
+        return result == "DELETE 1"
+
     # -- Collections --
 
     async def create_collection(

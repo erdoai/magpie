@@ -1,4 +1,4 @@
-"""Org and workspace management routes."""
+"""Org, workspace, and project management routes."""
 
 import re
 
@@ -26,6 +26,11 @@ class InviteMemberRequest(BaseModel):
 
 
 class CreateWorkspaceRequest(BaseModel):
+    name: str
+    slug: str | None = None
+
+
+class CreateProjectRequest(BaseModel):
     name: str
     slug: str | None = None
 

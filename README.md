@@ -39,15 +39,17 @@ claude mcp add --transport http magpie https://your-magpie-server/mcp \
   --header "Authorization: Bearer YOUR_API_KEY"
 ```
 
-This gives Claude Code these tools:
+This gives Claude Code Magpie's full tool set:
 
-| Tool | Description |
-|------|-------------|
-| `search` | Semantic + keyword search across knowledge |
-| `write` | Save knowledge (requires workspace) |
-| `read` | Read entry by ID |
-| `list_entries` | Browse/filter entries |
-| `archive` | Archive an entry |
+| Area | Tools |
+|------|-------|
+| Knowledge | `search`, `read`, `write`, `list_entries`, `archive` |
+| Coherence | `find_duplicates`, `merge` (and `write` with `dedupe`) |
+| Links & references | `list_links`, `resolve_knowledge` |
+| Collections | `list_collections`, `get_document`, `set_document`, `delete_document` |
+| Attachments | `upload_attachment`, `list_attachments`, `get_attachment` |
+
+The same tools are available over the remote (OAuth) MCP server and the local stdio proxy (`npx @erdo/magpie mcp`). Full reference: [MCP tools](https://github.com/erdoai/magpie/blob/main/docs/site/mcp/tools.mdx).
 
 **Workspace pattern**: When writing knowledge, you specify which project it relates to (`workspace: "support"`, `workspace: "engineering"`, etc.). When searching, you can scope to a workspace or search across all.
 

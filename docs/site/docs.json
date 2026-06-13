@@ -35,7 +35,7 @@
         "groups": [
           {
             "group": "Getting started",
-            "pages": ["introduction", "quickstart"]
+            "pages": ["introduction", "quickstart", "self-hosting"]
           },
           {
             "group": "Concepts",

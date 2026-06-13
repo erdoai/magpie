@@ -1,0 +1,91 @@
+---
+title: Self-hosting
+description: Run your own Magpie — Docker Compose, manual install, storage, auth, migrations, and backups.
+---
+
+Magpie is open source and runs anywhere you can run Postgres. The hosted instance and a self-hosted one are the **same code** — the only difference is configuration. You need two things: a **Postgres database** (with [pgvector](https://github.com/pgvector/pgvector) for semantic search) and, optionally, **S3-compatible storage** for attachments.
+
+## Quickstart with Docker Compose
+
+The fastest path. From a clone of the repo:
+
+```bash
+docker compose up --build
+```
+
+That brings up Postgres (with pgvector) and the Magpie server, runs migrations, and serves the REST API, MCP server, and web UI on [http://localhost:8200](http://localhost:8200). The bundled [`docker-compose.yml`](https://github.com/erdoai/magpie/blob/main/docker-compose.yml) is the reference deployment — copy it and adjust.
+
+To enable semantic search or email login, drop a `.env` next to the compose file:
+
+```bash
+OPENAI_API_KEY=sk-...                 # enables semantic search (keyword works without it)
+SESSION_SECRET=$(openssl rand -hex 32)
+RESEND_API_KEY=re_...                 # email one-time-code login
+RESEND_FROM=magpie <hi@yourdomain.com>
+```
+
+<Note>
+With neither `API_KEY` nor `RESEND_API_KEY` set, **auth is disabled** — convenient for a local single-user instance. Don't expose that to a network. See [Authentication](/reference/auth).
+</Note>
+
+## Manual install
+
+If you'd rather run the Python package directly against your own Postgres:
+
+```bash
+pip install erdo-magpie
+
+export DATABASE_URL=postgresql://user:pass@host:5432/magpie
+export OPENAI_API_KEY=sk-...          # optional
+
+magpie migrate                        # apply schema migrations
+magpie serve                          # REST + MCP + UI on :8200
+```
+
+`magpie serve` does **not** migrate on startup — run `magpie migrate` after install and after every upgrade.
+
+## Database
+
+Any Postgres 14+ works. For **semantic search** you need the `pgvector` extension available; `magpie migrate` enables it and creates the embedding column. Without pgvector, Magpie runs in **keyword-only** mode (full-text search still works) — semantic ranking is simply skipped.
+
+- **Docker Compose** uses the `pgvector/pgvector` image, so it's ready out of the box.
+- **Managed Postgres** (Neon, Supabase, RDS, Railway): confirm pgvector is supported/enabled. Neon and Supabase support it; on RDS enable it from the parameter group.
+
+## Attachment storage
+
+Attachments (logos, screenshots, SQL snippets, briefs) need somewhere to live. Pick a provider with `STORAGE_PROVIDER`:
+
+- **`local`** (default) — writes to `STORAGE_DIR`. Mount a volume so files survive restarts. Fine for a single instance.
+- **`s3`** — any S3-compatible store (AWS S3, Cloudflare R2, MinIO, Railway buckets). Set the bucket, endpoint, and credentials:
+
+```bash
+STORAGE_PROVIDER=s3
+STORAGE_BUCKET=magpie-attachments
+STORAGE_ENDPOINT=https://<account>.r2.cloudflarestorage.com   # omit for AWS
+STORAGE_ACCESS_KEY_ID=...
+STORAGE_SECRET_ACCESS_KEY=...
+STORAGE_REGION=auto                                            # 'auto' for R2
+ASSET_PUBLIC_BASE_URL=https://cdn.yourdomain.com               # for public assets
+```
+
+Storage keys are bucket-agnostic, so moving providers later is an object copy plus an env swap. The full variable list is in [Configuration](/reference/configuration).
+
+## Production notes
+
+- **TLS / reverse proxy** — run Magpie behind a proxy (Caddy, nginx, a platform router) that terminates TLS and forwards to `:8200`. Set `ASSET_PUBLIC_BASE_URL` and your public URL accordingly.
+- **Auth** — set `SESSION_SECRET` to a long random value, and configure `RESEND_*` for email login (or issue [API keys](/reference/auth) for agents). Avoid the static `API_KEY` on a shared/multi-tenant instance — it bypasses org isolation.
+- **Embeddings** — semantic search calls the OpenAI embeddings API. Self-hosters can swap the provider; it's abstracted behind `magpie/embeddings/base.py`.
+- **Upgrades** — pull the new version and run `magpie migrate` before `magpie serve`. Migrations are numbered, idempotent SQL files applied in order.
+
+## Backups
+
+Your knowledge lives in two places — back up both:
+
+1. **Postgres** — the source of truth for entries, collections, links, and metadata. Use your platform's managed backups, or schedule `pg_dump`.
+2. **Object storage** — the attachment bytes. Enable bucket versioning / lifecycle rules on R2/S3.
+
+You can also export everything to a portable [bundle](/repo-sync/overview) with `magpie export ./backup` — Markdown entries plus repo collections as files you can keep in git. That's a logical backup and a guard against lock-in, not a substitute for a database backup.
+
+## Connecting agents
+
+Once it's running, point Claude Code (or any MCP client) at your instance — over OAuth for the hosted HTTP server, or the stdio proxy for local setups. See [MCP setup](/mcp/setup), and pass `--api-url https://your-magpie` to `magpie login` so the CLI talks to your instance.

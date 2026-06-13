@@ -6,7 +6,9 @@ Knowledge store with semantic + keyword search. Postgres + pgvector.
 
 Single FastAPI server exposing:
 - **REST API** at `/api/` — CRUD + search for knowledge entries
-- **MCP server** at `/mcp` — 5 tools for AI agents (search, write, read, list, archive)
+- **MCP server** at `/mcp` — 16 tools for AI agents (search/read/write/list/archive,
+  find_duplicates/merge, list_links/resolve_knowledge, collection get/set/delete/list,
+  attachment upload/list/get) — kept in lockstep across both MCP servers
 
 Storage: Postgres with pgvector for embeddings and tsvector for full-text search.
 Search: Reciprocal Rank Fusion combining semantic (vector similarity) and keyword (full-text) results.

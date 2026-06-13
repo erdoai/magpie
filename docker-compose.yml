@@ -1,0 +1,50 @@
+# Self-hosted Magpie — Postgres (with pgvector) + the Magpie server.
+#
+#   docker compose up --build      → http://localhost:8200  (REST + MCP + UI)
+#
+# Semantic search and email login are optional: set OPENAI_API_KEY / RESEND_* in
+# a .env file next to this one (compose picks it up automatically). With neither
+# API_KEY nor RESEND_API_KEY set, auth is disabled — fine for single-user/local.
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: magpie
+      POSTGRES_PASSWORD: magpie
+      POSTGRES_DB: magpie
+    volumes:
+      - magpie-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U magpie"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  magpie:
+    build: .
+    # Apply migrations, then start the server (serve does not auto-migrate).
+    command: sh -c "magpie migrate && magpie serve"
+    environment:
+      DATABASE_URL: postgresql://magpie:magpie@db:5432/magpie
+      PORT: 8200
+      # Optional — enables semantic search. Omit for keyword-only.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      # Optional — email one-time-code login (sets session cookies).
+      SESSION_SECRET: ${SESSION_SECRET:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      RESEND_FROM: ${RESEND_FROM:-}
+      # Attachments: 'local' writes to the volume below. Set to 's3' and fill the
+      # STORAGE_* vars to use R2 / S3 / MinIO instead.
+      STORAGE_PROVIDER: ${STORAGE_PROVIDER:-local}
+      STORAGE_DIR: /data/attachments
+    ports:
+      - "8200:8200"
+    volumes:
+      - magpie-files:/data/attachments
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  magpie-db:
+  magpie-files:
