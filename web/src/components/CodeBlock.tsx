@@ -20,7 +20,7 @@ export function CodeBlock({
   };
 
   return (
-    <div className={cn('group relative rounded-lg border border-border bg-card', className)}>
+    <div className={cn('group relative min-w-0 rounded-lg border border-border bg-card', className)}>
       {language && (
         <span className="absolute right-10 top-2 text-[10px] uppercase tracking-wide text-muted-foreground/60">
           {language}

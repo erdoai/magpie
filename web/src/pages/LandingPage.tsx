@@ -199,7 +199,7 @@ export function LandingPage() {
   const active = tabs.find((t) => t.id === tab)!;
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen overflow-x-hidden">
       {/* Nav */}
       <nav className="sticky top-0 z-20 border-b border-border/60 bg-background/80 backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
@@ -288,7 +288,7 @@ export function LandingPage() {
 
       {/* Collections spotlight */}
       <section className="mx-auto max-w-5xl px-6 pb-20">
-        <div className="grid items-center gap-8 rounded-2xl border border-border bg-card/40 p-6 sm:p-8 lg:grid-cols-2">
+        <div className="grid items-center gap-8 rounded-2xl border border-border bg-card/40 p-6 sm:p-8 lg:grid-cols-2 [&>*]:min-w-0">
           <div>
             <Eyebrow>New · Typed collections</Eyebrow>
             <h2 className="text-2xl font-semibold">Not all knowledge is prose</h2>
@@ -343,7 +343,7 @@ export function LandingPage() {
           </p>
         </div>
 
-        <div className="mt-8 grid items-stretch gap-3 lg:grid-cols-[1fr_auto_1fr]">
+        <div className="mt-8 grid items-stretch gap-3 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] [&>*]:min-w-0">
           <div className="overflow-hidden rounded-xl border border-border bg-card">
             <div className="flex items-center justify-between border-b border-border px-4 py-2">
               <span className="font-mono text-xs text-muted-foreground">onboarding.md</span>
@@ -386,7 +386,7 @@ export function LandingPage() {
 
       {/* Coherence spotlight */}
       <section className="mx-auto max-w-5xl px-6 pb-20">
-        <div className="grid items-center gap-8 rounded-2xl border border-border bg-card/40 p-6 sm:p-8 lg:grid-cols-2">
+        <div className="grid items-center gap-8 rounded-2xl border border-border bg-card/40 p-6 sm:p-8 lg:grid-cols-2 [&>*]:min-w-0">
           <div>
             <Eyebrow>Stays coherent</Eyebrow>
             <h2 className="text-2xl font-semibold">Knowledge that doesn't fragment</h2>
