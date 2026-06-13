@@ -19,6 +19,7 @@ from magpie.config.settings import Settings
 from magpie.db.database import Database
 from magpie.db.migrate import run_migrations
 from magpie.embeddings.openai import OpenAIEmbeddings
+from magpie.export import write_bundle
 from magpie.links import sync_entry_links
 from magpie.manifest import check_drift
 from magpie.storage import create_storage
@@ -324,6 +325,63 @@ def push(
             f"[green]Pushed {len(result.entries)} entries "
             f"({created} created, {updated} updated) and {len(col_result.collections)} "
             f"repo collections ({doc_count} docs) into '{workspace}'[/green]"
+        )
+
+    asyncio.run(_run())
+
+
+@app.command()
+def export(
+    directory: str = typer.Argument(help="Directory to write the bundle into"),
+    workspace: str = typer.Option(None, help="Limit to a workspace"),
+    project: str = typer.Option(None, help="Limit to a project"),
+    org_id: str = typer.Option(None, help="Limit to an org (NULL = global)"),
+):
+    """Export entries and repo-canonical collections as a bundle on disk.
+
+    The inverse of `push`: writes Markdown entries (re-using their original
+    paths) and `collections/<slug>.json` for repo-canonical stores, plus a
+    generated `_manifest.json`. Live (server-canonical) collections are not
+    exported — runtime data stays out of the bundle.
+    """
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(name)s: %(message)s")
+
+    settings = Settings()
+    if not settings.database_url:
+        console.print("[red]DATABASE_URL is not set[/red]")
+        raise typer.Exit(1)
+
+    async def _run():
+        db = await Database.connect(settings.database_url)
+
+        entries = []
+        offset = 0
+        while True:
+            batch = await db.list_entries(
+                org_id=org_id, workspace=workspace, project=project,
+                offset=offset, limit=200,
+            )
+            if not batch:
+                break
+            entries.extend(batch)
+            offset += len(batch)
+
+        collections = []
+        for col in await db.list_collections(
+            org_id=org_id, workspace=workspace, project=project
+        ):
+            if col.get("source") != "repo":
+                continue  # live stores are not exported
+            documents = await db.list_documents(col["id"])
+            collections.append(
+                {"slug": col["slug"], "title": col.get("title"), "documents": documents}
+            )
+
+        await db.close()
+        summary = write_bundle(directory, entries, collections)
+        console.print(
+            f"[green]Exported {summary['entries']} entries and "
+            f"{summary['collections']} repo collections to {directory}[/green]"
         )
 
     asyncio.run(_run())
