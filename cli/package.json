@@ -1,6 +1,6 @@
 {
   "name": "@magpie/cli",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "CLI and MCP stdio server for Magpie — the knowledge and context store for agents and teams",
   "license": "MIT",
   "type": "module",

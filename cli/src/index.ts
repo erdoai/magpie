@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /** Magpie CLI — knowledge and context store for agents and teams. */
 
-import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { basename, extname, join } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { basename, dirname, extname, join } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { Command } from 'commander';
 import { api, ApiError, qs, requireToken } from './client.js';
@@ -33,7 +33,7 @@ const program = new Command();
 program
   .name('magpie')
   .description('Magpie — knowledge and context store for agents and teams')
-  .version('0.1.0');
+  .version('0.2.0');
 
 function scope(opts: { workspace?: string; project?: string }): {
   workspace?: string;
@@ -441,6 +441,93 @@ program
         count++;
       }
       console.log(`Imported ${count} entries.`);
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+// -- Repo sync (bundles) --
+
+interface PushResult {
+  created: number;
+  updated: number;
+  collections: number;
+  documents: number;
+  warnings: string[];
+}
+
+program
+  .command('push <dir>')
+  .description('Sync a knowledge bundle to the server (repo = source of truth)')
+  .option('--workspace <workspace>')
+  .option('--project <project>')
+  .action(async (dir: string, opts: { workspace?: string; project?: string }) => {
+    requireToken();
+    try {
+      // Entries: every .md outside the reserved collections/ and attachments/ dirs.
+      const entries: { path: string; text: string }[] = [];
+      const walk = (d: string, relBase = '') => {
+        for (const name of readdirSync(d)) {
+          const abs = join(d, name);
+          const rel = relBase ? `${relBase}/${name}` : name;
+          if (statSync(abs).isDirectory()) {
+            if (!relBase && (name === 'collections' || name === 'attachments')) continue;
+            walk(abs, rel);
+          } else if (extname(name) === '.md') {
+            entries.push({ path: rel, text: readFileSync(abs, 'utf-8') });
+          }
+        }
+      };
+      walk(dir);
+
+      // Repo-canonical collections + the anti-drift manifest.
+      const collections: { slug: string; text: string }[] = [];
+      let manifest: unknown = null;
+      const colDir = join(dir, 'collections');
+      if (existsSync(colDir)) {
+        for (const name of readdirSync(colDir)) {
+          if (extname(name) !== '.json') continue;
+          const text = readFileSync(join(colDir, name), 'utf-8');
+          if (name === '_manifest.json') manifest = JSON.parse(text);
+          else collections.push({ slug: basename(name, '.json'), text });
+        }
+      }
+
+      const res = await api<PushResult>('/api/bundle/push', {
+        method: 'POST',
+        body: { entries, collections, manifest, ...scope(opts) },
+      });
+      for (const w of res.warnings) console.log(`  warning: ${w}`);
+      console.log(
+        `Pushed ${res.created + res.updated} entries (${res.created} created, ` +
+          `${res.updated} updated) and ${res.collections} repo collections (${res.documents} docs).`
+      );
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+program
+  .command('export <dir>')
+  .description('Export entries and repo-canonical collections as a bundle on disk')
+  .option('--workspace <workspace>')
+  .option('--project <project>')
+  .action(async (dir: string, opts: { workspace?: string; project?: string }) => {
+    requireToken();
+    try {
+      const s = scope(opts);
+      const res = await api<{ files: { path: string; content: string }[]; entries: number; collections: number }>(
+        `/api/bundle/export${qs({ workspace: s.workspace, project: s.project })}`
+      );
+      for (const file of res.files) {
+        const dest = join(dir, file.path);
+        mkdirSync(dirname(dest), { recursive: true });
+        writeFileSync(dest, file.content);
+      }
+      console.log(
+        `Exported ${res.entries} entries and ${res.collections} repo collections to ${dir} ` +
+          `(open ${join(dir, 'index.html')} to browse).`
+      );
     } catch (err) {
       fail(err);
     }
