@@ -50,6 +50,14 @@ Scoped by user_id, org_id, workspace, project (all optional, NULL = global).
 Workspace = broad app/product namespace (e.g. "reach"); project = narrower work
 area within it (e.g. "alertee"). Org roles: owner > admin > editor > viewer.
 
+**Org is the only enforced boundary** (membership + roles). Workspace/project
+are filter tags within a trusted org, not security boundaries. A user can belong
+to many orgs but acts in one **active org** at a time, resolved as:
+`X-Organization-ID` header (membership-validated, 403 if not a member) > saved
+`users.default_org_id` (via `POST /api/orgs/{id}/select`) > first membership.
+Shared resolver: `context.resolve_active_org()`. A user API key can switch among
+the user's orgs via the header, capped by the key's role (`context.cap_role`).
+
 ## Development
 
 ```bash
@@ -69,6 +77,11 @@ pytest
 - Search fusion in `magpie/search/fusion.py` — runs semantic + keyword in parallel, merges with RRF.
 - Migration runner copied from crow pattern — numbered SQL files in `magpie/db/migrations/`.
 - MCP tools initialized with db + embedder at startup via `init_mcp()`.
+- **Fail-closed reads**: `db.get_entry/get_collection/get_document` filter
+  visibility in SQL. Pass `**ctx.view_filter` (REST + both MCP servers) or
+  `trusted=True` for server-internal reads (links, resolve, CLI, post-write
+  round-trips). No scope + not trusted ⇒ only global rows. Don't add a raw
+  by-id read that bypasses this.
 
 ## CLI / MCP / API / Docs parity
 

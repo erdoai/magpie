@@ -5,6 +5,8 @@ description: HTTP endpoints for entries, search, collections, attachments, and b
 
 All endpoints are under `/api`. Authenticate with `Authorization: Bearer <key>` or a session cookie. Where relevant, requests accept `workspace` and `project` to scope. Interactive docs are served at `/docs` on a running server.
 
+Multi-org users select their **active org** with the `X-Organization-ID` header — validated against membership, so naming an org you don't belong to returns `403`. See [Authentication & multi-tenancy](/reference/auth).
+
 ## Entries
 
 | Method | Path | Description |
@@ -55,5 +57,12 @@ Writes to a `repo`-canonical collection are rejected (the bundle is the source o
 |--------|------|-------------|
 | `POST` | `/api/keys` | Create an API key |
 | `GET` | `/api/keys` | List keys |
+| `DELETE` | `/api/keys/{id}` | Revoke a key |
 | `POST` | `/api/orgs` | Create an org |
 | `GET` | `/api/orgs` | List your orgs |
+| `POST` | `/api/orgs/{id}/select` | Set this org as your default active org |
+| `GET` | `/api/orgs/{id}/members` | List members (viewer+) |
+| `POST` | `/api/orgs/{id}/members` | Invite a member (admin+) |
+| `DELETE` | `/api/orgs/{id}/members/{user_id}` | Remove a member (admin+) |
+| `GET` | `/api/orgs/{id}/workspaces` | List workspaces |
+| `POST` | `/api/orgs/{id}/workspaces` | Create a workspace (editor+) |
