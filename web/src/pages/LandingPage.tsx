@@ -257,14 +257,19 @@ export function LandingPage() {
             MCP-native · open source · self-hostable
           </Badge>
           <h1 className="mx-auto max-w-3xl text-balance text-4xl font-bold leading-tight sm:text-5xl">
-            The knowledge store your agents and your team{' '}
+            One source of truth your agents and team keep{' '}
             <span className="bg-gradient-to-r from-primary to-[oklch(0.7_0.17_300)] bg-clip-text text-transparent">
-              share
+              true
             </span>
           </h1>
           <p className="mx-auto mt-5 max-w-2xl text-pretty text-muted-foreground">
-            Memory APIs remember your users. Magpie remembers your projects — durable Markdown,
-            typed KV stores, and real files that agents write and read across every product you build.
+            Magpie is the consistency layer for agent and human knowledge. Define a value, a metric,
+            a definition once — reference it anywhere, and it resolves to the one canonical value at
+            read time. Dedupe-on-write and merge keep contradictory copies from forming, so your
+            docs, your metrics, and your AI never disagree.
+          </p>
+          <p className="mx-auto mt-3 max-w-2xl text-pretty text-sm text-muted-foreground/80">
+            Memory APIs remember your users. Magpie remembers your projects.
           </p>
           <div className="mt-9 flex flex-col items-center gap-3">
             <InlineCommand code="npx @erdo/magpie login" />
@@ -275,78 +280,17 @@ export function LandingPage() {
         </div>
       </section>
 
-      {/* Quickstart tabs */}
-      <section className="mx-auto max-w-3xl px-6 pb-20">
-        <div className="mb-3 flex gap-1.5">
-          {tabs.map((t) => (
-            <Button
-              key={t.id}
-              variant={t.id === tab ? 'default' : 'outline'}
-              size="sm"
-              className={cn('text-xs', t.id !== tab && 'text-muted-foreground')}
-              onClick={() => setTab(t.id)}
-            >
-              {t.label}
-            </Button>
-          ))}
-        </div>
-        <CodeBlock code={active.code} language={tab === 'rest' ? 'bash' : 'shell'} />
-      </section>
-
-      {/* KV stores spotlight */}
-      <section className="mx-auto max-w-5xl px-6 pb-20">
-        <div className="grid items-center gap-8 rounded-2xl border border-border bg-card/40 p-6 sm:p-8 lg:grid-cols-2 [&>*]:min-w-0">
-          <div>
-            <Eyebrow>Typed KV stores</Eyebrow>
-            <h2 className="text-2xl font-semibold">Not all knowledge is prose</h2>
-            <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-              Some context is a <span className="text-foreground">value</span> — a trial length,
-              a support email, a set of brand tokens. KV stores are named key/value stores your
-              agents read whole by key, with typed values that deserialize without guessing.
-            </p>
-            <ul className="mt-5 space-y-3 text-sm">
-              <li className="flex gap-3">
-                <Boxes size={16} className="mt-0.5 shrink-0 text-primary" />
-                <span className="text-muted-foreground">
-                  <span className="text-foreground">Typed</span> — json, string, integer, float,
-                  boolean, datetime. Validated on write, returned as the real type on read.
-                </span>
-              </li>
-              <li className="flex gap-3">
-                <GitBranch size={16} className="mt-0.5 shrink-0 text-primary" />
-                <span className="text-muted-foreground">
-                  <span className="text-foreground">Live or curated</span> — agent-written runtime
-                  data, or repo-owned config that's canonical in git and can't drift.
-                </span>
-              </li>
-              <li className="flex gap-3">
-                <ArrowRight size={16} className="mt-0.5 shrink-0 text-primary" />
-                <span className="text-muted-foreground">
-                  <span className="text-foreground">Referenceable</span> —{' '}
-                  <code className="rounded bg-muted px-1 py-0.5 text-xs">{'{{config.trial_days}}'}</code>{' '}
-                  in any entry resolves to a live typed value at read time.
-                </span>
-              </li>
-            </ul>
-            <Link to="/docs" className="mt-6 inline-flex">
-              <Button variant="outline" size="sm">
-                KV stores docs <ArrowRight size={14} className="ml-1.5" />
-              </Button>
-            </Link>
-          </div>
-          <CodeBlock code={COLLECTIONS_EXAMPLE} language="shell" />
-        </div>
-      </section>
-
       {/* Resolve demo — before/after */}
       <section className="mx-auto max-w-5xl px-6 pb-20">
         <div className="text-center">
-          <Eyebrow>Resolved at read time</Eyebrow>
+          <Eyebrow>Define once, resolve everywhere</Eyebrow>
           <h2 className="text-2xl font-semibold">Templates in. Real values out.</h2>
           <p className="mx-auto mt-3 max-w-2xl text-sm text-muted-foreground">
-            Entries stay clean, reviewable templates — the stored Markdown is never mutated.
-            Read with <code className="rounded bg-muted px-1 py-0.5 text-xs">--resolved</code> and
-            every reference is filled with a live, permission-checked value.
+            This is the consistency mechanism. A value lives in one place; entries reference it and
+            stay clean, reviewable templates — the stored Markdown is never mutated. Read with{' '}
+            <code className="rounded bg-muted px-1 py-0.5 text-xs">--resolved</code> and every
+            reference fills with the one canonical, permission-checked value. Change it once, and
+            everywhere it's quoted follows.
           </p>
         </div>
 
@@ -422,9 +366,56 @@ export function LandingPage() {
         </div>
       </section>
 
+      {/* KV stores spotlight */}
+      <section className="mx-auto max-w-5xl px-6 pb-20">
+        <div className="grid items-center gap-8 rounded-2xl border border-border bg-card/40 p-6 sm:p-8 lg:grid-cols-2 [&>*]:min-w-0">
+          <div>
+            <Eyebrow>Typed KV stores</Eyebrow>
+            <h2 className="text-2xl font-semibold">Not all knowledge is prose</h2>
+            <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+              Some context is a <span className="text-foreground">value</span> — a trial length,
+              a support email, a set of brand tokens. KV stores are named key/value stores your
+              agents read whole by key, with typed values that deserialize without guessing — and
+              they're the canonical home a <code className="rounded bg-muted px-1 py-0.5 text-xs">{'{{config.trial_days}}'}</code>{' '}
+              reference points at.
+            </p>
+            <ul className="mt-5 space-y-3 text-sm">
+              <li className="flex gap-3">
+                <Boxes size={16} className="mt-0.5 shrink-0 text-primary" />
+                <span className="text-muted-foreground">
+                  <span className="text-foreground">Typed</span> — json, string, integer, float,
+                  boolean, datetime. Validated on write, returned as the real type on read.
+                </span>
+              </li>
+              <li className="flex gap-3">
+                <GitBranch size={16} className="mt-0.5 shrink-0 text-primary" />
+                <span className="text-muted-foreground">
+                  <span className="text-foreground">Live or curated</span> — agent-written runtime
+                  data, or repo-owned config that's canonical in git and can't drift.
+                </span>
+              </li>
+              <li className="flex gap-3">
+                <ArrowRight size={16} className="mt-0.5 shrink-0 text-primary" />
+                <span className="text-muted-foreground">
+                  <span className="text-foreground">Referenceable</span> —{' '}
+                  <code className="rounded bg-muted px-1 py-0.5 text-xs">{'{{config.trial_days}}'}</code>{' '}
+                  in any entry resolves to a live typed value at read time.
+                </span>
+              </li>
+            </ul>
+            <Link to="/docs" className="mt-6 inline-flex">
+              <Button variant="outline" size="sm">
+                KV stores docs <ArrowRight size={14} className="ml-1.5" />
+              </Button>
+            </Link>
+          </div>
+          <CodeBlock code={COLLECTIONS_EXAMPLE} language="shell" />
+        </div>
+      </section>
+
       {/* Features */}
       <section className="mx-auto max-w-5xl px-6 pb-20">
-        <Eyebrow>Everything in the box</Eyebrow>
+        <Eyebrow>And everything else you'd expect</Eyebrow>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {FEATURES.map(({ icon: Icon, title, body }) => (
             <div
@@ -439,6 +430,25 @@ export function LandingPage() {
             </div>
           ))}
         </div>
+      </section>
+
+      {/* Quickstart tabs */}
+      <section className="mx-auto max-w-3xl px-6 pb-20">
+        <Eyebrow>Start in one command</Eyebrow>
+        <div className="mb-3 flex gap-1.5">
+          {tabs.map((t) => (
+            <Button
+              key={t.id}
+              variant={t.id === tab ? 'default' : 'outline'}
+              size="sm"
+              className={cn('text-xs', t.id !== tab && 'text-muted-foreground')}
+              onClick={() => setTab(t.id)}
+            >
+              {t.label}
+            </Button>
+          ))}
+        </div>
+        <CodeBlock code={active.code} language={tab === 'rest' ? 'bash' : 'shell'} />
       </section>
 
       {/* Self-host */}

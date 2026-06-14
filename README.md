@@ -1,8 +1,8 @@
 # magpie
 
-Knowledge store with semantic + keyword search. Built for AI agents, usable by humans.
+One source of truth your agents and team keep true. Define a value, a metric, a definition once — reference it anywhere, and it resolves to the one canonical value at read time, so your docs, your metrics, and your AI never disagree.
 
-Postgres + pgvector. REST API + MCP server + CLI + management UI — one product, same rules across every surface.
+The consistency layer for agent and human knowledge: durable Markdown and typed KV stores in one store, with dual semantic + keyword search and dedupe/merge that stop contradictory copies forming. Postgres + pgvector. REST API + MCP server + CLI + management UI — one product, same rules across every surface.
 
 📚 **Documentation:** [Introduction](docs/site/introduction.mdx) ·
 [Quickstart](docs/site/quickstart.mdx) ·

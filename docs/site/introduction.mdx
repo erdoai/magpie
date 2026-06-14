@@ -1,9 +1,11 @@
 ---
 title: Introduction
-description: The knowledge and context store for AI agents and teams — durable prose, typed structured data, links, and files in one place, with semantic + keyword search and an MCP interface.
+description: The consistency layer for agent and human knowledge — define a value, a metric, a definition once, reference it anywhere, and it resolves to the one canonical value at read time, kept coherent by dedupe and merge.
 ---
 
-Magpie is a **store**, not a search box. It holds two kinds of context an agent needs and keeps them together: durable **prose knowledge** (Markdown) and **structured data** (typed key/value stores), connected by links and references, with files attached. You write context once, and agents read it back — by key, by reference, by search, over the Model Context Protocol. It's the shared memory and data layer your apps and agents delegate to instead of each rebuilding their own.
+Magpie is the **consistency layer** for agent and human knowledge. Define a value, a metric, a definition once — reference it anywhere with `{{value references}}`, and it resolves to the one canonical value at read time. Dedupe-on-write, duplicate detection, and merge keep contradictory copies from forming, so your docs, your metrics, and your agents never quote a value that's drifted out of sync.
+
+That layer rides on a **store, not a search box** — and your agents help maintain it as they work: a write can update the closest existing entry instead of forking a near-duplicate, so the single source of truth stays single without anyone paying a curation tax. Underneath, it holds two kinds of context and keeps them together: durable **prose knowledge** (Markdown) and **structured data** (typed key/value stores), connected by links and references, with files attached — read back by key, by reference, or by search, over the Model Context Protocol.
 
 ## Two halves of context, one store
 

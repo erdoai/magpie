@@ -3,6 +3,8 @@ title: Staying coherent
 description: How Magpie stops a knowledge store from fragmenting into near-duplicates and drift.
 ---
 
+*This is how one source of truth stays one. Resolution gives you a single canonical value; coherence stops the contradictory copies that would undermine it from ever forming.*
+
 Every shared memory store rots the same way. Agents write the same fact under slightly different titles, the same value lands in two KV stores with different keys, and six months in nobody trusts what's canonical. Search still works — it just returns five near-identical answers.
 
 Magpie treats coherence as a first-class job, defended at every layer: when an entry is written, when duplicates are found, when they're merged, and when KV stores are declared.

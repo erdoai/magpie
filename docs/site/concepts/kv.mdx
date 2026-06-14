@@ -3,6 +3,8 @@ title: KV stores
 description: Typed JSON key/value stores for structured context read whole by key.
 ---
 
+*Consistency starts here: a KV key is the single canonical home for a value, so every entry that references it quotes one true value — change it once, and everywhere it's referenced follows.*
+
 Some knowledge isn't prose — it's a **value**. A feature flag, a rate limit, a support email, a set of brand colors, the current pricing tier. A **KV store** is a named key/value store for exactly that: structured context an agent reads whole by key, not by search.
 
 KV stores are standalone (not owned by an entry) and scoped by org / workspace / project, addressed by a `slug`.

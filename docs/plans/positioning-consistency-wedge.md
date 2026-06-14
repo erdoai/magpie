@@ -2,8 +2,14 @@
 
 ## Status (2026-06-14)
 
-**Not started.** Messaging/docs retarget — no code/schema changes, copy + page
-structure only. Legend: 🤖 = agent-doable · 🧑 = Niall judgement call.
+**Done.** Hero headline locked (🧑): *"One source of truth your agents and team
+keep true."* (consistency-led, not staleness — Magpie doesn't auto-refresh values;
+it keeps one canonical value and stops contradictory copies). Shipped: landing
+page hero + subhead + section reorder (Hero → resolve demo → coherence → KV →
+features → quickstart → self-host); docs intro rewrite + frontmatter description;
+README one-liner; consistency framing line on `kv`/`coherence`/`links`/`search`
+concept pages. No code/schema changes. Remaining: 🧑 step 4 — read the first
+screen cold and confirm it lands.
 
 ## The decision behind this
 
