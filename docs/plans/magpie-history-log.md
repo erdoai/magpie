@@ -2,17 +2,23 @@
 
 ## Status (2026-06-14)
 
-**v1 shipped** — Phases 1–4 plus full parity (rollout steps 1–10): the
-`activity_events` table + migration, `db.record_activity`/`list_activity`, a
-shared `magpie/activity.py` emit layer called by both REST routes and the hosted
-MCP server, events on every write path (entries, KV, attachments, merge, bulk,
-bundle push), and `/api/updates` rewritten to read the durable log. Parity
-landed across the Updates page, the `list_updates` MCP tool (both servers),
-`magpie updates` (TS CLI), and docs (`concepts/activity`, API/MCP/CLI refs).
+**Phases 1–5 shipped** (rollout steps 1–12).
 
-**Still to do** — Phases 5–6: `entry_revisions` (+ `GET /api/entries/{id}/history`
-and the entry-page History tab), then optionally `kv_revisions`. These were
-always sequenced *after* events land.
+- **Activity events** — `activity_events` table + migration, `db.record_activity`/
+  `list_activity`, a shared `magpie/activity.py` emit layer called by both REST
+  routes and the hosted MCP server, events on every write path (entries, KV,
+  attachments, merge, bulk, bundle push), and `/api/updates` rewritten to read
+  the durable log. Read surfaces: Updates page, `list_updates` MCP tool (both
+  servers), `magpie updates` (TS CLI).
+- **Entry revisions** — `entry_revisions` table + migration,
+  `db.create_entry_revision`/`list_entry_revisions`, PUT snapshots the prior
+  version when a material field (title/content/tags/source) changes, and
+  `GET /api/entries/{id}/history`. Read surfaces: entry-page History section,
+  `entry_history` MCP tool (both servers), `magpie history <id>` (TS CLI).
+- Docs updated throughout (`concepts/activity`, API/MCP/CLI refs).
+
+**Still to do** — Phase 6: `kv_revisions` (previous value of a changed KV key).
+Plan marks it "add only if needed after entry history"; not yet built.
 
 ## Positioning
 

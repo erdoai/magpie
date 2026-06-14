@@ -20,9 +20,12 @@ Multi-org users select their **active org** with the `X-Organization-ID` header 
 | `POST` | `/api/entries/{id}/unarchive` | Restore an archived entry |
 | `POST` | `/api/entries/merge` | Merge entries into one; sources are archived |
 | `POST` | `/api/entries/bulk` | Rescope/retag many entries at once (dry-run by default) |
+| `GET` | `/api/entries/{id}/history` | Previous versions, newest first (`limit` ≤ 100) |
 | `GET` | `/api/entries/{id}/links` | Outgoing links + backlinks |
 | `POST` | `/api/entries/{id}/resolve` | Resolve `{{references}}` and `[[wikilinks]]` |
 | `POST` | `/api/search` | Dual semantic + keyword search (excludes archived) |
+
+`GET /api/entries/{id}/history` returns the entry's previous versions (newest first) — each revision is the title/content/tags/source as they were *before* a meaningful edit, plus the actor and timestamp. The current version is the entry itself. See [Activity log](/concepts/activity).
 
 Entry objects expose `archived_at` — a timestamp when the entry is archived, `null` when active. `POST`, `PUT`, `/api/search`, and `/api/entries/merge` accept `title`, `content`, `tags`, `source`, `workspace`, and `project`; there is no category field.
 

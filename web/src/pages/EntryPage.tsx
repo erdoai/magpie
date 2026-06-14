@@ -1,13 +1,26 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { api, Attachment, Entry, EntryLinks, OutgoingLink } from '@/lib/api';
+import { api, Attachment, Entry, EntryLinks, EntryRevision, OutgoingLink } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { ArrowLeft, Copy, ExternalLink, Link2, Paperclip, Pencil, Trash2, Upload } from 'lucide-react';
+import { ArrowLeft, Copy, ExternalLink, History, Link2, Paperclip, Pencil, Trash2, Upload } from 'lucide-react';
 import Markdown from 'react-markdown';
+
+function relativeTime(iso: string): string {
+  const then = new Date(iso).getTime();
+  const secs = Math.max(0, Math.round((Date.now() - then) / 1000));
+  if (secs < 60) return 'just now';
+  const mins = Math.round(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.round(hrs / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString();
+}
 
 function OutgoingLinkRow({ link }: { link: OutgoingLink }) {
   if (link.target_type === 'entry' && link.target_id) {
@@ -47,6 +60,8 @@ export function EntryPage() {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ title: '', content: '', tags: '' });
   const [saving, setSaving] = useState(false);
+  const [revisions, setRevisions] = useState<EntryRevision[]>([]);
+  const [openRevision, setOpenRevision] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -60,6 +75,7 @@ export function EntryPage() {
     });
     api.getEntryLinks(id).then(setLinks).catch(() => setLinks(null));
     api.listAttachments(id).then(setAttachments).catch(() => setAttachments([]));
+    api.getEntryHistory(id).then(setRevisions).catch(() => setRevisions([]));
   }, [id]);
 
   const handleUpload = async (file: File | undefined) => {
@@ -95,6 +111,7 @@ export function EntryPage() {
       setEntry(updated);
       setEditing(false);
       api.getEntryLinks(id).then(setLinks).catch(() => {});
+      api.getEntryHistory(id).then(setRevisions).catch(() => {});
     } catch (e) {
       console.error(e);
     }
@@ -298,6 +315,39 @@ export function EntryPage() {
                     </div>
                   )}
                 </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {revisions.length > 0 && (
+            <Card className="mt-4">
+              <CardContent className="pt-5">
+                <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                  <History size={12} /> History
+                </h2>
+                <ul className="flex flex-col">
+                  {revisions.map(rev => (
+                    <li key={rev.id} className="border-b border-border last:border-b-0 py-2">
+                      <button
+                        className="flex items-center gap-2 w-full text-left hover:opacity-80"
+                        onClick={() => setOpenRevision(openRevision === rev.id ? null : rev.id)}
+                      >
+                        <span className="text-sm truncate flex-1">{rev.previous_title}</span>
+                        {rev.actor_type && (
+                          <Badge variant="outline" className="text-[10px]">{rev.actor_type}</Badge>
+                        )}
+                        <span className="text-xs text-muted-foreground shrink-0">
+                          {relativeTime(rev.created_at)}
+                        </span>
+                      </button>
+                      {openRevision === rev.id && (
+                        <div className="mt-2 prose prose-invert prose-sm max-w-none border-l-2 border-border pl-3">
+                          <Markdown>{rev.previous_content}</Markdown>
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
               </CardContent>
             </Card>
           )}

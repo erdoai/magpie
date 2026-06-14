@@ -6,10 +6,10 @@ Knowledge store with semantic + keyword search. Postgres + pgvector.
 
 Single FastAPI server exposing:
 - **REST API** at `/api/` — CRUD + search for knowledge entries
-- **MCP server** at `/mcp` — 18 tools for AI agents (search/read/write/list/archive,
-  find_duplicates/merge, bulk_edit, list_updates, list_links/resolve_knowledge,
-  kv list/get/set/delete, attachment upload/list/get) — kept in lockstep across
-  both MCP servers
+- **MCP server** at `/mcp` — 19 tools for AI agents (search/read/write/list/archive,
+  find_duplicates/merge, bulk_edit, list_updates, entry_history,
+  list_links/resolve_knowledge, kv list/get/set/delete, attachment
+  upload/list/get) — kept in lockstep across both MCP servers
 
 Storage: Postgres with pgvector for embeddings and tsvector for full-text search.
 Search: Reciprocal Rank Fusion combining semantic (vector similarity) and keyword (full-text) results.
@@ -99,6 +99,12 @@ pytest
   best-effort (record_activity swallows+logs its own errors — never fails a
   committed write). Actor (`user`/`token`/`system`) comes from `ctx.actor`.
   Add a new event type to `activity.py`, never inline a raw `record_activity`.
+- **Entry revisions** (`entry_revisions` table + `db.create_entry_revision`/
+  `list_entry_revisions`): pre-update content snapshot behind `GET
+  /api/entries/{id}/history`. The PUT route snapshots `existing` (the pre-update
+  row it already read) only when a material field — title/content/tags/source —
+  changes; scope-only edits and bulk retag don't snapshot. KV-value revisions
+  aren't built yet.
 - **Bulk rescope/retag** (`magpie/bulk.py` + `db.bulk_update_entries`): in-place
   transactional UPDATE — preserves ids/links/embeddings (never copy-delete).
   `match` is required (never the whole store); writes are confined to own +

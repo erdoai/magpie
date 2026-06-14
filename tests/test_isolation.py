@@ -46,6 +46,32 @@ class FakeDatabase:
         self.sessions: dict[str, dict] = {}  # session_id -> {user_id}
         self.user_default_org: dict[str, str | None] = {}  # user_id -> org_id
         self.activity_events: list[dict] = []  # append-only activity log
+        self.entry_revisions: list[dict] = []  # pre-update content snapshots
+
+    # -- entry revisions --
+
+    async def create_entry_revision(self, **kwargs):
+        rev = {
+            "id": f"rev{len(self.entry_revisions)}",
+            "entry_id": kwargs["entry_id"],
+            "org_id": kwargs.get("org_id"),
+            "workspace": kwargs.get("workspace"),
+            "project": kwargs.get("project"),
+            "actor_user_id": kwargs.get("actor_user_id"),
+            "actor_type": kwargs.get("actor_type", "unknown"),
+            "actor_ref": kwargs.get("actor_ref"),
+            "previous_title": kwargs["previous_title"],
+            "previous_content": kwargs["previous_content"],
+            "previous_tags": kwargs.get("previous_tags") or [],
+            "previous_source": kwargs.get("previous_source"),
+            "created_at": datetime.now(UTC),
+        }
+        self.entry_revisions.append(rev)
+        return rev["id"]
+
+    async def list_entry_revisions(self, entry_id, limit=50):
+        revs = [r for r in self.entry_revisions if r["entry_id"] == entry_id]
+        return list(reversed(revs))[:limit]
 
     # -- activity log --
 

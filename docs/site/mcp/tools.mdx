@@ -40,6 +40,9 @@ Rescope or retag many entries at once, in place (ids, links, embeddings preserve
 ### `list_updates`
 Recent activity across the store, newest first — what changed, when, and by whom. Durable: covers entries, KV, attachments, merges, bulk edits, and bundle pushes, and survives overwrites and deletes. **Key params:** `workspace`, `project`, `limit`. See [Activity log](/concepts/activity).
 
+### `entry_history`
+Previous versions of an entry, newest first — what it said before each meaningful edit (title/content/tags/source), with actor and time. The current version is what `read` returns. **Params:** `id`, `limit`.
+
 ## Links & references
 
 ### `list_links`

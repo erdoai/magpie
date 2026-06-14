@@ -1692,3 +1692,48 @@ class Database:
             *params,
         )
         return [dict(r) for r in rows]
+
+    # -- Entry revisions --
+
+    async def create_entry_revision(
+        self,
+        *,
+        entry_id: str,
+        previous_title: str,
+        previous_content: str,
+        previous_tags: list[str] | None = None,
+        previous_source: str | None = None,
+        org_id: str | None = None,
+        workspace: str | None = None,
+        project: str | None = None,
+        actor_user_id: str | None = None,
+        actor_type: str = "unknown",
+        actor_ref: str | None = None,
+    ) -> str:
+        """Snapshot an entry's pre-update content. Caller passes the previous
+        row's values (read before the overwrite) and decides when a change is
+        material — this just persists the snapshot."""
+        rev_id = uuid4().hex
+        await self._pool.execute(
+            """INSERT INTO entry_revisions
+               (id, entry_id, org_id, workspace, project, actor_user_id,
+                actor_type, actor_ref, previous_title, previous_content,
+                previous_tags, previous_source, created_at)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)""",
+            rev_id, entry_id, org_id, workspace, project, actor_user_id,
+            actor_type, actor_ref, previous_title, previous_content,
+            previous_tags or [], previous_source, datetime.now(UTC),
+        )
+        return rev_id
+
+    async def list_entry_revisions(self, entry_id: str, limit: int = 50) -> list[dict]:
+        """Revisions for an entry, newest first. Visibility is the caller's
+        responsibility (gate on the entry first — revisions inherit its scope)."""
+        rows = await self._pool.fetch(
+            "SELECT id, entry_id, org_id, workspace, project, actor_user_id,"
+            " actor_type, actor_ref, previous_title, previous_content,"
+            " previous_tags, previous_source, created_at FROM entry_revisions"
+            " WHERE entry_id = $1 ORDER BY created_at DESC LIMIT $2",
+            entry_id, limit,
+        )
+        return [dict(r) for r in rows]

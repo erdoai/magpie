@@ -31,6 +31,14 @@ Each event captures the action, the subject it touched, the actor, and a small a
 
 Events are server-recorded on every write path, so all clients — REST, MCP, and the CLIs — inherit the history automatically; there is nothing to opt into.
 
+## Entry revisions
+
+The activity log records *that* an entry changed. **Entry revisions** record *what it said before* — the title, content, tags, and source captured the moment before a meaningful edit overwrites them.
+
+A revision is written only when a material field actually changes, so scope-only edits (moving an entry between workspaces) don't pile up noise. Each revision keeps the actor and timestamp, and is removed with the entry.
+
+Read an entry's history with `GET /api/entries/{id}/history`, the `entry_history` MCP tool, `magpie history <id>`, or the **History** section on the entry page in the web app — all newest first, with the current version being the entry itself.
+
 <Note>
-Activity events are the event spine. Per-entry and per-KV **revision history** (previous content of a changed entry) builds on top of this and lands in a later iteration.
+Per-KV-value revisions (previous value of a changed KV key) are the natural next step and build on the same pattern; they aren't in the store yet.
 </Note>

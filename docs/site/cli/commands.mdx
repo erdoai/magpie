@@ -58,9 +58,11 @@ magpie archive <entry-id>
 ```bash
 magpie updates                          # what changed across the store, newest first
 magpie updates --workspace support --limit 50
+magpie history <entry-id>               # previous versions of an entry
+magpie history <entry-id> --full        # include each revision's full content
 ```
 
-`updates` reads the durable [activity log](/concepts/activity) — entries, KV, attachments, merges, bulk edits, and bundle pushes — showing what changed, when, and by whom. It survives overwrites and deletes.
+`updates` reads the durable [activity log](/concepts/activity) — entries, KV, attachments, merges, bulk edits, and bundle pushes — showing what changed, when, and by whom. It survives overwrites and deletes. `history` shows an entry's previous versions (title/content/tags/source before each meaningful edit), newest first.
 
 ### Staying coherent
 

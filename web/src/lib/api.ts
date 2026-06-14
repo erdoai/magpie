@@ -79,6 +79,17 @@ export interface EntryLinks {
   backlinks: Backlink[];
 }
 
+export interface EntryRevision {
+  id: string;
+  previous_title: string;
+  previous_content: string;
+  previous_tags: string[];
+  previous_source: string | null;
+  actor_type: string | null;
+  actor_user_id: string | null;
+  created_at: string;
+}
+
 export interface KvStore {
   id: string;
   org_id: string | null;
@@ -211,6 +222,7 @@ export const api = {
   },
   getEntry: (id: string) => request<Entry>(`/api/entries/${id}`),
   getEntryLinks: (id: string) => request<EntryLinks>(`/api/entries/${id}/links`),
+  getEntryHistory: (id: string) => request<EntryRevision[]>(`/api/entries/${id}/history`),
   createEntry: (data: Partial<Entry>) =>
     request<Entry>('/api/entries', { method: 'POST', body: JSON.stringify(data) }),
   updateEntry: (id: string, data: Partial<Entry>) =>

@@ -130,6 +130,36 @@ export async function runMcpServer(): Promise<void> {
   );
 
   server.tool(
+    'entry_history',
+    'Previous versions of an entry, newest first — what it said before each meaningful edit (title/content/tags/source), with actor and time. The current version is what `read` returns.',
+    {
+      id: z.string().describe('Entry ID'),
+      limit: z.number().optional().describe('Max revisions (default 20, capped at 100)'),
+    },
+    async (args) =>
+      guarded(async () => {
+        const revisions = await api<{
+          previous_title: string; previous_content: string;
+          previous_tags: string[]; previous_source: string | null;
+          actor_type: string | null; created_at: string;
+        }[]>(`/api/entries/${args.id}/history${qs({ limit: String(args.limit ?? 20) })}`);
+        if (!revisions.length) return text(`No prior revisions for entry ${args.id}.`);
+        return text(
+          revisions
+            .map((r) => {
+              const tags = (r.previous_tags || []).join(', ');
+              return (
+                `## ${r.created_at} (by ${r.actor_type || 'unknown'})\n` +
+                `Title: ${r.previous_title}\nTags: ${tags}\n` +
+                `Source: ${r.previous_source || 'unknown'}\n\n${r.previous_content}`
+              );
+            })
+            .join('\n\n---\n\n')
+        );
+      })
+  );
+
+  server.tool(
     'list_entries',
     'Browse knowledge entries (use search for specific queries).',
     {

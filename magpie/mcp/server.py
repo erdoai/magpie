@@ -334,6 +334,43 @@ def _register_tools(server: FastMCP) -> None:
         return result
 
     @server.tool()
+    async def entry_history(id: str, limit: int = 20) -> str:
+        """Previous versions of an entry, newest first — what it said before each
+        meaningful edit (title/content/tags/source changes), with actor and time.
+        The current version is what `read` returns. Use to see how knowledge
+        evolved or recover an earlier wording.
+
+        Args:
+            id: The entry ID.
+            limit: Max revisions (default 20, capped at 100).
+        """
+        if not _db:
+            return "Error: database not initialized"
+
+        ctx = await _tool_context()
+        entry = await _db.get_entry(id, **ctx.view_filter)
+        if not entry or not ctx.can_access(entry):
+            return f"Entry {id} not found."
+
+        revisions = await _db.list_entry_revisions(id, limit=max(1, min(limit, 100)))
+        if not revisions:
+            return f"No prior revisions for entry {id} (current version is the only one)."
+
+        parts = [f"# History of {entry['title']} ({id})\n"]
+        for rev in revisions:
+            when = rev["created_at"].isoformat()
+            actor = rev.get("actor_type") or "unknown"
+            tags = ", ".join(rev.get("previous_tags") or [])
+            parts.append(
+                f"## {when} (by {actor})\n"
+                f"Title: {rev['previous_title']}\n"
+                f"Tags: {tags}\n"
+                f"Source: {rev.get('previous_source') or 'unknown'}\n\n"
+                f"{rev['previous_content']}"
+            )
+        return "\n\n---\n\n".join(parts)
+
+    @server.tool()
     async def list_entries(
         workspace: str | None = None,
         project: str | None = None,

@@ -196,6 +196,23 @@ async def get_entry_links(entry_id: str, request: Request):
     return {"outgoing": outgoing, "backlinks": backlinks}
 
 
+@router.get("/entries/{entry_id}/history")
+async def get_entry_history(entry_id: str, request: Request, limit: int = 50):
+    """Previous versions of an entry, newest first.
+
+    Each revision is the entry's content *before* a meaningful edit: title,
+    content, tags, source, actor, and timestamp. The current version is the
+    entry itself (`GET /api/entries/{id}`). Gated on entry visibility.
+    """
+    db = request.app.state.db
+    ctx = auth_context(request)
+    entry = await _get_accessible_entry(db, entry_id, ctx)
+    if not entry:
+        return _not_found()
+    limit = max(1, min(limit, 100))
+    return await db.list_entry_revisions(entry_id, limit=limit)
+
+
 @router.post("/entries/{entry_id}/resolve")
 async def resolve_entry_refs(entry_id: str, request: Request):
     """Render the entry's Markdown with [[wikilinks]], {{kv.paths}},
@@ -233,6 +250,25 @@ async def update_entry(entry_id: str, body: EntryUpdate, request: Request):
             fields["embedding"] = await embedder.embed(f"{title}\n{content}")
         except Exception:
             logger.exception("Failed to re-embed, continuing without")
+
+    # Snapshot the prior version before the overwrite — but only when a material
+    # field actually changes (scope-only edits don't make a content revision).
+    material = ("title", "content", "tags", "source")
+    changed_material = [
+        k for k in material if k in fields and fields[k] != existing.get(k)
+    ]
+    if changed_material:
+        await db.create_entry_revision(
+            entry_id=entry_id,
+            previous_title=existing["title"],
+            previous_content=existing["content"],
+            previous_tags=existing.get("tags") or [],
+            previous_source=existing.get("source"),
+            org_id=existing.get("org_id"),
+            workspace=existing.get("workspace"),
+            project=existing.get("project"),
+            **ctx.actor,
+        )
 
     ok = await db.update_entry(entry_id, **fields)
     if not ok:

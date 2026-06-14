@@ -91,6 +91,51 @@ def test_kv_set_records_created_then_updated():
     assert sets[0]["subject_title"] == "cfg/trial_days"
 
 
+def test_update_snapshots_previous_content_newest_first():
+    db, client = _setup()
+    eid = client.post(
+        "/api/entries",
+        json={"title": "Doc", "content": "v1", "workspace": "ws"},
+        headers=auth("tok-editor"),
+    ).json()["id"]
+    client.put(f"/api/entries/{eid}", json={"content": "v2"}, headers=auth("tok-editor"))
+    client.put(f"/api/entries/{eid}", json={"content": "v3"}, headers=auth("tok-editor"))
+
+    history = client.get(f"/api/entries/{eid}/history", headers=auth("tok-editor")).json()
+    # Two edits → two revisions, newest first; each holds the PRE-edit content.
+    assert [r["previous_content"] for r in history] == ["v2", "v1"]
+    assert all(r["actor_type"] == "token" for r in history)
+
+
+def test_scope_or_noop_change_creates_no_revision():
+    db, client = _setup()
+    eid = client.post(
+        "/api/entries",
+        json={"title": "Doc", "content": "body", "workspace": "ws"},
+        headers=auth("tok-editor"),
+    ).json()["id"]
+    # Scope-only move — no material field changes.
+    client.put(f"/api/entries/{eid}", json={"workspace": "ws2"}, headers=auth("tok-editor"))
+    # Re-set identical content — not a change.
+    client.put(f"/api/entries/{eid}", json={"content": "body"}, headers=auth("tok-editor"))
+
+    assert db.entry_revisions == []
+
+
+def test_history_endpoint_gated_across_orgs():
+    db, client = _setup()
+    db.org_roles[("org2", "user2")] = "editor"
+    add_token(db, "tok-other", user_id="user2", org_id="org2", role="editor")
+    eid = client.post(
+        "/api/entries",
+        json={"title": "Mine", "content": "x", "workspace": "ws"},
+        headers=auth("tok-editor"),
+    ).json()["id"]
+
+    r = client.get(f"/api/entries/{eid}/history", headers=auth("tok-other"))
+    assert r.status_code == 404
+
+
 def test_updates_visibility_hides_other_orgs():
     db, client = _setup()
     # A second org with its own editor.

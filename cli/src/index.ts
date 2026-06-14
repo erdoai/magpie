@@ -408,6 +408,37 @@ program
     }
   });
 
+interface Revision {
+  previous_title: string;
+  previous_content: string;
+  previous_tags: string[];
+  previous_source: string | null;
+  actor_type: string | null;
+  created_at: string;
+}
+
+program
+  .command('history <entryId>')
+  .description('Show previous versions of an entry (newest first)')
+  .option('--limit <n>', 'Max revisions (capped at 100)', '20')
+  .option('--full', 'Print the full previous content of each revision')
+  .action(async (entryId: string, opts: { limit: string; full?: boolean }) => {
+    requireToken();
+    try {
+      const revisions = await api<Revision[]>(
+        `/api/entries/${entryId}/history${qs({ limit: opts.limit })}`,
+      );
+      if (!revisions.length) return console.log('No prior revisions (current version is the only one).');
+      for (const r of revisions) {
+        console.log(`\n${r.created_at}  (by ${r.actor_type || 'unknown'})`);
+        console.log(`  ${r.previous_title} [${(r.previous_tags || []).join(', ')}]`);
+        if (opts.full) console.log(`\n${r.previous_content}\n`);
+      }
+    } catch (err) {
+      fail(err);
+    }
+  });
+
 program
   .command('write')
   .description('Create a knowledge entry')
