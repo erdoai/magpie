@@ -14,7 +14,7 @@ interface Entry {
   id: string;
   title: string;
   content: string;
-  category: string;
+  archived_at: string | null;
   tags: string[];
   workspace: string | null;
   project: string | null;
@@ -34,7 +34,7 @@ function entryScope(e: Entry): string {
 function formatEntry(e: Entry): string {
   return (
     `## [${entryScope(e)}] ${e.title}${e.score != null ? ` (score: ${e.score})` : ''}\n` +
-    `Category: ${e.category} | Tags: ${(e.tags || []).join(', ')}\n` +
+    `Tags: ${(e.tags || []).join(', ')}\n` +
     `ID: ${e.id}\n\n${e.content}`
   );
 }
@@ -67,14 +67,13 @@ export async function runMcpServer(): Promise<void> {
     {
       query: z.string().describe('Natural-language query'),
       ...scopeArgs,
-      category: z.string().optional().describe('project | area | resource | archive'),
       limit: z.number().optional().describe('Max results (default 10)'),
     },
     async (args) =>
       guarded(async () => {
         const results = await api<Entry[]>('/api/search', {
           method: 'POST',
-          body: { query: args.query, ...applyScope(args), category: args.category, limit: args.limit ?? 10 },
+          body: { query: args.query, ...applyScope(args), limit: args.limit ?? 10 },
         });
         if (!results.length) return text('No entries found.');
         return text(results.map(formatEntry).join('\n\n---\n\n'));
@@ -110,7 +109,6 @@ export async function runMcpServer(): Promise<void> {
       title: z.string(),
       content: z.string().describe('Markdown content with context and reasoning'),
       ...scopeArgs,
-      category: z.string().optional().describe('project | area | resource (default resource)'),
       tags: z.array(z.string()).optional(),
       dedupe: z.boolean().optional().describe('Update an existing similar entry if found'),
     },
@@ -121,7 +119,6 @@ export async function runMcpServer(): Promise<void> {
           body: {
             title: args.title,
             content: args.content,
-            category: args.category || 'resource',
             tags: args.tags || [],
             dedupe: args.dedupe || false,
             source: 'magpie-cli-mcp',
@@ -137,7 +134,7 @@ export async function runMcpServer(): Promise<void> {
     'Browse knowledge entries (use search for specific queries).',
     {
       ...scopeArgs,
-      category: z.string().optional(),
+      archived: z.boolean().optional().describe('Filter by archived status (omit = all, false = active, true = archived)'),
       limit: z.number().optional(),
     },
     async (args) =>
@@ -147,14 +144,14 @@ export async function runMcpServer(): Promise<void> {
           `/api/entries${qs({
             workspace: s.workspace,
             project: s.project,
-            category: args.category,
+            archived: args.archived != null ? String(args.archived) : undefined,
             limit: String(args.limit ?? 20),
           })}`
         );
         if (!entries.length) return text('No entries found.');
         return text(
           entries
-            .map((e) => `- ${e.title} [${entryScope(e)}/${e.category}] (${e.id.slice(0, 8)}…)`)
+            .map((e) => `- ${e.title} [${entryScope(e)}]${e.archived_at ? ' [archived]' : ''} (${e.id.slice(0, 8)}…)`)
             .join('\n')
         );
       })
@@ -215,7 +212,6 @@ export async function runMcpServer(): Promise<void> {
       source_ids: z.array(z.string()).describe('Entry IDs to merge (2+, archived after)'),
       title: z.string(),
       content: z.string().describe('Synthesized merged content (markdown)'),
-      category: z.string().optional().describe('project | area | resource (default resource)'),
       tags: z.array(z.string()).optional(),
       ...scopeArgs,
     },
@@ -227,7 +223,6 @@ export async function runMcpServer(): Promise<void> {
             source_ids: args.source_ids,
             title: args.title,
             content: args.content,
-            category: args.category || 'resource',
             tags: args.tags || [],
             ...applyScope(args),
           },

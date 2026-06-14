@@ -29,22 +29,28 @@ def test_render_entry_roundtrips_through_parser():
     entry = {
         "title": "Alertee positioning",
         "content": "# Heading\n\nThe wedge is simplicity.",
-        "category": "project",
         "tags": ["reach", "positioning"],
         "source": "strategy",
     }
     meta, body = parse(render_entry(entry))
-    assert meta.category == "project"
     assert meta.title == "Alertee positioning"
     assert meta.tags == ["reach", "positioning"]
     assert meta.source == "strategy"
     assert "The wedge is simplicity." in body
 
 
-def test_render_entry_defaults_bad_category_to_resource():
-    out = render_entry({"title": "X", "content": "body", "category": "weird"})
+def test_render_entry_emits_archived_when_archived_at_set():
+    out = render_entry({"title": "X", "content": "body", "archived_at": "2026-01-01T00:00:00Z"})
+    assert "archived: true" in out
     meta, _ = parse(out)
-    assert meta.category == "resource"
+    assert meta.archived is True
+
+
+def test_render_entry_omits_archived_when_active():
+    out = render_entry({"title": "X", "content": "body", "archived_at": None})
+    assert "archived:" not in out
+    meta, _ = parse(out)
+    assert meta.archived is False
 
 
 def test_build_manifest_sorts_and_includes_keys():
@@ -63,7 +69,6 @@ def test_full_bundle_roundtrips(tmp_path):
         {
             "title": "Orders",
             "content": "One row per order.",
-            "category": "resource",
             "tags": ["sales"],
             "source": None,
             "source_path": "sales/orders.md",
@@ -101,8 +106,8 @@ def test_full_bundle_roundtrips(tmp_path):
 
 def test_collision_paths_disambiguated(tmp_path):
     entries = [
-        {"title": "Same Name", "content": "a", "category": "resource"},
-        {"title": "Same Name", "content": "b", "category": "resource"},
+        {"title": "Same Name", "content": "a"},
+        {"title": "Same Name", "content": "b"},
     ]
     write_bundle(tmp_path, entries, [])
     files = sorted(p.name for p in tmp_path.glob("*.md"))
@@ -110,7 +115,7 @@ def test_collision_paths_disambiguated(tmp_path):
 
 
 def test_no_manifest_when_no_kv_stores(tmp_path):
-    write_bundle(tmp_path, [{"title": "X", "content": "y", "category": "resource"}], [])
+    write_bundle(tmp_path, [{"title": "X", "content": "y"}], [])
     assert not (tmp_path / "kv" / "_manifest.json").exists()
 
 

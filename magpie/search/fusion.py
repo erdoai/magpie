@@ -20,7 +20,6 @@ async def search(
     org_id: str | None = None,
     workspace: str | None = None,
     project: str | None = None,
-    category: str | None = None,
     tags: list[str] | None = None,
     limit: int = 10,
     semantic: bool = True,
@@ -35,7 +34,7 @@ async def search(
     """
     scope = dict(
         user_id=user_id, org_id=org_id, workspace=workspace, project=project,
-        category=category, tags=tags,
+        tags=tags,
     )
     # Fetch more than needed from each source for better fusion
     fetch_limit = limit * 3

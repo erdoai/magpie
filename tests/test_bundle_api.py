@@ -45,13 +45,14 @@ class FakeDB:
         return self.tokens and "editor"
 
     # entries
-    async def upsert_entry_by_path(self, source_path, title, content, category="resource",  # noqa: E501
+    async def upsert_entry_by_path(self, source_path, title, content, archived=False,  # noqa: E501
                                    tags=None, source=None, embedding=None, org_id=None,
                                    workspace=None, project=None):
         was = source_path in self.entries
         self.entries[source_path] = {
             "id": self.entries.get(source_path, {}).get("id", uuid4().hex),
-            "title": title, "content": content, "category": category,
+            "title": title, "content": content,
+            "archived_at": "2026-01-01T00:00:00Z" if archived else None,
             "tags": tags or [], "source": source, "source_path": source_path,
             "org_id": org_id, "workspace": workspace, "project": project,
         }
@@ -124,7 +125,7 @@ def auth(token):
 
 ENTRY = {
     "path": "orders.md",
-    "text": "---\nmagpie_version: 1\ncategory: resource\ntitle: Orders\n---\n\nOne row per order.",
+    "text": "---\nmagpie_version: 1\ntitle: Orders\n---\n\nOne row per order.",
 }
 
 

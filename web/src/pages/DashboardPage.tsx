@@ -24,7 +24,7 @@ export function DashboardPage() {
       const byWorkspace: Record<string, number> = {};
       let archived = 0;
       for (const e of entries) {
-        if (e.category === 'archive') { archived++; continue; }
+        if (e.archived_at != null) { archived++; continue; }
         const ws = e.workspace || 'unscoped';
         byWorkspace[ws] = (byWorkspace[ws] || 0) + 1;
       }
@@ -36,7 +36,7 @@ export function DashboardPage() {
         workspaceCount: Object.keys(byWorkspace).filter(w => w !== 'unscoped').length,
         byWorkspace,
       });
-      setRecent(entries.filter(e => e.category !== 'archive').slice(0, 5));
+      setRecent(entries.filter(e => e.archived_at == null).slice(0, 5));
     }).catch(() => {});
   }, []);
 

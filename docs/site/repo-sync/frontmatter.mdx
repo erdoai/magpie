@@ -8,7 +8,6 @@ Every entry Markdown file in a [bundle](/repo-sync/overview) starts with a front
 ```markdown
 ---
 magpie_version: 1
-category: resource
 title: Refund policy
 tags: [policy, billing]
 source: handbook
@@ -19,17 +18,27 @@ source: handbook
 Body markdown here...
 ```
 
+`magpie_version` is the only required field, so a minimal entry is just `magpie_version: 1` plus a body:
+
+```markdown
+---
+magpie_version: 1
+---
+
+Body markdown here...
+```
+
 ## Fields
 
 The schema is **closed** — only these fields are allowed:
 
 | Field | Required | Notes |
 |-------|----------|-------|
-| `magpie_version` | yes | Schema version. Currently `1`. |
-| `category` | yes | `project`, `area`, `resource`, or `archive`. |
+| `magpie_version` | yes | Schema version. |
 | `title` | no | Falls back to a humanized filename. |
 | `tags` | no | Inline `[a, b]` or a YAML block list. |
 | `source` | no | Where the knowledge came from. |
+| `archived` | no | `true` only when the entry is archived; omit otherwise. Archived entries are excluded from search and the default listing but kept for the record. |
 
 ## Why it's strict
 

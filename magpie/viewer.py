@@ -94,12 +94,10 @@ function mdToHtml(md) {
 
 function renderNav() {
   const nav = document.getElementById('nav'); let html = '';
-  const cats = {};
-  DATA.entries.forEach(e => { (cats[e.category] = cats[e.category] || []).push(e); });
-  Object.keys(cats).sort().forEach(cat => {
-    html += `<div class="group">${esc(cat)}</div>`;
-    cats[cat].forEach(e => { html += `<a class="item" data-i="${e._i}">${esc(e.title)}</a>`; });
-  });
+  if (DATA.entries.length) {
+    html += '<div class="group">Entries</div>';
+    DATA.entries.forEach(e => { html += `<a class="item" data-i="${e._i}">${esc(e.title)}</a>`; });
+  }
   if (DATA.stores.length) {
     html += '<div class="group">KV stores</div>';
     DATA.stores.forEach((c,i) => { html += `<a class="item" data-c="${i}">${esc(c.title||c.slug)}</a>`; });
@@ -114,7 +112,7 @@ function selectEntry(i) {
   const outs = e._out.map(j => `<a class="wl" data-i="${j}">${esc(DATA.entries[j].title)}</a>`).join(', ') || '<span class="empty">none</span>';
   const backs = [...new Set(e._back)].map(j => `<a class="wl" data-i="${j}">${esc(DATA.entries[j].title)}</a>`).join(', ') || '<span class="empty">none</span>';
   document.getElementById('main').innerHTML =
-    `<h1>${esc(e.title)}</h1><div class="meta">${esc(e.category)}${e.source ? ' &middot; '+esc(e.source) : ''}<br>${tags}</div>` +
+    `<h1>${esc(e.title)}</h1><div class="meta">${e.archived ? 'archived &middot; ' : ''}${e.source ? esc(e.source) : 'entry'}<br>${tags}</div>` +
     `<div class="body">${mdToHtml(e.content||'')}</div>` +
     `<div class="links"><h4>Links &rarr;</h4>${outs}<h4 style="margin-top:12px">Backlinks &larr;</h4>${backs}</div>`;
   bindLinks();
@@ -158,7 +156,7 @@ def render_viewer(entries: list[dict], stores: list[dict]) -> str:
         "entries": [
             {
                 "title": e.get("title") or "",
-                "category": e.get("category") or "resource",
+                "archived": bool(e.get("archived_at")),
                 "tags": list(e.get("tags") or []),
                 "source": e.get("source"),
                 "content": e.get("content") or "",

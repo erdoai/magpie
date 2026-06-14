@@ -12,14 +12,18 @@ Multi-org users select their **active org** with the `X-Organization-ID` header 
 | Method | Path | Description |
 |--------|------|-------------|
 | `POST` | `/api/entries` | Create an entry |
-| `GET` | `/api/entries` | List / filter (category, tags, workspace, project) |
+| `GET` | `/api/entries` | List / filter (`archived`, tags, workspace, project). `archived` is a boolean: omit for all, `false` for active only, `true` for archived only |
 | `GET` | `/api/entries/{id}` | Get one |
 | `PUT` | `/api/entries/{id}` | Update |
 | `DELETE` | `/api/entries/{id}` | Delete |
 | `POST` | `/api/entries/{id}/archive` | Archive |
+| `POST` | `/api/entries/{id}/unarchive` | Restore an archived entry |
+| `POST` | `/api/entries/merge` | Merge entries into one; sources are archived |
 | `GET` | `/api/entries/{id}/links` | Outgoing links + backlinks |
 | `POST` | `/api/entries/{id}/resolve` | Resolve `{{references}}` and `[[wikilinks]]` |
-| `POST` | `/api/search` | Dual semantic + keyword search |
+| `POST` | `/api/search` | Dual semantic + keyword search (excludes archived) |
+
+Entry objects expose `archived_at` — a timestamp when the entry is archived, `null` when active. `POST`, `PUT`, `/api/search`, and `/api/entries/merge` accept `title`, `content`, `tags`, `source`, `workspace`, and `project`; there is no category field.
 
 ## KV stores
 

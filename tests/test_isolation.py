@@ -280,7 +280,7 @@ class FakeDatabase:
         entry_id = uuid4().hex
         now = datetime.now(UTC)
         entry = {
-            "id": entry_id, "title": "t", "content": "c", "category": "resource",
+            "id": entry_id, "title": "t", "content": "c", "archived_at": None,
             "tags": [], "source": None, "user_id": None, "org_id": None,
             "workspace": None, "project": None,
             "created_at": now, "updated_at": now,
@@ -289,11 +289,11 @@ class FakeDatabase:
         self.entries[entry_id] = entry
         return entry_id
 
-    async def create_entry(self, title, content, category="resource", tags=None,
+    async def create_entry(self, title, content, tags=None,
                            source=None, embedding=None, user_id=None, org_id=None,
                            workspace=None, project=None):
         return self.add_entry(
-            title=title, content=content, category=category, tags=tags or [],
+            title=title, content=content, tags=tags or [],
             source=source, user_id=user_id, org_id=org_id,
             workspace=workspace, project=project,
         )
@@ -325,7 +325,14 @@ class FakeDatabase:
         entry = self.entries.get(entry_id)
         if not entry:
             return False
-        entry["category"] = "archive"
+        entry["archived_at"] = datetime.now(UTC)
+        return True
+
+    async def unarchive_entry(self, entry_id):
+        entry = self.entries.get(entry_id)
+        if not entry:
+            return False
+        entry["archived_at"] = None
         return True
 
     async def list_entries(self, **kwargs):
@@ -446,7 +453,7 @@ def test_cannot_update_or_delete_other_orgs_entry():
 
     res = client.post(f"/api/entries/{entry_id}/archive", headers=auth("key-a"))
     assert res.status_code == 404
-    assert db.entries[entry_id]["category"] != "archive"
+    assert db.entries[entry_id]["archived_at"] is None
 
 
 def test_can_read_own_org_and_global_entries():

@@ -21,7 +21,7 @@ interface Entry {
   id: string;
   title: string;
   content: string;
-  category: string;
+  archived_at: string | null;
   tags: string[];
   workspace: string | null;
   project: string | null;
@@ -68,7 +68,8 @@ function entryLine(e: Entry): string {
   const ws = e.workspace || 'general';
   const scopeStr = e.project ? `${ws}/${e.project}` : ws;
   const score = e.score != null ? ` (${e.score})` : '';
-  return `- ${e.title} [${scopeStr}/${e.category}]${score}\n  id: ${e.id}`;
+  const archived = e.archived_at ? ' [archived]' : '';
+  return `- ${e.title} [${scopeStr}]${archived}${score}\n  id: ${e.id}`;
 }
 
 async function prompt(question: string): Promise<string> {
@@ -369,14 +370,13 @@ program
   .description('Search knowledge (semantic + keyword)')
   .option('--workspace <workspace>')
   .option('--project <project>')
-  .option('--category <category>')
   .option('--limit <n>', 'Max results', '10')
-  .action(async (query: string, opts: { workspace?: string; project?: string; category?: string; limit: string }) => {
+  .action(async (query: string, opts: { workspace?: string; project?: string; limit: string }) => {
     requireToken();
     try {
       const results = await api<Entry[]>('/api/search', {
         method: 'POST',
-        body: { query, ...scope(opts), category: opts.category, limit: parseInt(opts.limit, 10) },
+        body: { query, ...scope(opts), limit: parseInt(opts.limit, 10) },
       });
       if (!results.length) return console.log('No results.');
       for (const e of results) console.log(entryLine(e));
@@ -414,13 +414,12 @@ program
   .requiredOption('--title <title>')
   .option('--file <path>', 'Markdown file with the content')
   .option('--content <content>', 'Inline content')
-  .option('--category <category>', 'project | area | resource', 'resource')
   .option('--tags <tags>', 'Comma-separated tags')
   .option('--dedupe', 'Update an existing similar entry instead of creating a duplicate')
   .option('--workspace <workspace>')
   .option('--project <project>')
   .action(async (opts: {
-    title: string; file?: string; content?: string; category: string;
+    title: string; file?: string; content?: string;
     tags?: string; dedupe?: boolean; workspace?: string; project?: string;
   }) => {
     requireToken();
@@ -432,7 +431,6 @@ program
         body: {
           title: opts.title,
           content,
-          category: opts.category,
           tags: opts.tags ? opts.tags.split(',').map((t) => t.trim()) : [],
           dedupe: opts.dedupe || false,
           ...scope(opts),
@@ -452,6 +450,19 @@ program
     try {
       await api(`/api/entries/${entryId}/archive`, { method: 'POST' });
       console.log(`Archived ${entryId}.`);
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+program
+  .command('unarchive <entryId>')
+  .description('Unarchive an entry')
+  .action(async (entryId: string) => {
+    requireToken();
+    try {
+      await api(`/api/entries/${entryId}/unarchive`, { method: 'POST' });
+      console.log(`Unarchived ${entryId}.`);
     } catch (err) {
       fail(err);
     }
@@ -499,12 +510,11 @@ program
   .requiredOption('--title <title>')
   .option('--file <path>', 'Markdown file with the merged content')
   .option('--content <content>', 'Inline merged content')
-  .option('--category <category>', 'project | area | resource', 'resource')
   .option('--tags <tags>', 'Comma-separated tags')
   .option('--workspace <workspace>')
   .option('--project <project>')
   .action(async (ids: string[], opts: {
-    title: string; file?: string; content?: string; category: string;
+    title: string; file?: string; content?: string;
     tags?: string; workspace?: string; project?: string;
   }) => {
     requireToken();
@@ -518,7 +528,6 @@ program
           source_ids: ids,
           title: opts.title,
           content,
-          category: opts.category,
           tags: opts.tags ? opts.tags.split(',').map((t) => t.trim()) : [],
           ...scope(opts),
         },

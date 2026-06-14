@@ -27,7 +27,7 @@ export interface Entry {
   id: string;
   title: string;
   content: string;
-  category: string;
+  archived_at: string | null;
   tags: string[];
   source: string | null;
   user_id: string | null;
@@ -209,8 +209,10 @@ export const api = {
     request<{ ok: boolean }>(`/api/entries/${id}`, { method: 'DELETE' }),
   archiveEntry: (id: string) =>
     request<{ ok: boolean }>(`/api/entries/${id}/archive`, { method: 'POST' }),
+  unarchiveEntry: (id: string) =>
+    request<{ ok: boolean }>(`/api/entries/${id}/unarchive`, { method: 'POST' }),
   search: (query: string, opts?: {
-    category?: string; tags?: string[]; workspace?: string; project?: string;
+    tags?: string[]; workspace?: string; project?: string;
     limit?: number; semantic?: boolean; keyword?: boolean;
   }) =>
     request<Entry[]>('/api/search', {

@@ -140,11 +140,11 @@ def _register_tools(server: FastMCP) -> None:
         query: str,
         workspace: str | None = None,
         project: str | None = None,
-        category: str | None = None,
         tags: list[str] | None = None,
         limit: int = 10,
     ) -> str:
         """Search the knowledge base. Uses semantic + keyword matching.
+        Archived entries are excluded.
 
         Args:
             query: What you're looking for — natural language.
@@ -152,7 +152,6 @@ def _register_tools(server: FastMCP) -> None:
                 "reach", "alertee", "magpie", "general"). Omit to search all.
             project: Narrower work area within the workspace (e.g. a
                 customer or product slug). Omit to search the whole workspace.
-            category: Filter by type: project, area, resource, archive.
             tags: Filter to entries matching any of these tags.
             limit: Max results (default 10).
         """
@@ -168,7 +167,6 @@ def _register_tools(server: FastMCP) -> None:
             org_id=ctx.org_id,
             workspace=workspace,
             project=project,
-            category=category,
             tags=tags,
             limit=limit,
         )
@@ -184,7 +182,6 @@ def _register_tools(server: FastMCP) -> None:
             scope = f"{ws}/{entry['project']}" if entry.get("project") else ws
             parts.append(
                 f"## [{scope}] {entry['title']}{score_str}\n"
-                f"Category: {entry['category']} | "
                 f"Tags: {', '.join(entry.get('tags', []))}\n"
                 f"ID: {entry['id']}\n\n"
                 f"{entry['content']}"
@@ -197,7 +194,6 @@ def _register_tools(server: FastMCP) -> None:
         content: str,
         workspace: str,
         project: str | None = None,
-        category: str = "resource",
         tags: list[str] | None = None,
         source: str | None = None,
         dedupe: bool = False,
@@ -213,8 +209,6 @@ def _register_tools(server: FastMCP) -> None:
                 "reach", "alertee", "magpie", "general"). Required.
             project: Narrower work area within the workspace (e.g. a
                 customer or product slug). Optional.
-            category: project (active goal), area (ongoing
-                responsibility), resource (reference). Default: resource.
             tags: Tags for filtering (e.g. ["deploy", "railway"]).
             source: Where this came from (e.g. "claude-code", "manual").
             dedupe: If true, update an existing similar entry instead
@@ -239,7 +233,6 @@ def _register_tools(server: FastMCP) -> None:
             entry_id, was_updated = await _db.upsert_entry(
                 title=title,
                 content=content,
-                category=category,
                 tags=tags,
                 source=source,
                 embedding=embedding,
@@ -256,7 +249,6 @@ def _register_tools(server: FastMCP) -> None:
         entry_id = await _db.create_entry(
             title=title,
             content=content,
-            category=category,
             tags=tags,
             source=source,
             embedding=embedding,
@@ -294,10 +286,10 @@ def _register_tools(server: FastMCP) -> None:
 
         ws = entry.get("workspace") or "general"
         scope = f"{ws}/{entry['project']}" if entry.get("project") else ws
+        archived = " | archived" if entry.get("archived_at") else ""
         result = (
             f"# [{scope}] {entry['title']}\n"
-            f"Category: {entry['category']} | "
-            f"Tags: {', '.join(entry.get('tags', []))}\n"
+            f"Tags: {', '.join(entry.get('tags', []))}{archived}\n"
             f"Source: {entry.get('source', 'unknown')} | "
             f"Updated: {entry['updated_at']}\n"
             f"ID: {entry['id']}\n\n"
@@ -334,7 +326,7 @@ def _register_tools(server: FastMCP) -> None:
     async def list_entries(
         workspace: str | None = None,
         project: str | None = None,
-        category: str | None = None,
+        archived: bool | None = None,
         tags: list[str] | None = None,
         limit: int = 20,
     ) -> str:
@@ -344,7 +336,8 @@ def _register_tools(server: FastMCP) -> None:
         Args:
             workspace: Filter to a workspace. Omit to see all.
             project: Filter to a project within the workspace.
-            category: Filter by type: project, area, resource, archive.
+            archived: false (default behaviour None shows all) to hide
+                archived, true to show only archived.
             tags: Filter to entries matching any of these tags.
             limit: Max results (default 20).
         """
@@ -353,7 +346,7 @@ def _register_tools(server: FastMCP) -> None:
 
         ctx = await _tool_context()
         entries = await _db.list_entries(
-            category=category,
+            archived=archived,
             tags=tags,
             user_id=ctx.user_id,
             org_id=ctx.org_id,
@@ -370,8 +363,9 @@ def _register_tools(server: FastMCP) -> None:
             short_id = entry["id"][:8]
             ws = entry.get("workspace") or "general"
             scope = f"{ws}/{entry['project']}" if entry.get("project") else ws
+            flag = " [archived]" if entry.get("archived_at") else ""
             lines.append(
-                f"- **{entry['title']}** [{scope}/{entry['category']}]"
+                f"- **{entry['title']}** [{scope}]{flag}"
                 f" ({short_id}…) {tags_str}"
             )
         return "\n".join(lines)
@@ -873,7 +867,6 @@ def _register_tools(server: FastMCP) -> None:
         source_ids: list[str],
         title: str,
         content: str,
-        category: str = "resource",
         tags: list[str] | None = None,
         workspace: str | None = None,
         project: str | None = None,
@@ -886,7 +879,6 @@ def _register_tools(server: FastMCP) -> None:
             source_ids: Entry IDs to merge (will be archived).
             title: Title for the merged entry.
             content: Synthesized content for the merged entry (markdown).
-            category: PARA category. Default: resource.
             tags: Tags for the merged entry.
             workspace: Workspace scope.
             project: Project scope within the workspace.
@@ -918,7 +910,6 @@ def _register_tools(server: FastMCP) -> None:
             source_ids=source_ids,
             title=title,
             content=content,
-            category=category,
             tags=tags,
             embedding=embedding,
             user_id=ctx.user_id,

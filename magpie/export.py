@@ -16,7 +16,7 @@ import json
 import re
 from pathlib import Path
 
-from magpie.frontmatter import CATEGORIES, Frontmatter, serialize
+from magpie.frontmatter import Frontmatter, serialize
 from magpie.viewer import render_viewer
 
 _SLUG_STRIP = re.compile(r"[^a-z0-9]+")
@@ -42,14 +42,11 @@ def entry_path(entry: dict) -> str:
 
 def render_entry(entry: dict) -> str:
     """Render an entry dict as frontmatter + body Markdown."""
-    category = entry.get("category") or "resource"
-    if category not in CATEGORIES:
-        category = "resource"
     meta = Frontmatter(
-        category=category,
         title=entry.get("title") or None,
         tags=list(entry.get("tags") or []),
         source=entry.get("source") or None,
+        archived=bool(entry.get("archived_at")),
     )
     return serialize(meta, entry.get("content") or "")
 

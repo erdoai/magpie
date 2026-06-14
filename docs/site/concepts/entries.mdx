@@ -3,18 +3,11 @@ title: Entries
 description: Knowledge entries — Markdown with typed metadata, scoped to your team.
 ---
 
-An **entry** is the core unit of knowledge: Markdown content with a title, tags, a source, and a category. Entries are searchable, linkable, and can own [attachments](/concepts/attachments).
+An **entry** is the core unit of knowledge: Markdown content with a title, tags, and a source. Entries are searchable, linkable, and can own [attachments](/concepts/attachments).
 
-## Categories (PARA)
+## Lifecycle
 
-Every entry has a `category` from the [PARA](https://fortelabs.com/blog/para/) system:
-
-| Category | For |
-|----------|-----|
-| `project` | Active, goal-bound work with an end state |
-| `area` | Ongoing responsibilities with no end date |
-| `resource` | Reference material and topics of interest (the default) |
-| `archive` | Inactive items kept for the record |
+An entry is either **active** or **archived** — that's the only lifecycle state. Archiving keeps an entry for the record without deleting it: archived entries are excluded from search and from the default entry listing, but stay readable by id and can be restored. Archive an entry with `POST /api/entries/{id}/archive`, restore it with `POST /api/entries/{id}/unarchive`. The `archived_at` field is a timestamp when archived, `null` otherwise.
 
 ## Scoping
 
@@ -30,7 +23,6 @@ All of these are optional; a `NULL` field means "global". **Visibility:** you se
 {
   "title": "Refund policy",
   "content": "# Refunds\n\nFull refund within 30 days...",
-  "category": "resource",
   "tags": ["policy", "billing"],
   "workspace": "support",
   "project": "billing"

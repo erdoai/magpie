@@ -11,7 +11,7 @@ def write(root: Path, rel: str, text: str) -> None:
     path.write_text(text)
 
 
-VALID = "---\nmagpie_version: 1\ncategory: resource\ntitle: Orders\n---\n\nOne row per order.\n"
+VALID = "---\nmagpie_version: 1\ntitle: Orders\n---\n\nOne row per order.\n"
 
 
 def test_scans_valid_entries(tmp_path):
@@ -50,7 +50,7 @@ def test_reports_unknown_field_as_error(tmp_path):
     write(
         tmp_path,
         "drift.md",
-        "---\nmagpie_version: 1\ncategory: resource\nmrr: 4200\n---\n\nbody\n",
+        "---\nmagpie_version: 1\nmrr: 4200\n---\n\nbody\n",
     )
     result = scan_entries(tmp_path)
     assert not result.ok
@@ -59,7 +59,7 @@ def test_reports_unknown_field_as_error(tmp_path):
 
 def test_reports_empty_and_bodyless_files(tmp_path):
     write(tmp_path, "empty.md", "   \n")
-    write(tmp_path, "nobody.md", "---\nmagpie_version: 1\ncategory: resource\n---\n\n")
+    write(tmp_path, "nobody.md", "---\nmagpie_version: 1\n---\n\n")
     result = scan_entries(tmp_path)
     paths = {e.path for e in result.errors}
     assert paths == {"empty.md", "nobody.md"}
@@ -69,7 +69,7 @@ def test_title_falls_back_to_filename(tmp_path):
     write(
         tmp_path,
         "weekly-active-users.md",
-        "---\nmagpie_version: 1\ncategory: resource\n---\n\nbody\n",
+        "---\nmagpie_version: 1\n---\n\nbody\n",
     )
     result = scan_entries(tmp_path)
     assert result.entries[0].title == "weekly active users"

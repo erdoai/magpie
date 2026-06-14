@@ -7,7 +7,7 @@ Magpie is a **store**, not a search box. It holds two kinds of context an agent 
 
 ## Two halves of context, one store
 
-- **Knowledge entries** — durable Markdown with typed metadata, organized by [PARA](/concepts/entries) category and scoped by org / workspace / project. The prose: decisions, runbooks, policies, notes.
+- **Knowledge entries** — durable Markdown with typed metadata, scoped by org / workspace / project and with a simple [active / archived lifecycle](/concepts/entries). The prose: decisions, runbooks, policies, notes.
 - **KV stores** — typed JSON **key/value data stores**. The structured half: config, metrics, brand tokens, resolved facts, preferences. An agent reads a value by key (and gets it typed — a number is a number), not by parsing prose. Stores can be live and agent-written, or curated in git. See [KV stores](/concepts/kv).
 
 Then the connective tissue across both:

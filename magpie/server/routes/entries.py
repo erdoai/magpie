@@ -40,7 +40,6 @@ async def _get_accessible_entry(db, entry_id: str, ctx: AuthContext) -> dict | N
 class EntryCreate(BaseModel):
     title: str
     content: str
-    category: str = "resource"
     tags: list[str] = []
     source: str | None = None
     workspace: str | None = None
@@ -51,14 +50,12 @@ class EntryCreate(BaseModel):
 class EntryUpdate(BaseModel):
     title: str | None = None
     content: str | None = None
-    category: str | None = None
     tags: list[str] | None = None
     source: str | None = None
 
 
 class SearchRequest(BaseModel):
     query: str
-    category: str | None = None
     tags: list[str] | None = None
     workspace: str | None = None
     project: str | None = None
@@ -71,13 +68,13 @@ class EntryResponse(BaseModel):
     id: str
     title: str
     content: str
-    category: str
     tags: list[str]
     source: str | None
     user_id: str | None = None
     org_id: str | None = None
     workspace: str | None = None
     project: str | None = None
+    archived_at: datetime | None = None
     score: float | None = None
     created_at: datetime
     updated_at: datetime
@@ -108,7 +105,6 @@ async def create_entry(body: EntryCreate, request: Request):
         entry_id, _was_updated = await db.upsert_entry(
             title=body.title,
             content=body.content,
-            category=body.category,
             tags=body.tags,
             source=body.source,
             embedding=embedding,
@@ -121,7 +117,6 @@ async def create_entry(body: EntryCreate, request: Request):
         entry_id = await db.create_entry(
             title=body.title,
             content=body.content,
-            category=body.category,
             tags=body.tags,
             source=body.source,
             embedding=embedding,
@@ -139,7 +134,7 @@ async def create_entry(body: EntryCreate, request: Request):
 @router.get("/entries", response_model=list[EntryResponse])
 async def list_entries(
     request: Request,
-    category: str | None = None,
+    archived: bool | None = None,
     tags: str | None = None,
     source: str | None = None,
     workspace: str | None = None,
@@ -152,7 +147,7 @@ async def list_entries(
     workspace, project = ctx.clamp_scope(workspace, project)
     tag_list = [t.strip() for t in tags.split(",")] if tags else None
     return await db.list_entries(
-        category=category,
+        archived=archived,
         tags=tag_list,
         source=source,
         user_id=ctx.user_id,
@@ -282,6 +277,23 @@ async def archive_entry(entry_id: str, request: Request):
     return {"ok": True}
 
 
+@router.post("/entries/{entry_id}/unarchive")
+async def unarchive_entry(entry_id: str, request: Request):
+    db = request.app.state.db
+    ctx = auth_context(request)
+
+    if not ctx.has_role("editor"):
+        return _forbidden("Write access requires editor role")
+
+    if not await _get_accessible_entry(db, entry_id, ctx):
+        return _not_found()
+
+    ok = await db.unarchive_entry(entry_id)
+    if not ok:
+        return _not_found()
+    return {"ok": True}
+
+
 class FindDuplicatesRequest(BaseModel):
     workspace: str | None = None
     project: str | None = None
@@ -293,7 +305,6 @@ class MergeRequest(BaseModel):
     source_ids: list[str]
     title: str
     content: str
-    category: str = "resource"
     tags: list[str] = []
     workspace: str | None = None
     project: str | None = None
@@ -348,7 +359,6 @@ async def merge_entries(body: MergeRequest, request: Request):
         source_ids=body.source_ids,
         title=body.title,
         content=body.content,
-        category=body.category,
         tags=body.tags,
         embedding=embedding,
         user_id=ctx.user_id,
@@ -377,7 +387,6 @@ async def search_entries(body: SearchRequest, request: Request):
         org_id=ctx.org_id,
         workspace=workspace,
         project=project,
-        category=body.category,
         tags=body.tags,
         limit=body.limit,
         semantic=body.semantic,

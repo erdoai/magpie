@@ -12,10 +12,10 @@ The two ranked lists are combined with **Reciprocal Rank Fusion (RRF)**, so an e
 
 ## Scoping a search
 
-Narrow by workspace, project, category, or tags:
+Narrow by workspace, project, or tags:
 
 ```bash
-magpie search "incident runbook" --workspace support --category resource
+magpie search "incident runbook" --workspace support --tags runbook
 ```
 
 ```json
@@ -23,4 +23,4 @@ POST /api/search
 { "query": "incident runbook", "workspace": "support", "limit": 10 }
 ```
 
-Results are always filtered to what you're allowed to see (your entries + your org + global). Over MCP, the same search is the `search` [tool](/mcp/tools).
+Results are always filtered to what you're allowed to see (your entries + your org + global), and [archived entries](/concepts/entries) are excluded automatically. Over MCP, the same search is the `search` [tool](/mcp/tools).

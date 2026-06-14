@@ -29,10 +29,9 @@ export function BrowsePage() {
       const params: Record<string, string> = {};
       if (workspace !== 'all') params.workspace = workspace;
       if (project.trim()) params.project = project.trim();
-      if (showArchived) params.category = 'archive';
+      params.archived = showArchived ? 'true' : 'false';
       const rows = await api.listEntries(params);
-      // Active view hides archived; archived view shows only archived (handled by API param).
-      setEntries(showArchived ? rows : rows.filter(e => e.category !== 'archive'));
+      setEntries(rows);
     } catch (e) {
       console.error(e);
     }
@@ -51,6 +50,11 @@ export function BrowsePage() {
 
   const handleArchive = async (id: string) => {
     await api.archiveEntry(id);
+    load();
+  };
+
+  const handleUnarchive = async (id: string) => {
+    await api.unarchiveEntry(id);
     load();
   };
 
@@ -131,7 +135,8 @@ export function BrowsePage() {
             <EntryCard
               key={entry.id}
               entry={entry}
-              onArchive={handleArchive}
+              onArchive={showArchived ? undefined : handleArchive}
+              onUnarchive={showArchived ? handleUnarchive : undefined}
               onDelete={handleDelete}
             />
           ))}

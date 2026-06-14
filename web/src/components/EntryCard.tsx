@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Archive, Trash2 } from 'lucide-react';
+import { Archive, ArchiveRestore, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { Entry } from '@/lib/api';
@@ -7,11 +7,13 @@ import type { Entry } from '@/lib/api';
 export function EntryCard({
   entry,
   onArchive,
+  onUnarchive,
   onDelete,
   showScore,
 }: {
   entry: Entry;
   onArchive?: (id: string) => void;
+  onUnarchive?: (id: string) => void;
   onDelete?: (id: string) => void;
   showScore?: boolean;
 }) {
@@ -50,9 +52,14 @@ export function EntryCard({
         )}
       </div>
       <div className="flex gap-1 ml-3 shrink-0">
-        {onArchive && entry.category !== 'archive' && (
+        {onArchive && (
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onArchive(entry.id)}>
             <Archive size={14} />
+          </Button>
+        )}
+        {onUnarchive && (
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onUnarchive(entry.id)}>
+            <ArchiveRestore size={14} />
           </Button>
         )}
         {onDelete && (

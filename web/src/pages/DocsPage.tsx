@@ -156,7 +156,7 @@ claude mcp add magpie -- npx @erdo/magpie mcp`}
               ['org', 'Team/account boundary. Roles: owner > admin > editor > viewer. Editors write knowledge; admins manage members and workspaces.'],
               ['workspace', 'Broad app/product namespace — "reach", "alertee", "personal".'],
               ['project', 'Narrower work area inside a workspace — a customer, a product, a codebase. Workspace + project travel together on every entry, search, and token.'],
-              ['entry', 'A Markdown knowledge document with category (PARA), tags, source, and scope.'],
+              ['entry', 'A Markdown knowledge note with tags, source, scope, and an archived status.'],
               ['kv store', 'A named store of typed values, read whole by key.'],
               ['attachment', 'A file owned by an entry — logo, screenshot, SQL snippet, brief.'],
               ['visibility', 'You see your entries + your org’s entries + global entries. Cross-org access is never possible.'],
@@ -173,7 +173,7 @@ claude mcp add magpie -- npx @erdo/magpie mcp`}
             code={`npx @erdo/magpie login        # email OTP → token in ~/.config/magpie/
 magpie logout | whoami | link
 
-magpie search "query" [--workspace W] [--project P] [--category C]
+magpie search "query" [--workspace W] [--project P]
 magpie read <id> [--resolved]
 magpie write --title T (--file F | --content C) [--tags a,b]
 magpie archive <id>
@@ -200,10 +200,10 @@ magpie mcp                   # stdio MCP server for local agents`}
           <Table
             headers={['Tool', 'Does']}
             rows={[
-              ['search', 'Hybrid semantic+keyword search with workspace/project/category/tag filters'],
+              ['search', 'Hybrid semantic+keyword search with workspace/project/tag filters'],
               ['read', 'Full entry with links, backlinks, attachments; resolved=true renders references'],
               ['write', 'Save knowledge; dedupe=true updates a near-duplicate instead of duplicating'],
-              ['list_entries', 'Browse by scope/category/tags'],
+              ['list_entries', 'Browse by scope/tags/archived status'],
               ['archive', 'Retire an entry from search'],
               ['list_links', 'Outgoing links + backlinks for an entry'],
               ['resolve_knowledge', 'Rendered Markdown + dependency report'],

@@ -51,7 +51,7 @@ Full list in `magpie/config/settings.py` and `docs/site/reference/configuration.
 
 ## Data model
 
-Entries use PARA categories (Projects / Areas / Resources / Archives).
+Entries are plain notes with an `archived_at` lifecycle status (NULL = active).
 Scoped by user_id, org_id, workspace, project (all optional, NULL = global).
 Workspace = broad app/product namespace (e.g. "reach"); project = narrower work
 area within it (e.g. "alertee"). Org roles: owner > admin > editor > viewer.

@@ -141,7 +141,6 @@ async def _import_markdown_file(db, embedder, file_path, workspace, project, sou
 
     # Parse YAML frontmatter if present
     title = file_path.stem.replace("_", " ").replace("-", " ").title()
-    category = "resource"
     tags = []
 
     if text.startswith("---"):
@@ -153,10 +152,6 @@ async def _import_markdown_file(db, embedder, file_path, workspace, project, sou
             for line in frontmatter.strip().split("\n"):
                 if line.startswith("name:"):
                     title = line.split(":", 1)[1].strip().strip('"')
-                elif line.startswith("type:"):
-                    t = line.split(":", 1)[1].strip().strip('"')
-                    if t in ("project", "area", "resource"):
-                        category = t
                 elif line.startswith("description:"):
                     pass  # use content instead
 
@@ -173,7 +168,6 @@ async def _import_markdown_file(db, embedder, file_path, workspace, project, sou
     entry_id = await db.create_entry(
         title=title,
         content=text,
-        category=category,
         tags=tags,
         source=source,
         embedding=embedding,

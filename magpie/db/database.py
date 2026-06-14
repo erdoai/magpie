@@ -51,7 +51,6 @@ class Database:
         self,
         title: str,
         content: str,
-        category: str = "resource",
         tags: list[str] | None = None,
         source: str | None = None,
         embedding: list[float] | None = None,
@@ -65,14 +64,13 @@ class Database:
         if embedding and self.has_vectors:
             await self._pool.execute(
                 """INSERT INTO entries
-                   (id, title, content, category, tags, source,
+                   (id, title, content, tags, source,
                     embedding, user_id, org_id, workspace, project,
                     created_at, updated_at)
-                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)""",
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)""",
                 entry_id,
                 title,
                 content,
-                category,
                 tags or [],
                 source,
                 str(embedding),
@@ -86,14 +84,13 @@ class Database:
         else:
             await self._pool.execute(
                 """INSERT INTO entries
-                   (id, title, content, category, tags, source,
+                   (id, title, content, tags, source,
                     user_id, org_id, workspace, project,
                     created_at, updated_at)
-                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)""",
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)""",
                 entry_id,
                 title,
                 content,
-                category,
                 tags or [],
                 source,
                 user_id,
@@ -121,8 +118,8 @@ class Database:
         a tenanted row, so cross-tenant reads return None rather than leaking.
         """
         cols = (
-            "id, title, content, category, tags, source, user_id, org_id,"
-            " workspace, project, created_at, updated_at"
+            "id, title, content, tags, source, user_id, org_id,"
+            " workspace, project, archived_at, created_at, updated_at"
         )
         if trusted:
             row = await self._pool.fetchrow(
@@ -138,7 +135,7 @@ class Database:
         return dict(row) if row else None
 
     async def update_entry(self, entry_id: str, **fields) -> bool:
-        allowed = {"title", "content", "category", "tags", "source"}
+        allowed = {"title", "content", "tags", "source"}
         if self.has_vectors:
             allowed.add("embedding")
         updates = {k: v for k, v in fields.items() if k in allowed and v is not None}
@@ -183,7 +180,15 @@ class Database:
 
     async def archive_entry(self, entry_id: str) -> bool:
         result = await self._pool.execute(
-            "UPDATE entries SET category = 'archive', updated_at = $1 WHERE id = $2",
+            "UPDATE entries SET archived_at = $1, updated_at = $1 WHERE id = $2",
+            datetime.now(UTC),
+            entry_id,
+        )
+        return result == "UPDATE 1"
+
+    async def unarchive_entry(self, entry_id: str) -> bool:
+        result = await self._pool.execute(
+            "UPDATE entries SET archived_at = NULL, updated_at = $1 WHERE id = $2",
             datetime.now(UTC),
             entry_id,
         )
@@ -191,7 +196,7 @@ class Database:
 
     async def list_entries(
         self,
-        category: str | None = None,
+        archived: bool | None = None,
         tags: list[str] | None = None,
         source: str | None = None,
         user_id: str | None = None,
@@ -205,10 +210,11 @@ class Database:
         params: list = []
         idx = 0
 
-        if category:
-            idx += 1
-            conditions.append(f"category = ${idx}")
-            params.append(category)
+        # archived: None = all, False = active only, True = archived only
+        if archived is True:
+            conditions.append("archived_at IS NOT NULL")
+        elif archived is False:
+            conditions.append("archived_at IS NULL")
 
         if tags:
             idx += 1
@@ -259,8 +265,8 @@ class Database:
         limit_idx = idx
         params.append(limit)
 
-        cols = ("id, title, content, category, tags, source, user_id,"
-                " org_id, workspace, project, created_at, updated_at")
+        cols = ("id, title, content, tags, source, user_id,"
+                " org_id, workspace, project, archived_at, created_at, updated_at")
         sql = (
             f"SELECT {cols} FROM entries {where}"
             f" ORDER BY updated_at DESC OFFSET ${offset_idx} LIMIT ${limit_idx}"
@@ -327,7 +333,6 @@ class Database:
         org_id: str | None = None,
         workspace: str | None = None,
         project: str | None = None,
-        category: str | None = None,
         tags: list[str] | None = None,
         limit: int = 20,
     ) -> list[dict]:
@@ -335,17 +340,12 @@ class Database:
         if not self.has_vectors:
             return []
 
-        conditions = ["category != 'archive'"]
+        conditions = ["archived_at IS NULL"]
         params: list = []
         idx = 0
 
         idx = self._add_visibility(conditions, params, idx, user_id, org_id)
         idx = self._add_scope(conditions, params, idx, workspace, project)
-
-        if category:
-            idx += 1
-            conditions.append(f"category = ${idx}")
-            params.append(category)
 
         if tags:
             idx += 1
@@ -363,8 +363,8 @@ class Database:
         limit_idx = idx
 
         sql = (
-            f"SELECT id, title, content, category, tags, source, workspace, project,"
-            f" created_at, updated_at,"
+            f"SELECT id, title, content, tags, source, workspace, project,"
+            f" archived_at, created_at, updated_at,"
             f" embedding <=> ${embed_idx} AS distance"
             f" FROM entries {where}"
             f" ORDER BY embedding <=> ${embed_idx}"
@@ -380,12 +380,11 @@ class Database:
         org_id: str | None = None,
         workspace: str | None = None,
         project: str | None = None,
-        category: str | None = None,
         tags: list[str] | None = None,
         limit: int = 20,
     ) -> list[dict]:
         """Search by Postgres full-text search. Returns entries with rank score."""
-        conditions = ["category != 'archive'"]
+        conditions = ["archived_at IS NULL"]
         params: list = []
         idx = 0
 
@@ -396,11 +395,6 @@ class Database:
 
         idx = self._add_visibility(conditions, params, idx, user_id, org_id)
         idx = self._add_scope(conditions, params, idx, workspace, project)
-
-        if category:
-            idx += 1
-            conditions.append(f"category = ${idx}")
-            params.append(category)
 
         if tags:
             idx += 1
@@ -414,8 +408,8 @@ class Database:
         limit_idx = idx
 
         sql = (
-            f"SELECT id, title, content, category, tags, source, workspace, project,"
-            f" created_at, updated_at,"
+            f"SELECT id, title, content, tags, source, workspace, project,"
+            f" archived_at, created_at, updated_at,"
             f" ts_rank(search_vector, plainto_tsquery('english', ${query_idx})) AS rank"
             f" FROM entries {where}"
             f" ORDER BY rank DESC"
@@ -441,7 +435,7 @@ class Database:
         if not self.has_vectors:
             return []
 
-        conditions = ["category != 'archive'", "embedding IS NOT NULL"]
+        conditions = ["archived_at IS NULL", "embedding IS NOT NULL"]
         params: list = []
         idx = 0
 
@@ -468,8 +462,8 @@ class Database:
         where = f"WHERE {' AND '.join(conditions)}"
 
         sql = (
-            f"SELECT id, title, content, category, tags, source, workspace, project,"
-            f" created_at, updated_at,"
+            f"SELECT id, title, content, tags, source, workspace, project,"
+            f" archived_at, created_at, updated_at,"
             f" embedding <=> ${embed_idx} AS distance"
             f" FROM entries {where}"
             f" AND embedding <=> ${embed_idx} < ${thresh_idx}"
@@ -497,8 +491,8 @@ class Database:
             return []
 
         conditions = [
-            "a.category != 'archive'",
-            "b.category != 'archive'",
+            "a.archived_at IS NULL",
+            "b.archived_at IS NULL",
             "a.embedding IS NOT NULL",
             "b.embedding IS NOT NULL",
             "a.id < b.id",
@@ -555,10 +549,10 @@ class Database:
 
         sql = (
             f"SELECT a.id AS id_a, a.title AS title_a, a.content AS content_a,"
-            f" a.category AS category_a, a.tags AS tags_a, a.source AS source_a,"
+            f" a.tags AS tags_a, a.source AS source_a,"
             f" a.workspace AS workspace_a, a.created_at AS created_a, a.updated_at AS updated_a,"
             f" b.id AS id_b, b.title AS title_b, b.content AS content_b,"
-            f" b.category AS category_b, b.tags AS tags_b, b.source AS source_b,"
+            f" b.tags AS tags_b, b.source AS source_b,"
             f" b.workspace AS workspace_b, b.created_at AS created_b, b.updated_at AS updated_b,"
             f" a.embedding <=> b.embedding AS distance"
             f" FROM entries a JOIN entries b ON a.id < b.id"
@@ -598,14 +592,14 @@ class Database:
             if id_a not in entry_map:
                 entry_map[id_a] = {
                     "id": id_a, "title": row["title_a"], "content": row["content_a"],
-                    "category": row["category_a"], "tags": row["tags_a"],
+                    "tags": row["tags_a"],
                     "source": row["source_a"], "workspace": row["workspace_a"],
                     "created_at": row["created_a"], "updated_at": row["updated_a"],
                 }
             if id_b not in entry_map:
                 entry_map[id_b] = {
                     "id": id_b, "title": row["title_b"], "content": row["content_b"],
-                    "category": row["category_b"], "tags": row["tags_b"],
+                    "tags": row["tags_b"],
                     "source": row["source_b"], "workspace": row["workspace_b"],
                     "created_at": row["created_b"], "updated_at": row["updated_b"],
                 }
@@ -630,7 +624,6 @@ class Database:
         source_ids: list[str],
         title: str,
         content: str,
-        category: str = "resource",
         tags: list[str] | None = None,
         source: str | None = None,
         embedding: list[float] | None = None,
@@ -650,22 +643,22 @@ class Database:
                 if embedding and self.has_vectors:
                     await conn.execute(
                         """INSERT INTO entries
-                           (id, title, content, category, tags, source,
+                           (id, title, content, tags, source,
                             embedding, user_id, org_id, workspace, project,
                             created_at, updated_at)
-                           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)""",
-                        new_id, title, content, category, tags or [],
+                           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)""",
+                        new_id, title, content, tags or [],
                         lineage_source, str(embedding),
                         user_id, org_id, workspace, project, now, now,
                     )
                 else:
                     await conn.execute(
                         """INSERT INTO entries
-                           (id, title, content, category, tags, source,
+                           (id, title, content, tags, source,
                             user_id, org_id, workspace, project,
                             created_at, updated_at)
-                           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)""",
-                        new_id, title, content, category, tags or [],
+                           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)""",
+                        new_id, title, content, tags or [],
                         lineage_source,
                         user_id, org_id, workspace, project, now, now,
                     )
@@ -673,7 +666,7 @@ class Database:
                 # Archive sources with lineage
                 await conn.execute(
                     """UPDATE entries
-                       SET category = 'archive',
+                       SET archived_at = $2,
                            source = COALESCE(source, '') || $1,
                            updated_at = $2
                        WHERE id = ANY($3)""",
@@ -688,7 +681,6 @@ class Database:
         self,
         title: str,
         content: str,
-        category: str = "resource",
         tags: list[str] | None = None,
         source: str | None = None,
         embedding: list[float] | None = None,
@@ -718,7 +710,6 @@ class Database:
                     match_id,
                     title=title,
                     content=content,
-                    category=category,
                     tags=tags,
                     source=source,
                     embedding=embedding,
@@ -728,7 +719,6 @@ class Database:
         entry_id = await self.create_entry(
             title=title,
             content=content,
-            category=category,
             tags=tags,
             source=source,
             embedding=embedding,
@@ -744,7 +734,6 @@ class Database:
         source_path: str,
         title: str,
         content: str,
-        category: str = "resource",
         tags: list[str] | None = None,
         source: str | None = None,
         embedding: list[float] | None = None,
@@ -752,12 +741,14 @@ class Database:
         org_id: str | None = None,
         workspace: str | None = None,
         project: str | None = None,
+        archived: bool = False,
     ) -> tuple[str, bool]:
         """Create or update the entry identified by ``source_path`` within scope.
 
         Identity is the bundle-relative path, scoped to (org, workspace,
         project) — deterministic, so re-pushing a bundle updates in place rather
-        than duplicating. Returns (entry_id, was_updated).
+        than duplicating. The bundle is the source of truth, so ``archived``
+        mirrors the frontmatter on every push. Returns (entry_id, was_updated).
         """
         existing = await self._pool.fetchval(
             """SELECT id FROM entries
@@ -771,48 +762,50 @@ class Database:
             project,
         )
 
+        now = datetime.now(UTC)
+        archived_at = now if archived else None
         use_vec = bool(embedding) and self.has_vectors
         if existing:
             if use_vec:
                 await self._pool.execute(
                     """UPDATE entries
-                       SET title=$2, content=$3, category=$4, tags=$5, source=$6,
-                           embedding=$7, updated_at=$8
+                       SET title=$2, content=$3, tags=$4, source=$5,
+                           embedding=$6, archived_at=$7, updated_at=$8
                        WHERE id=$1""",
-                    existing, title, content, category, tags or [], source,
-                    str(embedding), datetime.now(UTC),
+                    existing, title, content, tags or [], source,
+                    str(embedding), archived_at, now,
                 )
             else:
                 await self._pool.execute(
                     """UPDATE entries
-                       SET title=$2, content=$3, category=$4, tags=$5, source=$6,
-                           updated_at=$7
+                       SET title=$2, content=$3, tags=$4, source=$5,
+                           archived_at=$6, updated_at=$7
                        WHERE id=$1""",
-                    existing, title, content, category, tags or [], source,
-                    datetime.now(UTC),
+                    existing, title, content, tags or [], source,
+                    archived_at, now,
                 )
             return existing, True
 
         entry_id = uuid4().hex
-        now = datetime.now(UTC)
         if use_vec:
             await self._pool.execute(
                 """INSERT INTO entries
-                   (id, title, content, category, tags, source, source_path,
+                   (id, title, content, tags, source, source_path,
                     embedding, user_id, org_id, workspace, project,
-                    created_at, updated_at)
-                   VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)""",
-                entry_id, title, content, category, tags or [], source, source_path,
-                str(embedding), user_id, org_id, workspace, project, now, now,
+                    archived_at, created_at, updated_at)
+                   VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$13)""",
+                entry_id, title, content, tags or [], source, source_path,
+                str(embedding), user_id, org_id, workspace, project, archived_at, now,
             )
         else:
             await self._pool.execute(
                 """INSERT INTO entries
-                   (id, title, content, category, tags, source, source_path,
-                    user_id, org_id, workspace, project, created_at, updated_at)
-                   VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)""",
-                entry_id, title, content, category, tags or [], source, source_path,
-                user_id, org_id, workspace, project, now, now,
+                   (id, title, content, tags, source, source_path,
+                    user_id, org_id, workspace, project, archived_at,
+                    created_at, updated_at)
+                   VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$12)""",
+                entry_id, title, content, tags or [], source, source_path,
+                user_id, org_id, workspace, project, archived_at, now,
             )
         return entry_id, False
 

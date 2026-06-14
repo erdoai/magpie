@@ -4,8 +4,8 @@ from magpie.export import write_bundle
 from magpie.viewer import render_viewer
 
 ENTRIES = [
-    {"title": "Orders", "category": "resource", "tags": ["sales"], "content": "See [[Customers]]."},
-    {"title": "Customers", "category": "resource", "tags": [], "content": "People."},
+    {"title": "Orders", "tags": ["sales"], "content": "See [[Customers]]."},
+    {"title": "Customers", "tags": [], "content": "People."},
 ]
 STORES = [
     {"slug": "strategy", "title": "Strategy",
@@ -31,7 +31,7 @@ def test_embeds_entry_and_kv_data():
 
 
 def test_escapes_script_breakout():
-    evil = [{"title": "X", "category": "resource", "tags": [], "content": "</script><b>hi"}]
+    evil = [{"title": "X", "tags": [], "content": "</script><b>hi"}]
     html = render_viewer(evil, [])
     # The literal closing tag must not appear in the embedded JSON payload.
     assert "</script><b>hi" not in html

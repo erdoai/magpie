@@ -8,8 +8,8 @@ Every tool is scoped by the caller's org and role. Most accept `workspace` and `
 ## Knowledge
 
 ### `search`
-Semantic + keyword search across knowledge.
-**Key params:** `query`, `workspace`, `project`, `category`, `limit`.
+Semantic + keyword search across knowledge. Archived entries are excluded automatically.
+**Key params:** `query`, `workspace`, `project`, `limit`.
 **Returns:** ranked entries with scores.
 
 ### `read`
@@ -19,11 +19,11 @@ Read one entry by id.
 
 ### `write`
 Create a knowledge entry.
-**Key params:** `title`, `content`, `category`, `tags`, `source`, `workspace`, `project`.
+**Key params:** `title`, `content`, `tags`, `source`, `workspace`, `project`.
 
 ### `list_entries`
-Browse and filter entries.
-**Key params:** `category`, `tags`, `workspace`, `project`, `limit`.
+Browse and filter entries. Archived entries are flagged with `[archived]`.
+**Key params:** `archived` (omit for all, `false` for active only, `true` for archived only), `tags`, `workspace`, `project`, `limit`.
 
 ### `archive`
 Archive an entry. **Params:** `id`.

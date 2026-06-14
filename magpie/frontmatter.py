@@ -6,7 +6,6 @@ keys. A bundle file is Markdown with a YAML-style frontmatter block fenced by
 
     ---
     magpie_version: 1
-    category: resource
     title: Alertee positioning
     tags: [reach, positioning]
     source: strategy-doc
@@ -32,12 +31,9 @@ from dataclasses import dataclass, field
 # Bump when the field set or semantics change; the loader keys migrations off it.
 FRONTMATTER_VERSION = "1"
 
-# Entry categories (PARA). Mirrors the `entries.category` column.
-CATEGORIES = ("project", "area", "resource", "archive")
-
 # The closed field set. Anything outside this is rejected on parse.
-ALLOWED_FIELDS = ("magpie_version", "category", "title", "tags", "source")
-REQUIRED_FIELDS = ("magpie_version", "category")
+ALLOWED_FIELDS = ("magpie_version", "archived", "title", "tags", "source")
+REQUIRED_FIELDS = ("magpie_version",)
 
 
 class FrontmatterError(ValueError):
@@ -48,10 +44,10 @@ class FrontmatterError(ValueError):
 class Frontmatter:
     """A validated frontmatter block."""
 
-    category: str
     title: str | None = None
     tags: list[str] = field(default_factory=list)
     source: str | None = None
+    archived: bool = False
     magpie_version: str = FRONTMATTER_VERSION
 
 
@@ -158,21 +154,24 @@ def validate(raw: dict[str, str]) -> Frontmatter:
             f"version {FRONTMATTER_VERSION}."
         )
 
-    category = _strip_quotes(raw["category"])
-    if category not in CATEGORIES:
-        raise FrontmatterError(
-            f"Invalid category {category!r}. One of: {', '.join(CATEGORIES)}."
-        )
-
     title = _strip_quotes(raw["title"]) if "title" in raw else None
     source = _strip_quotes(raw["source"]) if "source" in raw else None
     tags = _parse_tags(raw["tags"]) if "tags" in raw else []
 
+    archived = False
+    if "archived" in raw:
+        val = _strip_quotes(raw["archived"]).lower()
+        if val not in ("true", "false"):
+            raise FrontmatterError(
+                f"Invalid archived {raw['archived']!r}; expected true or false."
+            )
+        archived = val == "true"
+
     return Frontmatter(
-        category=category,
         title=title or None,
         tags=tags,
         source=source or None,
+        archived=archived,
         magpie_version=version,
     )
 
@@ -186,7 +185,7 @@ def parse(text: str) -> tuple[Frontmatter, str]:
     if block is None:
         raise FrontmatterError(
             "Missing frontmatter block. A Magpie entry file must start with a "
-            "'---' fenced frontmatter (magpie_version + category required)."
+            "'---' fenced frontmatter (magpie_version required)."
         )
     return validate(_parse_block(block)), body
 
@@ -196,13 +195,15 @@ def serialize(meta: Frontmatter, body: str) -> str:
 
     Emits only populated fields, in a stable order, so exports diff cleanly.
     """
-    lines = ["---", f"magpie_version: {meta.magpie_version}", f"category: {meta.category}"]
+    lines = ["---", f"magpie_version: {meta.magpie_version}"]
     if meta.title:
         lines.append(f"title: {meta.title}")
     if meta.tags:
         lines.append("tags: [" + ", ".join(meta.tags) + "]")
     if meta.source:
         lines.append(f"source: {meta.source}")
+    if meta.archived:
+        lines.append("archived: true")
     lines.append("---")
     document = "\n".join(lines)
     body = body.strip("\n")

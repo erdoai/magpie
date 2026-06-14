@@ -54,7 +54,7 @@ async def list_updates(
         items.append({
             "kind": "entry",
             "action": _action(
-                e["created_at"], e["updated_at"], archived=e.get("category") == "archive"
+                e["created_at"], e["updated_at"], archived=e.get("archived_at") is not None
             ),
             "title": e["title"],
             "entry_id": e["id"],

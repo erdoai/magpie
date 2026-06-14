@@ -86,13 +86,13 @@ async def apply_push(
             source_path=entry.path,
             title=entry.title,
             content=entry.body,
-            category=fm.category,
             tags=fm.tags,
             source=fm.source or "bundle",
             embedding=embedding,
             org_id=org_id,
             workspace=workspace,
             project=project,
+            archived=fm.archived,
         )
         await sync_entry_links(db, entry_id)
         outcome.updated += was_updated
