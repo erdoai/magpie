@@ -17,6 +17,21 @@ async def _init_connection(conn: asyncpg.Connection) -> None:
     )
 
 
+# Fields whose change is worth a content revision. Scope tags (workspace/
+# project) are deliberately excluded — moving an entry isn't a content edit.
+MATERIAL_REVISION_FIELDS = ("title", "content", "tags", "source")
+
+
+def changed_material_fields(previous: dict, new: dict) -> list[str]:
+    """Which material fields in ``new`` differ from ``previous`` — the basis for
+    deciding whether an update warrants an entry revision. Only keys present in
+    ``new`` are considered (mirrors update_entry skipping None)."""
+    return [
+        k for k in MATERIAL_REVISION_FIELDS
+        if k in new and new[k] != previous.get(k)
+    ]
+
+
 def apply_bulk_changes(entry: dict, changes: dict) -> dict:
     """Pure transform: return ``entry`` with a bulk ``changes`` spec applied.
 
@@ -843,8 +858,15 @@ class Database:
         workspace: str | None = None,
         project: str | None = None,
         dedupe_threshold: float = 0.10,
+        actor_user_id: str | None = None,
+        actor_type: str = "unknown",
+        actor_ref: str | None = None,
     ) -> tuple[str, bool]:
         """Create or update an entry. If a similar entry exists within threshold, update it.
+
+        When a dedupe match is overwritten, the prior version is snapshotted to
+        ``entry_revisions`` (same rule as PUT — only on a material change), so
+        history covers the dedupe path too. Pass actor via ``**ctx.actor``.
 
         Returns (entry_id, was_updated).
         """
@@ -860,6 +882,26 @@ class Database:
             )
             if similar:
                 match_id = similar[0]["id"]
+                previous = await self.get_entry(match_id, trusted=True)
+                new_vals: dict = {"title": title, "content": content}
+                if tags is not None:
+                    new_vals["tags"] = tags
+                if source is not None:
+                    new_vals["source"] = source
+                if previous and changed_material_fields(previous, new_vals):
+                    await self.create_entry_revision(
+                        entry_id=match_id,
+                        previous_title=previous["title"],
+                        previous_content=previous["content"],
+                        previous_tags=previous.get("tags") or [],
+                        previous_source=previous.get("source"),
+                        org_id=previous.get("org_id"),
+                        workspace=previous.get("workspace"),
+                        project=previous.get("project"),
+                        actor_user_id=actor_user_id,
+                        actor_type=actor_type,
+                        actor_ref=actor_ref,
+                    )
                 await self.update_entry(
                     match_id,
                     title=title,
@@ -1735,5 +1777,48 @@ class Database:
             " previous_tags, previous_source, created_at FROM entry_revisions"
             " WHERE entry_id = $1 ORDER BY created_at DESC LIMIT $2",
             entry_id, limit,
+        )
+        return [dict(r) for r in rows]
+
+    # -- KV revisions --
+
+    async def create_kv_revision(
+        self,
+        *,
+        store_id: str,
+        key: str,
+        previous_value,
+        previous_value_type: str,
+        previous_summary: str | None = None,
+        org_id: str | None = None,
+        actor_user_id: str | None = None,
+        actor_type: str = "unknown",
+        actor_ref: str | None = None,
+    ) -> str:
+        """Snapshot a KV pair's pre-overwrite value. Caller passes the previous
+        value (read before the set) and decides materiality."""
+        rev_id = uuid4().hex
+        await self._pool.execute(
+            """INSERT INTO kv_revisions
+               (id, store_id, key, org_id, actor_user_id, actor_type, actor_ref,
+                previous_value, previous_value_type, previous_summary, created_at)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)""",
+            rev_id, store_id, key, org_id, actor_user_id, actor_type, actor_ref,
+            previous_value, previous_value_type, previous_summary,
+            datetime.now(UTC),
+        )
+        return rev_id
+
+    async def list_kv_revisions(
+        self, store_id: str, key: str, limit: int = 50
+    ) -> list[dict]:
+        """Revisions for a KV pair, newest first. Gate on store visibility first
+        — revisions inherit the store's scope."""
+        rows = await self._pool.fetch(
+            "SELECT id, store_id, key, org_id, actor_user_id, actor_type,"
+            " actor_ref, previous_value, previous_value_type, previous_summary,"
+            " created_at FROM kv_revisions"
+            " WHERE store_id = $1 AND key = $2 ORDER BY created_at DESC LIMIT $3",
+            store_id, key, limit,
         )
         return [dict(r) for r in rows]

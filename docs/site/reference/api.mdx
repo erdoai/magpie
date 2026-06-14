@@ -40,10 +40,11 @@ Entry objects expose `archived_at` — a timestamp when the entry is archived, `
 | `DELETE` | `/api/kv/{store_id}` | Delete a KV store |
 | `GET` | `/api/kv/{slug}/keys` | List keys (`{ store, pairs }`) |
 | `GET` | `/api/kv/{slug}/keys/{key}` | Get a key |
+| `GET` | `/api/kv/{slug}/keys/{key}/history` | Previous values of a key, newest first (`limit` ≤ 100) |
 | `PUT` | `/api/kv/{slug}/keys/{key}` | Set a key |
 | `DELETE` | `/api/kv/{slug}/keys/{key}` | Delete a key |
 
-Writes to a `repo`-canonical KV store are rejected (the bundle is the source of truth).
+Writes to a `repo`-canonical KV store are rejected (the bundle is the source of truth). `GET /api/kv/{slug}/keys/{key}/history` returns a key's previous values (newest first) — the value/type/summary before each meaningful set, with actor and timestamp. See [Activity log](/concepts/activity).
 
 ## Attachments
 

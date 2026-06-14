@@ -783,6 +783,27 @@ kv
   });
 
 kv
+  .command('history <slug> <key>')
+  .description('Show previous values of a KV key (newest first)')
+  .option('--limit <n>', 'Max revisions (capped at 100)', '20')
+  .action(async (slug: string, key: string, opts: { limit: string }) => {
+    requireToken();
+    try {
+      const revisions = await api<{
+        previous_value: unknown; previous_value_type: string;
+        previous_summary: string | null; actor_type: string | null; created_at: string;
+      }[]>(`/api/kv/${slug}/keys/${key}/history${qs({ limit: opts.limit })}`);
+      if (!revisions.length) return console.log('No prior revisions (current value is the only one).');
+      for (const r of revisions) {
+        console.log(`\n${r.created_at}  (by ${r.actor_type || 'unknown'}) [${r.previous_value_type}]`);
+        console.log(JSON.stringify(r.previous_value, null, 2));
+      }
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+kv
   .command('set <slug> <key>')
   .description('Write a key from a JSON file or inline value')
   .option('--file <path>', 'JSON file with the value')

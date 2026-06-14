@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, KvStore, KvPair, ValueType } from '@/lib/api';
+import { api, KvStore, KvPair, KvRevision, ValueType } from '@/lib/api';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -27,6 +27,15 @@ export function KvPage() {
     key: string; value: string; valueType: ValueType; summary: string; isNew: boolean;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [historyKey, setHistoryKey] = useState<string | null>(null);
+  const [history, setHistory] = useState<KvRevision[]>([]);
+
+  const toggleHistory = (key: string) => {
+    if (historyKey === key) { setHistoryKey(null); return; }
+    if (!selected) return;
+    setHistoryKey(key);
+    api.getKvHistory(selected, key).then(setHistory).catch(() => setHistory([]));
+  };
 
   const loadCollections = () =>
     api.listKvStores().then(cols => {
@@ -239,6 +248,12 @@ export function KvPage() {
                           <div className="flex gap-1 shrink-0">
                             <Button
                               variant="ghost" size="sm" className="h-7 text-xs"
+                              onClick={() => toggleHistory(doc.key)}
+                            >
+                              History
+                            </Button>
+                            <Button
+                              variant="ghost" size="sm" className="h-7 text-xs"
                               onClick={() => setEditor({
                                 key: doc.key,
                                 value: formatValue(doc),
@@ -264,6 +279,31 @@ export function KvPage() {
                         <pre className="text-xs font-mono text-muted-foreground mt-1.5 max-h-32 overflow-auto whitespace-pre-wrap break-all">
                           {formatValue(doc)}
                         </pre>
+                        {historyKey === doc.key && (
+                          <div className="mt-2 border-t border-border pt-2">
+                            <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5">History</p>
+                            {history.length === 0 ? (
+                              <p className="text-xs text-muted-foreground">No prior revisions.</p>
+                            ) : (
+                              <ul className="flex flex-col gap-2">
+                                {history.map(rev => (
+                                  <li key={rev.id} className="border-l-2 border-border pl-2">
+                                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                                      <span>{new Date(rev.created_at).toLocaleString()}</span>
+                                      {rev.actor_type && (
+                                        <Badge variant="outline" className="text-[10px]">{rev.actor_type}</Badge>
+                                      )}
+                                      <Badge variant="outline" className="text-[10px]">{rev.previous_value_type}</Badge>
+                                    </div>
+                                    <pre className="text-xs font-mono text-muted-foreground mt-1 max-h-28 overflow-auto whitespace-pre-wrap break-all">
+                                      {JSON.stringify(rev.previous_value, null, 2)}
+                                    </pre>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>

@@ -59,6 +59,9 @@ List KV stores in scope. **Key params:** `workspace`, `project`.
 ### `kv_get`
 Read a key (returns value + `value_type`). **Params:** `store`, `key`.
 
+### `kv_history`
+Previous values of a key, newest first — value/type/summary before each meaningful set, with actor and time. **Params:** `store`, `key`, `limit`.
+
 ### `kv_set`
 Write a typed pair. **Key params:** `store`, `key`, `value`, `value_type`, `create_store`.
 Rejected for [repo-canonical](/repo-sync/kv) stores; refuses a near-duplicate new slug.

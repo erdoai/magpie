@@ -13,6 +13,18 @@ from datetime import datetime
 VALUE_TYPES = ("json", "string", "integer", "float", "boolean", "datetime")
 
 
+def kv_value_changed(previous: dict | None, value, value_type: str, summary) -> bool:
+    """Whether setting ``(value, value_type, summary)`` materially changes an
+    existing pair — the basis for a KV revision. False for a brand-new key.
+    A None summary is "leave as-is" (set_kv_pair COALESCEs it), so it's only a
+    change when explicitly provided and different."""
+    if previous is None:
+        return False
+    if previous.get("value") != value or previous.get("value_type") != value_type:
+        return True
+    return summary is not None and previous.get("summary") != summary
+
+
 def infer_value_type(value) -> str:
     """Infer a ``value_type`` from a native JSON value.
 

@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from magpie import activity
-from magpie.kv import VALUE_TYPES, validate_value
+from magpie.kv import VALUE_TYPES, kv_value_changed, validate_value
 from magpie.manifest import normalize_slug
 from magpie.server.context import AuthContext, auth_context
 
@@ -203,6 +203,27 @@ async def get_kv_pair(
     return pair
 
 
+@router.get("/kv/{slug}/keys/{key}/history")
+async def get_kv_pair_history(
+    slug: str,
+    key: str,
+    request: Request,
+    workspace: str | None = None,
+    project: str | None = None,
+    limit: int = 50,
+):
+    """Previous values of a KV pair, newest first. Each revision is the value/
+    type/summary before a meaningful set; the current value is the pair itself.
+    Gated on store visibility."""
+    db = request.app.state.db
+    ctx = auth_context(request)
+    store = await _find_visible_store(db, slug, ctx, workspace, project)
+    if not store:
+        return _not_found()
+    limit = max(1, min(limit, 100))
+    return await db.list_kv_revisions(store["id"], key, limit=limit)
+
+
 @router.put("/kv/{slug}/keys/{key}")
 async def set_kv_pair(
     slug: str,
@@ -234,7 +255,18 @@ async def set_kv_pair(
     if locked:
         return locked
 
-    existed = await db.get_kv_pair(store["id"], key, trusted=True) is not None
+    previous = await db.get_kv_pair(store["id"], key, trusted=True)
+    # Snapshot the prior value before the overwrite, only on a material change.
+    if kv_value_changed(previous, body.value, body.value_type, body.summary):
+        await db.create_kv_revision(
+            store_id=store["id"],
+            key=key,
+            previous_value=previous["value"],
+            previous_value_type=previous["value_type"],
+            previous_summary=previous.get("summary"),
+            org_id=store.get("org_id"),
+            **ctx.actor,
+        )
     await db.set_kv_pair(
         store_id=store["id"],
         key=key,
@@ -245,7 +277,7 @@ async def set_kv_pair(
         created_by_user_id=ctx.user_id,
     )
     await activity.kv_pair_set(
-        db, ctx, store, key, body.value_type, created=not existed
+        db, ctx, store, key, body.value_type, created=previous is None
     )
     return await db.get_kv_pair(store["id"], key, trusted=True)  # just written by caller
 

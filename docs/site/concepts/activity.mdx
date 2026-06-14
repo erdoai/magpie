@@ -31,14 +31,11 @@ Each event captures the action, the subject it touched, the actor, and a small a
 
 Events are server-recorded on every write path, so all clients — REST, MCP, and the CLIs — inherit the history automatically; there is nothing to opt into.
 
-## Entry revisions
+## Revisions
 
-The activity log records *that* an entry changed. **Entry revisions** record *what it said before* — the title, content, tags, and source captured the moment before a meaningful edit overwrites them.
+The activity log records *that* something changed. **Revisions** record *what it held before* — the content captured the moment before a meaningful edit overwrites it. Two kinds:
 
-A revision is written only when a material field actually changes, so scope-only edits (moving an entry between workspaces) don't pile up noise. Each revision keeps the actor and timestamp, and is removed with the entry.
+- **Entry revisions** — the title, content, tags, and source before an edit. Written only when a material field actually changes (scope-only moves don't make a revision), and captured on both the `PUT` path and a dedupe write that folds into an existing entry. Read with `GET /api/entries/{id}/history`, the `entry_history` MCP tool, `magpie history <id>`, or the **History** section on the web entry page.
+- **KV revisions** — the value, type, and summary before a key is overwritten, when any of them materially change. Read with `GET /api/kv/{slug}/keys/{key}/history`, the `kv_history` MCP tool, `magpie kv history <slug> <key>`, or the **History** toggle on a key in the web KV page.
 
-Read an entry's history with `GET /api/entries/{id}/history`, the `entry_history` MCP tool, `magpie history <id>`, or the **History** section on the entry page in the web app — all newest first, with the current version being the entry itself.
-
-<Note>
-Per-KV-value revisions (previous value of a changed KV key) are the natural next step and build on the same pattern; they aren't in the store yet.
-</Note>
+Each revision keeps the actor and timestamp, is newest-first, and is removed with its parent (entry or store). The current version is always the live record itself.

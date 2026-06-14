@@ -117,6 +117,17 @@ export interface KvPair {
   updated_at: string;
 }
 
+export interface KvRevision {
+  id: string;
+  store_id: string;
+  key: string;
+  previous_value: unknown;
+  previous_value_type: ValueType;
+  previous_summary: string | null;
+  actor_type: string | null;
+  created_at: string;
+}
+
 export interface Attachment {
   id: string;
   entry_id: string;
@@ -260,6 +271,8 @@ export const api = {
     request<{ store: KvStore; pairs: KvPair[] }>(
       `/api/kv/${slug}/keys`
     ),
+  getKvHistory: (slug: string, key: string) =>
+    request<KvRevision[]>(`/api/kv/${slug}/keys/${key}/history`),
   setKey: (slug: string, key: string, data: {
     value: unknown; value_type?: ValueType; summary?: string;
   }) =>

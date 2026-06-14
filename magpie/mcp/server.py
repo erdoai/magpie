@@ -27,7 +27,7 @@ from magpie.attachments import (
 from magpie.bulk import BulkError, build_changes, build_match, run_bulk
 from magpie.db.database import Database
 from magpie.embeddings.base import EmbeddingProvider
-from magpie.kv import VALUE_TYPES, validate_value
+from magpie.kv import VALUE_TYPES, kv_value_changed, validate_value
 from magpie.links import normalize_target, sync_entry_links
 from magpie.manifest import normalize_slug
 from magpie.mcp.oauth import MagpieOAuthProvider
@@ -246,6 +246,7 @@ def _register_tools(server: FastMCP) -> None:
                 org_id=ctx.org_id,
                 workspace=workspace,
                 project=project,
+                **ctx.actor,
             )
             await sync_entry_links(_db, entry_id)
             entry = await _db.get_entry(entry_id, trusted=True)  # just written above
@@ -770,6 +771,51 @@ def _register_tools(server: FastMCP) -> None:
         )
 
     @server.tool()
+    async def kv_history(
+        store: str,
+        key: str,
+        workspace: str | None = None,
+        project: str | None = None,
+        limit: int = 20,
+    ) -> str:
+        """Previous values of a KV pair, newest first — what the key held before
+        each meaningful set, with actor and time. The current value is what
+        `kv_get` returns.
+
+        Args:
+            store: KV store slug.
+            key: Key within the store.
+            workspace: Workspace scope for slug lookup.
+            project: Project scope for slug lookup.
+            limit: Max revisions (default 20, capped at 100).
+        """
+        if not _db:
+            return "Error: database not initialized"
+
+        ctx = await _tool_context()
+        kv = await _db.find_kv_store(
+            store, org_id=ctx.org_id, workspace=workspace, project=project
+        )
+        if not kv or not ctx.can_access({"user_id": None, "org_id": kv.get("org_id")}):
+            return f"KV store {store} not found."
+
+        revisions = await _db.list_kv_revisions(kv["id"], key, limit=max(1, min(limit, 100)))
+        if not revisions:
+            return f"No prior revisions for {store}/{key}."
+
+        parts = [f"# History of {store}/{key}\n"]
+        for rev in revisions:
+            when = rev["created_at"].isoformat()
+            actor = rev.get("actor_type") or "unknown"
+            summary = f"Summary: {rev['previous_summary']}\n" if rev.get("previous_summary") else ""
+            parts.append(
+                f"## {when} (by {actor})\n"
+                f"Type: {rev['previous_value_type']}\n{summary}\n"
+                f"{json.dumps(rev['previous_value'], indent=2, default=str)}"
+            )
+        return "\n\n---\n\n".join(parts)
+
+    @server.tool()
     async def kv_set(
         store: str,
         key: str,
@@ -855,7 +901,17 @@ def _register_tools(server: FastMCP) -> None:
             kv = await _db.get_kv_store(store_id, trusted=True)  # just created above
             await activity.kv_store_created(_db, ctx, kv)
 
-        existed = await _db.get_kv_pair(kv["id"], key, trusted=True) is not None
+        previous = await _db.get_kv_pair(kv["id"], key, trusted=True)
+        if kv_value_changed(previous, parsed_value, value_type, summary):
+            await _db.create_kv_revision(
+                store_id=kv["id"],
+                key=key,
+                previous_value=previous["value"],
+                previous_value_type=previous["value_type"],
+                previous_summary=previous.get("summary"),
+                org_id=kv.get("org_id"),
+                **ctx.actor,
+            )
         await _db.set_kv_pair(
             store_id=kv["id"],
             key=key,
@@ -865,7 +921,7 @@ def _register_tools(server: FastMCP) -> None:
             org_id=kv.get("org_id"),
             created_by_user_id=ctx.user_id,
         )
-        await activity.kv_pair_set(_db, ctx, kv, key, value_type, created=not existed)
+        await activity.kv_pair_set(_db, ctx, kv, key, value_type, created=previous is None)
         return f"Set {store}/{key} ({value_type})."
 
     @server.tool()

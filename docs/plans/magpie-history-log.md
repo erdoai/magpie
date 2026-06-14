@@ -17,8 +17,18 @@
   `entry_history` MCP tool (both servers), `magpie history <id>` (TS CLI).
 - Docs updated throughout (`concepts/activity`, API/MCP/CLI refs).
 
-**Still to do** — Phase 6: `kv_revisions` (previous value of a changed KV key).
-Plan marks it "add only if needed after entry history"; not yet built.
+- **KV revisions** (Phase 6) — `kv_revisions` table + migration,
+  `db.create_kv_revision`/`list_kv_revisions`, snapshot on the REST set route and
+  the MCP `kv_set` tool when value/type/summary materially changes (shared
+  `kv_value_changed`), and `GET /api/kv/{slug}/keys/{key}/history`. Read surfaces:
+  web KV-page History toggle, `kv_history` MCP tool (both servers),
+  `magpie kv history <slug> <key>` (TS CLI).
+- Entry revisions now also snapshot on the **dedupe** write path (`upsert_entry`),
+  not just PUT — shared `changed_material_fields`.
+
+**Done.** All plan phases (1–6) and rollout steps shipped. Bundle pushes
+deliberately don't snapshot revisions (repo is the source of truth, history is
+in git).
 
 ## Positioning
 

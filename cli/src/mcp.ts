@@ -406,6 +406,44 @@ export async function runMcpServer(): Promise<void> {
   );
 
   server.tool(
+    'kv_history',
+    'Previous values of a KV pair, newest first — what the key held before each meaningful set, with actor and time. The current value is what `kv_get` returns.',
+    {
+      store: z.string().describe('KV store slug (e.g. reach.strategy)'),
+      key: z.string(),
+      ...scopeArgs,
+      limit: z.number().optional().describe('Max revisions (default 20, capped at 100)'),
+    },
+    async (args) =>
+      guarded(async () => {
+        const s = applyScope(args);
+        const revisions = await api<{
+          previous_value: unknown; previous_value_type: string;
+          previous_summary: string | null; actor_type: string | null; created_at: string;
+        }[]>(
+          `/api/kv/${args.store}/keys/${args.key}/history${qs({
+            workspace: s.workspace,
+            project: s.project,
+            limit: String(args.limit ?? 20),
+          })}`
+        );
+        if (!revisions.length) return text(`No prior revisions for ${args.store}/${args.key}.`);
+        return text(
+          revisions
+            .map((r) => {
+              const summary = r.previous_summary ? `Summary: ${r.previous_summary}\n` : '';
+              return (
+                `## ${r.created_at} (by ${r.actor_type || 'unknown'})\n` +
+                `Type: ${r.previous_value_type}\n${summary}\n` +
+                JSON.stringify(r.previous_value, null, 2)
+              );
+            })
+            .join('\n\n---\n\n')
+        );
+      })
+  );
+
+  server.tool(
     'kv_set',
     'Write a typed value to a KV store (creates or overwrites by key).',
     {

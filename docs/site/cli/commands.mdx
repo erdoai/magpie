@@ -92,9 +92,10 @@ magpie retag --tag legacy --add imported --remove legacy --apply
 magpie kv list
 magpie kv get config trial_days
 magpie kv set config trial_days --value 14 --type integer
+magpie kv history config trial_days          # previous values of a key
 ```
 
-`set` takes `--value <json>` or `--file <path>`, and `--type` (`json`, `string`, `integer`, `float`, `boolean`, `datetime`). See [KV stores](/concepts/kv).
+`set` takes `--value <json>` or `--file <path>`, and `--type` (`json`, `string`, `integer`, `float`, `boolean`, `datetime`). `history` shows a key's previous values (newest first). See [KV stores](/concepts/kv).
 
 ## Attachments
 

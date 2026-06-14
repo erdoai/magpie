@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from magpie import activity
 from magpie.bulk import BulkError, build_changes, build_match, run_bulk
+from magpie.db.database import changed_material_fields
 from magpie.links import normalize_target, sync_entry_links
 from magpie.resolve import resolve_entry
 from magpie.search.fusion import search
@@ -117,6 +118,7 @@ async def create_entry(body: EntryCreate, request: Request):
             org_id=ctx.org_id,
             workspace=workspace,
             project=project,
+            **ctx.actor,
         )
     else:
         entry_id = await db.create_entry(
@@ -253,11 +255,7 @@ async def update_entry(entry_id: str, body: EntryUpdate, request: Request):
 
     # Snapshot the prior version before the overwrite — but only when a material
     # field actually changes (scope-only edits don't make a content revision).
-    material = ("title", "content", "tags", "source")
-    changed_material = [
-        k for k in material if k in fields and fields[k] != existing.get(k)
-    ]
-    if changed_material:
+    if changed_material_fields(existing, fields):
         await db.create_entry_revision(
             entry_id=entry_id,
             previous_title=existing["title"],

@@ -8,6 +8,8 @@ the emission wiring (not Postgres) is what's under test.
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from magpie.db.database import changed_material_fields
+from magpie.kv import kv_value_changed
 from magpie.server.auth import AuthMiddleware
 from magpie.server.routes import entries, kv, updates
 
@@ -134,6 +136,47 @@ def test_history_endpoint_gated_across_orgs():
 
     r = client.get(f"/api/entries/{eid}/history", headers=auth("tok-other"))
     assert r.status_code == 404
+
+
+def test_kv_set_snapshots_previous_value_on_change():
+    db, client = _setup()
+    client.post(
+        "/api/kv",
+        json={"slug": "cfg", "title": "Config", "workspace": "ws"},
+        headers=auth("tok-editor"),
+    )
+    client.put("/api/kv/cfg/keys/trial", json={"value": 14, "value_type": "integer"},
+               headers=auth("tok-editor"))
+    # First set is a create — no revision.
+    assert db.kv_revisions == []
+    client.put("/api/kv/cfg/keys/trial", json={"value": 30, "value_type": "integer"},
+               headers=auth("tok-editor"))
+    # Re-set identical value — not a change, no new revision.
+    client.put("/api/kv/cfg/keys/trial", json={"value": 30, "value_type": "integer"},
+               headers=auth("tok-editor"))
+
+    history = client.get("/api/kv/cfg/keys/trial/history", headers=auth("tok-editor")).json()
+    assert [r["previous_value"] for r in history] == [14]
+    assert history[0]["actor_type"] == "token"
+
+
+def test_changed_material_fields_helper():
+    prev = {"title": "T", "content": "C", "tags": ["a"], "source": "s", "workspace": "w"}
+    # Only material fields present in `new` and actually different count.
+    assert changed_material_fields(prev, {"content": "C2"}) == ["content"]
+    assert changed_material_fields(prev, {"content": "C"}) == []
+    assert changed_material_fields(prev, {"workspace": "w2"}) == []  # scope not material
+    assert changed_material_fields(prev, {"tags": ["a", "b"]}) == ["tags"]
+
+
+def test_kv_value_changed_helper():
+    prev = {"value": 1, "value_type": "integer", "summary": "old"}
+    assert kv_value_changed(None, 1, "integer", None) is False          # new key
+    assert kv_value_changed(prev, 1, "integer", None) is False          # unchanged
+    assert kv_value_changed(prev, 2, "integer", None) is True           # value
+    assert kv_value_changed(prev, 1, "string", None) is True            # type
+    assert kv_value_changed(prev, 1, "integer", "new") is True          # summary
+    assert kv_value_changed(prev, 1, "integer", "old") is False         # same summary
 
 
 def test_updates_visibility_hides_other_orgs():

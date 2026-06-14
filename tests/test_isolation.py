@@ -47,6 +47,7 @@ class FakeDatabase:
         self.user_default_org: dict[str, str | None] = {}  # user_id -> org_id
         self.activity_events: list[dict] = []  # append-only activity log
         self.entry_revisions: list[dict] = []  # pre-update content snapshots
+        self.kv_revisions: list[dict] = []  # pre-overwrite kv value snapshots
 
     # -- entry revisions --
 
@@ -71,6 +72,32 @@ class FakeDatabase:
 
     async def list_entry_revisions(self, entry_id, limit=50):
         revs = [r for r in self.entry_revisions if r["entry_id"] == entry_id]
+        return list(reversed(revs))[:limit]
+
+    # -- kv revisions --
+
+    async def create_kv_revision(self, **kwargs):
+        rev = {
+            "id": f"kvrev{len(self.kv_revisions)}",
+            "store_id": kwargs["store_id"],
+            "key": kwargs["key"],
+            "org_id": kwargs.get("org_id"),
+            "actor_user_id": kwargs.get("actor_user_id"),
+            "actor_type": kwargs.get("actor_type", "unknown"),
+            "actor_ref": kwargs.get("actor_ref"),
+            "previous_value": kwargs["previous_value"],
+            "previous_value_type": kwargs["previous_value_type"],
+            "previous_summary": kwargs.get("previous_summary"),
+            "created_at": datetime.now(UTC),
+        }
+        self.kv_revisions.append(rev)
+        return rev["id"]
+
+    async def list_kv_revisions(self, store_id, key, limit=50):
+        revs = [
+            r for r in self.kv_revisions
+            if r["store_id"] == store_id and r["key"] == key
+        ]
         return list(reversed(revs))[:limit]
 
     # -- activity log --
