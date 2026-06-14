@@ -43,7 +43,8 @@ claude mcp add --transport http magpie ${origin}/mcp
 claude mcp add magpie -- npx @erdo/magpie mcp
 
 # your agent now has: search, read, write, list_links,
-# resolve_knowledge, get/set_document, upload_attachment, ...`,
+# resolve_knowledge, kv get/set, list_updates, entry_history,
+# upload_attachment, ...`,
     },
     {
       id: 'rest',
@@ -181,8 +182,8 @@ const FEATURES = [
   },
   {
     icon: Activity,
-    title: 'Activity feed',
-    body: 'A chronological view of what changed — entries and KV writes, newest first — so you can see what your agents and teammates have been doing.',
+    title: 'History that survives',
+    body: 'A durable activity log — entries, KV, attachments, merges, bulk edits, pushes — recording what changed, when, and by whom. It outlives overwrites and deletes, and every entry and KV key keeps its previous versions.',
   },
   {
     icon: Terminal,

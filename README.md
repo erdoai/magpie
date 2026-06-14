@@ -18,6 +18,7 @@ Postgres + pgvector. REST API + MCP server + CLI + management UI — one product
 - **Links & references** — `[[wikilinks]]` with backlinks, and `{{kv.key}}` / `{{attachment:…}}` references that resolve to live values at read time.
 - **Attachments** — files owned by entries (logos, screenshots, SQL, briefs) with stable `magpie:<id>` handles.
 - **Stays coherent** — dedupe-on-write, semantic duplicate detection, merge, and a KV-store registry keep the store from fragmenting. See [Staying coherent](docs/site/concepts/coherence.mdx).
+- **History** — a durable activity log (what changed, when, by whom) that survives overwrites and deletes, plus previous versions of every entry and KV key. See [Activity log](docs/site/concepts/activity.mdx).
 - **Orgs + teams** — share within an org with roles (owner > admin > editor > viewer); fail-closed visibility.
 - **Every surface** — [REST API](docs/site/reference/api.mdx), [MCP server](docs/site/mcp/overview.mdx), [CLI](docs/site/cli/commands.mdx), and a management UI.
 
@@ -62,8 +63,9 @@ That exposes Magpie's full tool set (identical on the remote server and the stdi
 | Knowledge | `search`, `read`, `write`, `list_entries`, `archive` |
 | Coherence | `find_duplicates`, `merge` (and `write` with `dedupe`) |
 | Links & references | `list_links`, `resolve_knowledge` |
-| KV | `kv_list`, `kv_get`, `kv_set`, `kv_delete` |
+| KV | `kv_list`, `kv_get`, `kv_set`, `kv_delete`, `kv_history` |
 | Attachments | `upload_attachment`, `list_attachments`, `get_attachment` |
+| History | `list_updates`, `entry_history` |
 
 Full reference: [MCP tools](docs/site/mcp/tools.mdx) · setup for other clients: [MCP setup](docs/site/mcp/setup.mdx).
 
