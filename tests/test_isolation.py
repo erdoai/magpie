@@ -345,6 +345,19 @@ class FakeDatabase:
     async def delete_kv_pair(self, store_id, key):
         return self.kv_pairs.pop((store_id, key), None) is not None
 
+    async def merge_entries(self, source_ids, title, content, tags=None,
+                            source=None, embedding=None, user_id=None, org_id=None,
+                            workspace=None, project=None):
+        new_id = self.add_entry(
+            title=title, content=content, tags=tags or [],
+            source=source or f"merged_from:{','.join(source_ids)}",
+            user_id=user_id, org_id=org_id, workspace=workspace, project=project,
+        )
+        for sid in source_ids:
+            if sid in self.entries:
+                self.entries[sid]["archived_at"] = datetime.now(UTC)
+        return new_id
+
     # -- attachments --
 
     async def create_attachment(self, entry_id, kind, filename, media_type,

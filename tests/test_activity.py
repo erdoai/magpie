@@ -11,21 +11,22 @@ from fastapi.testclient import TestClient
 from magpie.db.database import changed_material_fields
 from magpie.kv import kv_value_changed
 from magpie.server.auth import AuthMiddleware
-from magpie.server.routes import entries, kv, updates
+from magpie.server.routes import attachments, entries, kv, updates
 
 from .test_isolation import FakeDatabase, FakeSettings, add_token, auth
 
 
-def make_client(db: FakeDatabase) -> TestClient:
+def make_client(db: FakeDatabase, storage=None) -> TestClient:
     app = FastAPI()
     app.include_router(entries.router)
     app.include_router(kv.router)
+    app.include_router(attachments.router)
     app.include_router(updates.router)
     app.add_middleware(AuthMiddleware)
     app.state.settings = FakeSettings()
     app.state.db = db
     app.state.embedder = None
-    app.state.storage = None
+    app.state.storage = storage
     return TestClient(app)
 
 
@@ -158,6 +159,90 @@ def test_kv_set_snapshots_previous_value_on_change():
     history = client.get("/api/kv/cfg/keys/trial/history", headers=auth("tok-editor")).json()
     assert [r["previous_value"] for r in history] == [14]
     assert history[0]["actor_type"] == "token"
+
+
+def test_unarchive_emits_event():
+    db, client = _setup()
+    eid = client.post(
+        "/api/entries", json={"title": "E", "content": "c", "workspace": "ws"},
+        headers=auth("tok-editor"),
+    ).json()["id"]
+    client.post(f"/api/entries/{eid}/archive", headers=auth("tok-editor"))
+    client.post(f"/api/entries/{eid}/unarchive", headers=auth("tok-editor"))
+    actions = [e["action"] for e in db.activity_events]
+    assert "entry.archived" in actions and "entry.unarchived" in actions
+
+
+def test_merge_emits_one_event_with_source_ids():
+    db, client = _setup()
+    a = client.post("/api/entries", json={"title": "A", "content": "a", "workspace": "ws"},
+                    headers=auth("tok-editor")).json()["id"]
+    b = client.post("/api/entries", json={"title": "B", "content": "b", "workspace": "ws"},
+                    headers=auth("tok-editor")).json()["id"]
+    client.post(
+        "/api/entries/merge",
+        json={"source_ids": [a, b], "title": "AB", "content": "merged", "workspace": "ws"},
+        headers=auth("tok-editor"),
+    )
+    merges = [e for e in db.activity_events if e["action"] == "entry.merged"]
+    assert len(merges) == 1
+    assert merges[0]["metadata_json"]["source_ids"] == [a, b]
+
+
+def test_bulk_apply_emits_one_event():
+    db, client = _setup()
+    db.org_roles[("org1", "user1")] = "admin"
+    add_token(db, "tok-admin", user_id="user1", org_id="org1", role="admin")
+    client.post("/api/entries", json={"title": "E", "content": "c", "workspace": "ws",
+                                      "tags": ["x"]}, headers=auth("tok-admin"))
+    # Dry-run writes nothing → no event; apply emits exactly one.
+    client.post("/api/entries/bulk", json={"match": {"workspace": "ws"},
+                "changes": {"add_tags": ["y"]}, "dry_run": True}, headers=auth("tok-admin"))
+    assert [e for e in db.activity_events if e["action"] == "entry.bulk_updated"] == []
+    client.post("/api/entries/bulk", json={"match": {"workspace": "ws"},
+                "changes": {"add_tags": ["y"]}, "dry_run": False}, headers=auth("tok-admin"))
+    bulk = [e for e in db.activity_events if e["action"] == "entry.bulk_updated"]
+    assert len(bulk) == 1
+    assert bulk[0]["metadata_json"]["updated"] == 1
+
+
+def test_kv_store_create_and_delete_emit_events():
+    db, client = _setup()
+    store_id = client.post("/api/kv", json={"slug": "cfg", "title": "Config", "workspace": "ws"},
+                           headers=auth("tok-editor")).json()["id"]
+    client.delete(f"/api/kv/{store_id}", headers=auth("tok-editor"))
+    actions = [e["action"] for e in db.activity_events]
+    assert "kv_store.created" in actions and "kv_store.deleted" in actions
+
+
+def test_attachment_add_and_delete_emit_events(tmp_path):
+    from magpie.storage.local import LocalStorage
+    db = FakeDatabase()
+    db.org_roles[("org1", "user1")] = "editor"
+    add_token(db, "tok-editor", user_id="user1", org_id="org1", role="editor")
+    client = make_client(db, storage=LocalStorage(str(tmp_path)))
+    eid = client.post("/api/entries", json={"title": "E", "content": "c", "workspace": "ws"},
+                      headers=auth("tok-editor")).json()["id"]
+    up = client.post(
+        f"/api/entries/{eid}/attachments",
+        files={"file": ("logo.png", b"png-bytes", "image/png")},
+        headers=auth("tok-editor"),
+    )
+    att_id = up.json()["id"]
+    client.delete(f"/api/attachments/{att_id}", headers=auth("tok-editor"))
+    actions = [e["action"] for e in db.activity_events]
+    assert "attachment.added" in actions and "attachment.deleted" in actions
+
+
+def test_updates_workspace_filter():
+    db, client = _setup()
+    client.post("/api/entries", json={"title": "In", "content": "c", "workspace": "keep"},
+                headers=auth("tok-editor"))
+    client.post("/api/entries", json={"title": "Out", "content": "c", "workspace": "other"},
+                headers=auth("tok-editor"))
+    feed = client.get("/api/updates?workspace=keep", headers=auth("tok-editor")).json()
+    titles = {i["title"] for i in feed}
+    assert titles == {"In"}
 
 
 def test_changed_material_fields_helper():
