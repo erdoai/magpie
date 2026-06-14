@@ -14,6 +14,7 @@ from rich.console import Console
 
 from magpie.__version__ import __version__
 from magpie.attachments import handle_for, infer_kind, storage_key_for
+from magpie.bulk import build_changes, build_match
 from magpie.bundle import load_manifest, scan_entries, scan_kv_stores
 from magpie.config.settings import Settings
 from magpie.db.database import Database
@@ -391,6 +392,95 @@ def attachments_list(entry_id: str = typer.Argument(help="Entry ID")):
             )
 
     asyncio.run(_run())
+
+
+def _print_bulk(result: dict, apply: bool) -> None:
+    for s in result["sample"]:
+        before, after = s["before"], s["after"]
+        bs = f"{before['workspace'] or '—'}/{before['project'] or '—'} {before['tags']}"
+        as_ = f"{after['workspace'] or '—'}/{after['project'] or '—'} {after['tags']}"
+        console.print(f"  - {s['title']}: {bs} → {as_}")
+    if result["applied"]:
+        n = result["updated"]
+        console.print(f"[green]Applied to {n} entr{'y' if n == 1 else 'ies'}.[/green]")
+    else:
+        n = result["matched"]
+        console.print(
+            f"[yellow]Dry run: {n} entr{'y' if n == 1 else 'ies'} would change. "
+            f"Re-run with --apply to commit.[/yellow]"
+        )
+
+
+async def _run_bulk(match: dict, changes: dict, apply: bool) -> None:
+    settings = Settings()
+    if not settings.database_url:
+        console.print("[red]DATABASE_URL is not set[/red]")
+        raise typer.Exit(1)
+    if not match:
+        console.print("[red]Refusing to run — provide at least one match filter[/red]")
+        raise typer.Exit(1)
+    if not changes:
+        console.print("[red]Refusing to run — provide at least one change[/red]")
+        raise typer.Exit(1)
+
+    db = await Database.connect(settings.database_url)
+    # Server-side op against the DB: trusted, no tenant boundary (operator tool).
+    result = await db.bulk_update_entries(
+        match=match, changes=changes, trusted=True, dry_run=not apply
+    )
+    await db.close()
+    _print_bulk(result, apply)
+
+
+@app.command()
+def rescope(
+    workspace: str = typer.Option(None, help="Match: only entries in this workspace"),
+    project: str = typer.Option(None, help="Match: only entries in this project"),
+    tag: list[str] = typer.Option(None, help="Match: entries having this tag (repeatable)"),
+    source: str = typer.Option(None, help="Match: only entries with this source"),
+    to_workspace: str = typer.Option(None, help="Move matched entries to this workspace"),
+    to_project: str = typer.Option(None, help="Move matched entries to this project"),
+    clear_project: bool = typer.Option(False, help="Clear the project on matched entries"),
+    apply: bool = typer.Option(False, help="Apply the change (default is a dry-run preview)"),
+):
+    """Bulk-move entries to a new workspace/project (in-place; ids/links/embeddings preserved)."""
+    logging.basicConfig(level=logging.WARNING)
+    match = build_match(workspace=workspace, project=project, tags=tag, source=source)
+    changes = build_changes(
+        workspace=to_workspace,
+        project=to_project,
+        clear=["project"] if clear_project else None,
+    )
+    asyncio.run(_run_bulk(match, changes, apply))
+
+
+@app.command()
+def retag(
+    workspace: str = typer.Option(None, help="Match: only entries in this workspace"),
+    project: str = typer.Option(None, help="Match: only entries in this project"),
+    tag: list[str] = typer.Option(None, help="Match: entries having this tag (repeatable)"),
+    source: str = typer.Option(None, help="Match: only entries with this source"),
+    add: list[str] = typer.Option(None, help="Add this tag to matched entries (repeatable)"),
+    remove: list[str] = typer.Option(None, help="Remove this tag (repeatable)"),
+    rename: str = typer.Option(None, help="Rename a tag across matched entries (old=new)"),
+    apply: bool = typer.Option(False, help="Apply the change (default is a dry-run preview)"),
+):
+    """Bulk add/remove/rename tags on entries (in-place; ids/links/embeddings preserved)."""
+    logging.basicConfig(level=logging.WARNING)
+    rename_from = rename_to = None
+    if rename:
+        if "=" not in rename or rename.startswith("="):
+            console.print("[red]--rename expects old=new[/red]")
+            raise typer.Exit(1)
+        rename_from, rename_to = rename.split("=", 1)
+    match = build_match(workspace=workspace, project=project, tags=tag, source=source)
+    changes = build_changes(
+        add_tags=add,
+        remove_tags=remove,
+        rename_from=rename_from,
+        rename_to=rename_to,
+    )
+    asyncio.run(_run_bulk(match, changes, apply))
 
 
 @app.command()

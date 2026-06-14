@@ -11,6 +11,7 @@ from uuid import uuid4
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from magpie.db.database import apply_bulk_changes
 from magpie.server.auth import AuthMiddleware
 from magpie.server.context import AuthContext
 from magpie.server.routes import attachments, entries, kv, orgs, tokens
@@ -337,6 +338,45 @@ class FakeDatabase:
 
     async def list_entries(self, **kwargs):
         return list(self.entries.values())
+
+    async def bulk_update_entries(self, *, match, changes, user_id=None,
+                                  org_id=None, trusted=False, dry_run=True,
+                                  sample_size=10):
+        matched = []
+        for e in self.entries.values():
+            if match.get("workspace") is not None and e.get("workspace") != match["workspace"]:
+                continue
+            if match.get("project") is not None and e.get("project") != match["project"]:
+                continue
+            if match.get("source") is not None and e.get("source") != match["source"]:
+                continue
+            if match.get("tags") and not (set(match["tags"]) & set(e.get("tags") or [])):
+                continue
+            if not trusted:
+                own = user_id and e.get("user_id") == user_id
+                org = org_id and e.get("org_id") == org_id
+                if not (own or org):
+                    continue
+            matched.append(e)
+
+        def view(e):
+            return {"workspace": e.get("workspace"), "project": e.get("project"),
+                    "tags": list(e.get("tags") or [])}
+
+        sample = [
+            {"id": e["id"], "title": e["title"], "before": view(e),
+             "after": view(apply_bulk_changes(e, changes))}
+            for e in matched[:sample_size]
+        ]
+        if dry_run:
+            return {"matched": len(matched), "updated": 0, "applied": False, "sample": sample}
+        updated = 0
+        for e in matched:
+            after = apply_bulk_changes(e, changes)
+            e["workspace"], e["project"], e["tags"] = (
+                after["workspace"], after["project"], after["tags"])
+            updated += 1
+        return {"matched": len(matched), "updated": updated, "applied": True, "sample": sample}
 
     async def search_keyword(self, query, **scope):
         self.search_calls.append({"query": query, **scope})

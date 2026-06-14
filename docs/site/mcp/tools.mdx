@@ -1,6 +1,6 @@
 ---
 title: Tools reference
-description: The 16 tools exposed by the Magpie MCP server.
+description: The 17 tools exposed by the Magpie MCP server.
 ---
 
 Every tool is scoped by the caller's org and role. Most accept `workspace` and `project` to narrow scope.
@@ -33,6 +33,9 @@ Merge several entries into one; the sources are archived. **Key params:** `sourc
 
 ### `find_duplicates`
 Find clusters of near-duplicate entries by semantic similarity. **Key params:** `threshold`, `limit`.
+
+### `bulk_edit`
+Rescope or retag many entries at once, in place (ids, links, embeddings preserved). Selects with `match_*` filters (at least one required) and applies `set_workspace`/`set_project`, `add_tags`/`remove_tags`/`rename_tag_from`+`rename_tag_to`, or `clear_project`. **Always preview with `dry_run` (default true) first; applying requires `admin`.** See [Reorganizing in bulk](/concepts/bulk-operations).
 
 ## Links & references
 

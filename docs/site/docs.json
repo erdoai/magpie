@@ -46,7 +46,8 @@
               "concepts/kv",
               "concepts/links",
               "concepts/attachments",
-              "concepts/coherence"
+              "concepts/coherence",
+              "concepts/bulk-operations"
             ]
           },
           {

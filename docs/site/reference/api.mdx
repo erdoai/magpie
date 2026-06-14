@@ -19,11 +19,14 @@ Multi-org users select their **active org** with the `X-Organization-ID` header 
 | `POST` | `/api/entries/{id}/archive` | Archive |
 | `POST` | `/api/entries/{id}/unarchive` | Restore an archived entry |
 | `POST` | `/api/entries/merge` | Merge entries into one; sources are archived |
+| `POST` | `/api/entries/bulk` | Rescope/retag many entries at once (dry-run by default) |
 | `GET` | `/api/entries/{id}/links` | Outgoing links + backlinks |
 | `POST` | `/api/entries/{id}/resolve` | Resolve `{{references}}` and `[[wikilinks]]` |
 | `POST` | `/api/search` | Dual semantic + keyword search (excludes archived) |
 
 Entry objects expose `archived_at` — a timestamp when the entry is archived, `null` when active. `POST`, `PUT`, `/api/search`, and `/api/entries/merge` accept `title`, `content`, `tags`, `source`, `workspace`, and `project`; there is no category field.
+
+`POST /api/entries/bulk` takes `{ match, changes, dry_run }`. `match` (at least one of `workspace`, `project`, `tags`, `source` — never empty) selects entries; `changes` sets `workspace`/`project`, `add_tags`/`remove_tags`/`rename_from`+`rename_to`, or `clear` (e.g. `["project"]`). It updates matched rows **in place** (ids, links, and embeddings preserved) within the caller's own + active-org scope. `dry_run` defaults to `true` and returns `{ matched, sample, applied, updated }` without writing; setting it `false` applies the change and requires the `admin` role. See [Reorganizing in bulk](/concepts/bulk-operations).
 
 ## KV stores
 

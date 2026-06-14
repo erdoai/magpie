@@ -60,7 +60,7 @@ The REST API, both MCP servers (remote `magpie/mcp/server.py` + local stdio
 `cli/src` user client), and the docs are one surface — keep them in lockstep.
 Change a capability → update every surface it belongs on, and its docs, in the
 same change. Business logic is single-sourced server-side (REST + the shared
-`magpie/sync.py`/`bundle.py`/`export.py` helpers); clients stay thin. A
+`magpie/sync.py`/`bundle.py`/`export.py`/`bulk.py` helpers); clients stay thin. A
 user-facing feature isn't done until it's documented. Public docs are Mintlify
 under `docs/site/` — the content root must stay `docs/site/` so `docs/plans/`
 (internal) never publishes. Full detail in `CLAUDE.md`; keep the two in sync.

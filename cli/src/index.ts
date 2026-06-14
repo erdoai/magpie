@@ -538,6 +538,146 @@ program
     }
   });
 
+interface BulkScopeView {
+  workspace: string | null;
+  project: string | null;
+  tags: string[];
+}
+
+interface BulkResult {
+  matched: number;
+  updated: number;
+  applied: boolean;
+  sample: { title: string; before: BulkScopeView; after: BulkScopeView }[];
+}
+
+const collect = (value: string, acc: string[]): string[] => {
+  acc.push(value);
+  return acc;
+};
+
+function printBulk(result: BulkResult): void {
+  const fmt = (v: BulkScopeView) =>
+    `${v.workspace || '—'}/${v.project || '—'} [${v.tags.join(', ')}]`;
+  for (const s of result.sample) {
+    console.log(`  - ${s.title}: ${fmt(s.before)} → ${fmt(s.after)}`);
+  }
+  if (result.applied) {
+    const n = result.updated;
+    console.log(`Applied to ${n} entr${n === 1 ? 'y' : 'ies'}.`);
+  } else {
+    const n = result.matched;
+    console.log(
+      `Dry run: ${n} entr${n === 1 ? 'y' : 'ies'} would change. ` +
+        `Re-run with --apply to commit (requires admin).`
+    );
+  }
+}
+
+async function runBulk(
+  match: Record<string, unknown>,
+  changes: Record<string, unknown>,
+  apply: boolean
+): Promise<void> {
+  requireToken();
+  try {
+    const result = await api<BulkResult>('/api/entries/bulk', {
+      method: 'POST',
+      body: { match, changes, dry_run: !apply },
+    });
+    printBulk(result);
+  } catch (err) {
+    fail(err);
+  }
+}
+
+program
+  .command('rescope')
+  .description('Bulk-move entries to a new workspace/project (dry-run unless --apply)')
+  .option('--workspace <workspace>', 'Match: only entries in this workspace')
+  .option('--project <project>', 'Match: only entries in this project')
+  .option('--tag <tag>', 'Match: entries having this tag (repeatable)', collect, [])
+  .option('--source <source>', 'Match: only entries with this source')
+  .option('--to-workspace <workspace>', 'Move matched entries to this workspace')
+  .option('--to-project <project>', 'Move matched entries to this project')
+  .option('--clear-project', 'Clear the project (e.g. retiring a project namespace)')
+  .option('--apply', 'Apply the change (default is a dry-run preview)')
+  .action(
+    async (opts: {
+      workspace?: string;
+      project?: string;
+      tag: string[];
+      source?: string;
+      toWorkspace?: string;
+      toProject?: string;
+      clearProject?: boolean;
+      apply?: boolean;
+    }) => {
+      await runBulk(
+        {
+          workspace: opts.workspace,
+          project: opts.project,
+          tags: opts.tag.length ? opts.tag : undefined,
+          source: opts.source,
+        },
+        {
+          workspace: opts.toWorkspace,
+          project: opts.toProject,
+          clear: opts.clearProject ? ['project'] : undefined,
+        },
+        Boolean(opts.apply)
+      );
+    }
+  );
+
+program
+  .command('retag')
+  .description('Bulk add/remove/rename tags on entries (dry-run unless --apply)')
+  .option('--workspace <workspace>', 'Match: only entries in this workspace')
+  .option('--project <project>', 'Match: only entries in this project')
+  .option('--tag <tag>', 'Match: entries having this tag (repeatable)', collect, [])
+  .option('--source <source>', 'Match: only entries with this source')
+  .option('--add <tag>', 'Add this tag to matched entries (repeatable)', collect, [])
+  .option('--remove <tag>', 'Remove this tag from matched entries (repeatable)', collect, [])
+  .option('--rename <old=new>', 'Rename a tag across matched entries')
+  .option('--apply', 'Apply the change (default is a dry-run preview)')
+  .action(
+    async (opts: {
+      workspace?: string;
+      project?: string;
+      tag: string[];
+      source?: string;
+      add: string[];
+      remove: string[];
+      rename?: string;
+      apply?: boolean;
+    }) => {
+      let renameFrom: string | undefined;
+      let renameTo: string | undefined;
+      if (opts.rename) {
+        const eq = opts.rename.indexOf('=');
+        if (eq < 1) fail(new Error('--rename expects old=new'));
+        renameFrom = opts.rename.slice(0, eq);
+        renameTo = opts.rename.slice(eq + 1);
+      }
+      await runBulk(
+        {
+          workspace: opts.workspace,
+          project: opts.project,
+          tags: opts.tag.length ? opts.tag : undefined,
+          source: opts.source,
+        },
+        {
+          add_tags: opts.add.length ? opts.add : undefined,
+          remove_tags: opts.remove.length ? opts.remove : undefined,
+          rename_from: renameFrom,
+          rename_to: renameTo,
+        },
+        Boolean(opts.apply)
+      );
+    }
+  );
+
 // -- KV stores --
 
 const kv = program.command('kv').description('KV store commands');

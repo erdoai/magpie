@@ -1,0 +1,60 @@
+---
+title: Reorganizing in bulk
+description: Rescope and retag many entries at once — in place, previewable, and safe.
+---
+
+Knowledge stores get reorganized. A workspace gets renamed, a tag convention changes, a project namespace is retired and its entries fold up into the workspace. Doing that by hand — fetch each entry, recreate it in the new scope, delete the old one — is slow and dangerous: the classic slip is deleting before the copy is verified.
+
+Magpie does it as one **transactional, in-place update**. You select entries with a `match` filter and apply a `changes` spec; matched rows are updated where they sit. Because nothing is recreated:
+
+- **ids are preserved** — so `[[wikilinks]]` and backlinks stay intact.
+- **embeddings are preserved** — rescope/retag never touch title or content, so there's no re-embedding; the keyword index refreshes automatically.
+- **it's atomic** — the whole change commits or none of it does. There is no delete-before-copy window.
+
+## Preview first
+
+Every bulk operation is a **dry run by default**. It reports how many entries match and a sample of `before → after`, and writes nothing. Previewing needs the `editor` role; **applying needs `admin`** — a mass mutation has a wide blast radius.
+
+```bash
+# Preview: move everything in 'reach' to 'erdo' (writes nothing)
+magpie rescope --workspace reach --to-workspace erdo
+
+#   - Alertee incident runbook: reach/alertee [runbook] → erdo/alertee [runbook]
+#   Dry run: 42 entries would change. Re-run with --apply to commit (requires admin).
+
+# Apply it
+magpie rescope --workspace reach --to-workspace erdo --apply
+```
+
+## Rescope
+
+Move matched entries to a new `workspace`/`project`, or **clear** a project namespace — the primitive you reach for when retiring `project` as a scope:
+
+```bash
+magpie rescope --workspace reach --project alertee --to-workspace reach --clear-project --apply
+```
+
+`--clear-project` sets `project` to empty, folding those entries up into the workspace.
+
+## Retag
+
+Add, remove, or rename tags across matched entries. Changes apply in order — rename, then remove, then add — and the result is de-duplicated:
+
+```bash
+magpie retag --workspace support --rename old-name=new-name --apply
+magpie retag --tag legacy --add archived-import --remove legacy --apply
+```
+
+## Selecting entries
+
+A `match` filter is **required** — Magpie refuses to select the whole store. Filter by `workspace`, `project`, `source`, or `--tag` (matches entries having any of the given tags; repeatable). Selection is always confined to what the caller can write: your own and active-org entries, never another org's and never global rows.
+
+## Across the surfaces
+
+The same operation is available everywhere:
+
+- **CLI** — `magpie rescope` / `magpie retag` (dry-run unless `--apply`).
+- **MCP** — the `bulk_edit` tool (`dry_run` defaults true; applying requires admin). Agents should always preview first.
+- **REST** — `POST /api/entries/bulk` with `{ match, changes, dry_run }`. See the [API reference](/reference/api).
+
+The Python `magpie` CLI also exposes `rescope`/`retag` for self-hosted operators running directly against the database.

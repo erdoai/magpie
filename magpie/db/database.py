@@ -17,6 +17,42 @@ async def _init_connection(conn: asyncpg.Connection) -> None:
     )
 
 
+def apply_bulk_changes(entry: dict, changes: dict) -> dict:
+    """Pure transform: return ``entry`` with a bulk ``changes`` spec applied.
+
+    The single source of truth for bulk semantics — used both to preview a
+    dry-run (compute the "after" for sampled rows) and to apply the change
+    row by row. Order is fixed and meaningful: scope set, then clear, then
+    tag rename → remove → add, then order-preserving dedupe. ``clear`` wins
+    over a same-field set.
+    """
+    new = dict(entry)
+    if "workspace" in changes:
+        new["workspace"] = changes["workspace"]
+    if "project" in changes:
+        new["project"] = changes["project"]
+    for field in changes.get("clear", []):
+        new[field] = None
+
+    tags = list(entry.get("tags") or [])
+    rename_from, rename_to = changes.get("rename_from"), changes.get("rename_to")
+    if rename_from and rename_to:
+        tags = [rename_to if t == rename_from else t for t in tags]
+    remove = set(changes.get("remove_tags") or [])
+    if remove:
+        tags = [t for t in tags if t not in remove]
+    for t in changes.get("add_tags") or []:
+        tags.append(t)
+
+    seen, deduped = set(), []
+    for t in tags:
+        if t not in seen:
+            seen.add(t)
+            deduped.append(t)
+    new["tags"] = deduped
+    return new
+
+
 class Database:
     def __init__(self, pool: asyncpg.Pool, has_vectors: bool = False):
         self._pool = pool
@@ -135,7 +171,7 @@ class Database:
         return dict(row) if row else None
 
     async def update_entry(self, entry_id: str, **fields) -> bool:
-        allowed = {"title", "content", "tags", "source"}
+        allowed = {"title", "content", "tags", "source", "workspace", "project"}
         if self.has_vectors:
             allowed.add("embedding")
         updates = {k: v for k, v in fields.items() if k in allowed and v is not None}
@@ -158,6 +194,124 @@ class Database:
         sql = f"UPDATE entries SET {', '.join(set_parts)} WHERE id = ${len(params)}"
         result = await self._pool.execute(sql, *params)
         return result == "UPDATE 1"
+
+    async def bulk_update_entries(
+        self,
+        *,
+        match: dict,
+        changes: dict,
+        user_id: str | None = None,
+        org_id: str | None = None,
+        trusted: bool = False,
+        dry_run: bool = True,
+        sample_size: int = 10,
+    ) -> dict:
+        """Rescope/retag every entry matching ``match`` in one transaction.
+
+        In-place UPDATE — ids, links, and embeddings are preserved (scope/tag
+        edits touch neither title nor content, so no re-embed; the FTS trigger
+        refreshes the search vector). ``dry_run`` selects and previews without
+        writing. Visibility is fail-closed: a tenant caller only ever touches
+        their own + active-org rows, never global (NULL/NULL) rows. ``match``
+        must be non-empty — refuse to select the whole store.
+
+        Returns ``{matched, updated, applied, sample}`` where each sample item
+        is ``{id, title, before, after}`` with scope/tags before and after.
+        """
+        conditions: list[str] = []
+        params: list = []
+
+        if match.get("workspace") is not None:
+            params.append(match["workspace"])
+            conditions.append(f"workspace = ${len(params)}")
+        if match.get("project") is not None:
+            params.append(match["project"])
+            conditions.append(f"project = ${len(params)}")
+        if match.get("source") is not None:
+            params.append(match["source"])
+            conditions.append(f"source = ${len(params)}")
+        if match.get("tags"):
+            params.append(match["tags"])
+            conditions.append(f"tags && ${len(params)}")
+
+        if not conditions:
+            raise ValueError("bulk update requires at least one match filter")
+
+        # Write-visibility: own + active-org rows only. Global (NULL/NULL)
+        # rows are never touched by a tenant bulk op. trusted = static key.
+        if not trusted:
+            if user_id and org_id:
+                params.append(user_id)
+                uid = len(params)
+                params.append(org_id)
+                oid = len(params)
+                conditions.append(f"(user_id = ${uid} OR org_id = ${oid})")
+            elif user_id:
+                params.append(user_id)
+                conditions.append(f"user_id = ${len(params)}")
+            elif org_id:
+                params.append(org_id)
+                conditions.append(f"org_id = ${len(params)}")
+            else:
+                # No identity and not trusted ⇒ nothing is writable.
+                return {"matched": 0, "updated": 0, "applied": False, "sample": []}
+
+        where = " AND ".join(conditions)
+        rows = await self._pool.fetch(
+            "SELECT id, title, workspace, project, tags FROM entries"
+            f" WHERE {where} ORDER BY updated_at DESC",
+            *params,
+        )
+        matched = [dict(r) for r in rows]
+
+        def _view(e: dict) -> dict:
+            return {
+                "workspace": e.get("workspace"),
+                "project": e.get("project"),
+                "tags": list(e.get("tags") or []),
+            }
+
+        sample = [
+            {
+                "id": r["id"],
+                "title": r["title"],
+                "before": _view(r),
+                "after": _view(apply_bulk_changes(r, changes)),
+            }
+            for r in matched[:sample_size]
+        ]
+
+        if dry_run:
+            return {
+                "matched": len(matched),
+                "updated": 0,
+                "applied": False,
+                "sample": sample,
+            }
+
+        now = datetime.now(UTC)
+        updated = 0
+        async with self._pool.acquire() as conn:
+            async with conn.transaction():
+                for r in matched:
+                    after = apply_bulk_changes(r, changes)
+                    await conn.execute(
+                        "UPDATE entries SET workspace = $1, project = $2,"
+                        " tags = $3, updated_at = $4 WHERE id = $5",
+                        after["workspace"],
+                        after["project"],
+                        after["tags"],
+                        now,
+                        r["id"],
+                    )
+                    updated += 1
+
+        return {
+            "matched": len(matched),
+            "updated": updated,
+            "applied": True,
+            "sample": sample,
+        }
 
     async def delete_entry(self, entry_id: str) -> bool:
         async with self._pool.acquire() as conn:

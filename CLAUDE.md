@@ -6,8 +6,8 @@ Knowledge store with semantic + keyword search. Postgres + pgvector.
 
 Single FastAPI server exposing:
 - **REST API** at `/api/` — CRUD + search for knowledge entries
-- **MCP server** at `/mcp` — 16 tools for AI agents (search/read/write/list/archive,
-  find_duplicates/merge, list_links/resolve_knowledge, kv list/get/set/delete,
+- **MCP server** at `/mcp` — 17 tools for AI agents (search/read/write/list/archive,
+  find_duplicates/merge, bulk_edit, list_links/resolve_knowledge, kv list/get/set/delete,
   attachment upload/list/get) — kept in lockstep across both MCP servers
 
 Storage: Postgres with pgvector for embeddings and tsvector for full-text search.
@@ -31,6 +31,8 @@ magpie migrate            # run migrations only
 magpie push ./bundle      # sync a knowledge bundle (repo -> server)
 magpie export ./bundle    # write entries + repo kv stores to a bundle (server -> repo)
 magpie import markdown .  # import foreign markdown/claude memories
+magpie rescope --workspace reach --to-workspace erdo --apply  # bulk-move entries
+magpie retag --workspace reach --rename old=new --apply       # bulk add/remove/rename tags
 magpie version            # show version
 ```
 
@@ -88,6 +90,12 @@ pytest
   `trusted=True` for server-internal reads (links, resolve, CLI, post-write
   round-trips). No scope + not trusted ⇒ only global rows. Don't add a raw
   by-id read that bypasses this.
+- **Bulk rescope/retag** (`magpie/bulk.py` + `db.bulk_update_entries`): in-place
+  transactional UPDATE — preserves ids/links/embeddings (never copy-delete).
+  `match` is required (never the whole store); writes are confined to own +
+  active-org rows, never global. Dry-run is the default; applying needs `admin`.
+  Shared `build_match`/`build_changes`/`run_bulk` back REST `POST /api/entries/bulk`,
+  the `bulk_edit` MCP tool, and both CLIs' `rescope`/`retag`.
 
 ## CLI / MCP / API / Docs parity
 

@@ -23,6 +23,7 @@ from magpie.attachments import (
     is_browser_safe,
     storage_key_for,
 )
+from magpie.bulk import BulkError, build_changes, build_match, run_bulk
 from magpie.db.database import Database
 from magpie.embeddings.base import EmbeddingProvider
 from magpie.kv import VALUE_TYPES, validate_value
@@ -922,3 +923,87 @@ def _register_tools(server: FastMCP) -> None:
             f"Merged {len(source_ids)} entries into {new_id}: {title}\n"
             f"Archived: {', '.join(source_ids)}"
         )
+
+    @server.tool()
+    async def bulk_edit(
+        match_workspace: str | None = None,
+        match_project: str | None = None,
+        match_tags: list[str] | None = None,
+        match_source: str | None = None,
+        set_workspace: str | None = None,
+        set_project: str | None = None,
+        add_tags: list[str] | None = None,
+        remove_tags: list[str] | None = None,
+        rename_tag_from: str | None = None,
+        rename_tag_to: str | None = None,
+        clear_project: bool = False,
+        dry_run: bool = True,
+    ) -> str:
+        """Rescope or retag many entries at once (bulk reorganize).
+
+        Selects every entry matching the match_* filters and applies the
+        set_*/tag changes in a single transaction. In-place — ids, links, and
+        embeddings are preserved. ALWAYS preview with dry_run=True first
+        (returns how many match and a sample of before→after); applying
+        (dry_run=False) requires admin and cannot be undone.
+
+        At least one match_* filter is required (never matches the whole
+        store). Tag changes apply in order: rename, then remove, then add.
+
+        Args:
+            match_workspace: Only entries in this workspace.
+            match_project: Only entries in this project.
+            match_tags: Only entries having ANY of these tags.
+            match_source: Only entries with this source.
+            set_workspace: Move matched entries to this workspace.
+            set_project: Move matched entries to this project.
+            add_tags: Tags to add to every matched entry.
+            remove_tags: Tags to remove from every matched entry.
+            rename_tag_from: Tag to rename (with rename_tag_to).
+            rename_tag_to: New name for rename_tag_from.
+            clear_project: Set project to empty on matched entries (e.g. when
+                retiring a project namespace).
+            dry_run: Preview without writing (default True). Set False to apply.
+        """
+        if not _db:
+            return "Error: database not initialized"
+
+        ctx = await _tool_context()
+        match = build_match(
+            workspace=match_workspace,
+            project=match_project,
+            tags=match_tags,
+            source=match_source,
+        )
+        changes = build_changes(
+            workspace=set_workspace,
+            project=set_project,
+            add_tags=add_tags,
+            remove_tags=remove_tags,
+            rename_from=rename_tag_from,
+            rename_to=rename_tag_to,
+            clear=["project"] if clear_project else None,
+        )
+
+        result = await run_bulk(_db, ctx, match=match, changes=changes, dry_run=dry_run)
+        if isinstance(result, BulkError):
+            return f"Error: {result.message}"
+
+        lines = []
+        for s in result["sample"]:
+            b, a = s["before"], s["after"]
+            scope_b = f"{b['workspace'] or '—'}/{b['project'] or '—'}"
+            scope_a = f"{a['workspace'] or '—'}/{a['project'] or '—'}"
+            change = f"{scope_b} {b['tags']} → {scope_a} {a['tags']}"
+            lines.append(f"  - {s['title']}: {change}")
+        preview = "\n".join(lines)
+
+        if result["applied"]:
+            head = f"Applied to {result['updated']} entr{'y' if result['updated'] == 1 else 'ies'}."
+        else:
+            head = (
+                f"Dry run: {result['matched']} entr"
+                f"{'y' if result['matched'] == 1 else 'ies'} would change. "
+                f"Re-run with dry_run=False to apply (requires admin)."
+            )
+        return f"{head}\n{preview}" if preview else head

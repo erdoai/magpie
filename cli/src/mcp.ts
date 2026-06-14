@@ -469,6 +469,75 @@ export async function runMcpServer(): Promise<void> {
       })
   );
 
+  server.tool(
+    'bulk_edit',
+    'Rescope or retag many entries at once. Selects entries by the match_* ' +
+      'filters and applies set_*/tag changes in one transaction (ids, links, ' +
+      'embeddings preserved). ALWAYS preview with dry_run=true first; applying ' +
+      '(dry_run=false) requires admin. At least one match_* filter is required.',
+    {
+      match_workspace: z.string().optional().describe('Only entries in this workspace'),
+      match_project: z.string().optional().describe('Only entries in this project'),
+      match_tags: z.array(z.string()).optional().describe('Only entries having ANY of these tags'),
+      match_source: z.string().optional().describe('Only entries with this source'),
+      set_workspace: z.string().optional().describe('Move matched entries to this workspace'),
+      set_project: z.string().optional().describe('Move matched entries to this project'),
+      add_tags: z.array(z.string()).optional().describe('Tags to add to every matched entry'),
+      remove_tags: z.array(z.string()).optional().describe('Tags to remove from every matched entry'),
+      rename_tag_from: z.string().optional().describe('Tag to rename (with rename_tag_to)'),
+      rename_tag_to: z.string().optional().describe('New name for rename_tag_from'),
+      clear_project: z.boolean().optional().describe('Set project to empty on matched entries'),
+      dry_run: z.boolean().optional().describe('Preview without writing (default true)'),
+    },
+    async (args) =>
+      guarded(async () => {
+        const result = await api<{
+          matched: number;
+          updated: number;
+          applied: boolean;
+          sample: {
+            title: string;
+            before: { workspace: string | null; project: string | null; tags: string[] };
+            after: { workspace: string | null; project: string | null; tags: string[] };
+          }[];
+        }>('/api/entries/bulk', {
+          method: 'POST',
+          body: {
+            match: {
+              workspace: args.match_workspace,
+              project: args.match_project,
+              tags: args.match_tags,
+              source: args.match_source,
+            },
+            changes: {
+              workspace: args.set_workspace,
+              project: args.set_project,
+              add_tags: args.add_tags,
+              remove_tags: args.remove_tags,
+              rename_from: args.rename_tag_from,
+              rename_to: args.rename_tag_to,
+              clear: args.clear_project ? ['project'] : undefined,
+            },
+            dry_run: args.dry_run ?? true,
+          },
+        });
+        const scope = (s: { workspace: string | null; project: string | null }) =>
+          `${s.workspace || '—'}/${s.project || '—'}`;
+        const preview = result.sample
+          .map(
+            (s) =>
+              `  - ${s.title}: ${scope(s.before)} [${s.before.tags.join(', ')}]` +
+              ` → ${scope(s.after)} [${s.after.tags.join(', ')}]`
+          )
+          .join('\n');
+        const head = result.applied
+          ? `Applied to ${result.updated} entr${result.updated === 1 ? 'y' : 'ies'}.`
+          : `Dry run: ${result.matched} entr${result.matched === 1 ? 'y' : 'ies'} would change. ` +
+            `Re-run with dry_run=false to apply (requires admin).`;
+        return text(preview ? `${head}\n${preview}` : head);
+      })
+  );
+
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }

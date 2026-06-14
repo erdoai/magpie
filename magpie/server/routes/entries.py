@@ -7,6 +7,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from magpie.bulk import BulkError, build_changes, build_match, run_bulk
 from magpie.links import normalize_target, sync_entry_links
 from magpie.resolve import resolve_entry
 from magpie.search.fusion import search
@@ -52,6 +53,8 @@ class EntryUpdate(BaseModel):
     content: str | None = None
     tags: list[str] | None = None
     source: str | None = None
+    workspace: str | None = None
+    project: str | None = None
 
 
 class SearchRequest(BaseModel):
@@ -393,3 +396,55 @@ async def search_entries(body: SearchRequest, request: Request):
         keyword=body.keyword,
     )
     return results
+
+
+class BulkMatch(BaseModel):
+    workspace: str | None = None
+    project: str | None = None
+    tags: list[str] | None = None
+    source: str | None = None
+
+
+class BulkChanges(BaseModel):
+    workspace: str | None = None
+    project: str | None = None
+    add_tags: list[str] | None = None
+    remove_tags: list[str] | None = None
+    rename_from: str | None = None
+    rename_to: str | None = None
+    clear: list[str] | None = None
+
+
+class BulkRequest(BaseModel):
+    match: BulkMatch
+    changes: BulkChanges
+    dry_run: bool = True
+
+
+@router.post("/entries/bulk")
+async def bulk_update(body: BulkRequest, request: Request):
+    """Rescope/retag many entries at once. Dry-run by default; applying needs
+    admin. In-place UPDATE — preserves ids, links, and embeddings."""
+    db = request.app.state.db
+    ctx = auth_context(request)
+
+    match = build_match(
+        workspace=body.match.workspace,
+        project=body.match.project,
+        tags=body.match.tags,
+        source=body.match.source,
+    )
+    changes = build_changes(
+        workspace=body.changes.workspace,
+        project=body.changes.project,
+        add_tags=body.changes.add_tags,
+        remove_tags=body.changes.remove_tags,
+        rename_from=body.changes.rename_from,
+        rename_to=body.changes.rename_to,
+        clear=body.changes.clear,
+    )
+
+    result = await run_bulk(db, ctx, match=match, changes=changes, dry_run=body.dry_run)
+    if isinstance(result, BulkError):
+        return JSONResponse(status_code=result.status, content={"error": result.message})
+    return result

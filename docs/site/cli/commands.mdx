@@ -63,6 +63,18 @@ magpie merge <id-a> <id-b> --title "Refunds" --file merged.md
 
 `duplicates` reports clusters of entries that cover the same ground by semantic similarity (lower `--threshold` is stricter). `merge` collapses two or more into one — you supply the synthesized `--title` and `--file`/`--content`, and the sources are archived with lineage. See [Staying coherent](/concepts/coherence).
 
+### Reorganizing in bulk
+
+```bash
+magpie rescope --workspace reach --to-workspace erdo            # preview a move
+magpie rescope --workspace reach --to-workspace erdo --apply    # commit it (admin)
+magpie rescope --project alertee --clear-project --apply        # retire a project namespace
+magpie retag --workspace support --rename old=new --apply       # rename a tag everywhere
+magpie retag --tag legacy --add imported --remove legacy --apply
+```
+
+`rescope` moves matched entries to a new `--to-workspace`/`--to-project` (or `--clear-project`); `retag` does `--add`/`--remove`/`--rename old=new`. Both select with a required `--workspace`/`--project`/`--source`/`--tag` filter and are **dry-run unless `--apply`** — applying needs the `admin` role. Changes are in place, so ids and links survive. See [Reorganizing in bulk](/concepts/bulk-operations).
+
 ## KV stores
 
 ```bash
