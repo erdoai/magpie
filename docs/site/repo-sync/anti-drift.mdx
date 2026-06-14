@@ -7,7 +7,7 @@ The real risk in a folder-of-files knowledge store is **drift**: two stores name
 
 ## The manifest
 
-`collections/_manifest.json` declares the canonical stores, and optionally their keys:
+`kv/_manifest.json` declares the canonical stores, and optionally their keys:
 
 ```json
 {
@@ -18,16 +18,16 @@ The real risk in a folder-of-files knowledge store is **drift**: two stores name
 }
 ```
 
-On `push`, Magpie checks every collection against it:
+On `push`, Magpie checks every KV store against it:
 
-- A collection whose slug **isn't declared** is rejected, with a nearest-match suggestion (`Did you mean 'config'?`). Creating a store is a deliberate act, not a side effect of adding a file.
+- A KV store whose slug **isn't declared** is rejected, with a nearest-match suggestion (`Did you mean 'config'?`). Creating a store is a deliberate act, not a side effect of adding a file.
 - Two files whose slugs collapse to the same normalized form (case and separators removed) are rejected as **near-duplicates**.
-- If a store declares `keys`, document keys outside that list produce a **warning** — surfaced, but not blocking — so typo'd keys show up early.
+- If a store declares `keys`, keys outside that list produce a **warning** — surfaced, but not blocking — so typo'd keys show up early.
 
 `export` generates a manifest for you from the stores it writes, so a round-trip stays consistent.
 
 ## On the server too
 
-The registry isn't only enforced at push time. When an agent creates a new collection over [MCP](/mcp/tools) or the REST API, Magpie refuses a slug that near-duplicates an existing store in the same scope — the same defense, applied to live writes.
+The registry isn't only enforced at push time. When an agent creates a new KV store over [MCP](/mcp/tools) or the REST API, Magpie refuses a slug that near-duplicates an existing store in the same scope — the same defense, applied to live writes.
 
-The manifest is the collections half of a broader story. Entries have their own defenses — dedupe-on-write, duplicate detection, and merge. See [Staying coherent](/concepts/coherence) for the full picture.
+The manifest is the KV-store half of a broader story. Entries have their own defenses — dedupe-on-write, duplicate detection, and merge. See [Staying coherent](/concepts/coherence) for the full picture.

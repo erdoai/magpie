@@ -1125,9 +1125,9 @@ class Database:
         result = await self._pool.execute("DELETE FROM projects WHERE id = $1", proj_id)
         return result == "DELETE 1"
 
-    # -- Collections --
+    # -- KV stores --
 
-    async def create_collection(
+    async def create_kv_store(
         self,
         slug: str,
         title: str,
@@ -1139,52 +1139,52 @@ class Database:
         created_by_user_id: str | None = None,
         source: str = "server",
     ) -> str:
-        col_id = uuid4().hex
+        store_id = uuid4().hex
         now = datetime.now(UTC)
         await self._pool.execute(
-            """INSERT INTO collections
+            """INSERT INTO kv_stores
                (id, org_id, workspace, project, slug, title, description,
                 visibility, created_by_user_id, source, created_at, updated_at)
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11)""",
-            col_id, org_id, workspace, project, slug, title, description,
+            store_id, org_id, workspace, project, slug, title, description,
             visibility, created_by_user_id, source, now,
         )
-        return col_id
+        return store_id
 
-    async def get_collection(
+    async def get_kv_store(
         self,
-        col_id: str,
+        store_id: str,
         *,
-        user_id: str | None = None,  # noqa: ARG002 — call-site uniformity; collections aren't user-scoped
+        user_id: str | None = None,  # noqa: ARG002 — call-site uniformity; kv stores aren't user-scoped
         org_id: str | None = None,
         trusted: bool = False,
     ) -> dict | None:
-        """Fetch a collection by id, enforcing org visibility unless ``trusted``.
+        """Fetch a kv store by id, enforcing org visibility unless ``trusted``.
 
-        Collections are visible to their org plus global (org_id NULL). Pass
+        Stores are visible to their org plus global (org_id NULL). Pass
         ``**ctx.view_filter``; the user_id kwarg is accepted but unused so the
-        same call shape works for entries and collections.
+        same call shape works for entries and kv stores.
         """
         if trusted:
             row = await self._pool.fetchrow(
-                "SELECT * FROM collections WHERE id = $1", col_id
+                "SELECT * FROM kv_stores WHERE id = $1", store_id
             )
         else:
             row = await self._pool.fetchrow(
-                "SELECT * FROM collections WHERE id = $1"
+                "SELECT * FROM kv_stores WHERE id = $1"
                 " AND (org_id IS NULL OR org_id = $2)",
-                col_id, org_id,
+                store_id, org_id,
             )
         return dict(row) if row else None
 
-    async def find_collection(
+    async def find_kv_store(
         self,
         slug: str,
         org_id: str | None = None,
         workspace: str | None = None,
         project: str | None = None,
     ) -> dict | None:
-        """Find a collection by slug within org visibility.
+        """Find a kv store by slug within org visibility.
 
         workspace/project narrow the match when provided; an exact scope
         match wins over a broader (NULL-scoped) one.
@@ -1209,14 +1209,14 @@ class Database:
             params.append(project)
 
         sql = (
-            f"SELECT * FROM collections WHERE {' AND '.join(conditions)}"
+            f"SELECT * FROM kv_stores WHERE {' AND '.join(conditions)}"
             f" ORDER BY org_id NULLS LAST, workspace NULLS LAST, project NULLS LAST"
             f" LIMIT 1"
         )
         row = await self._pool.fetchrow(sql, *params)
         return dict(row) if row else None
 
-    async def list_collections(
+    async def list_kv_stores(
         self,
         org_id: str | None = None,
         workspace: str | None = None,
@@ -1235,24 +1235,24 @@ class Database:
 
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
         rows = await self._pool.fetch(
-            f"SELECT c.*,"
-            f" (SELECT COUNT(*) FROM documents d WHERE d.collection_id = c.id)"
-            f" AS document_count"
-            f" FROM collections c {where} ORDER BY c.slug"
+            f"SELECT s.*,"
+            f" (SELECT COUNT(*) FROM kv_pairs p WHERE p.store_id = s.id)"
+            f" AS key_count"
+            f" FROM kv_stores s {where} ORDER BY s.slug"
         , *params)
         return [dict(r) for r in rows]
 
-    async def delete_collection(self, col_id: str) -> bool:
+    async def delete_kv_store(self, store_id: str) -> bool:
         result = await self._pool.execute(
-            "DELETE FROM collections WHERE id = $1", col_id
+            "DELETE FROM kv_stores WHERE id = $1", store_id
         )
         return result == "DELETE 1"
 
-    # -- Documents --
+    # -- KV pairs --
 
-    async def set_document(
+    async def set_kv_pair(
         self,
-        collection_id: str,
+        store_id: str,
         key: str,
         value,
         value_type: str = "json",
@@ -1260,64 +1260,64 @@ class Database:
         org_id: str | None = None,
         created_by_user_id: str | None = None,
     ) -> str:
-        doc_id = uuid4().hex
+        pair_id = uuid4().hex
         now = datetime.now(UTC)
         row = await self._pool.fetchrow(
-            """INSERT INTO documents
-               (id, org_id, collection_id, key, value, value_type, summary,
+            """INSERT INTO kv_pairs
+               (id, org_id, store_id, key, value, value_type, summary,
                 created_by_user_id, created_at, updated_at)
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)
-               ON CONFLICT (collection_id, key) DO UPDATE SET
+               ON CONFLICT (store_id, key) DO UPDATE SET
                  value = EXCLUDED.value,
                  value_type = EXCLUDED.value_type,
-                 summary = COALESCE(EXCLUDED.summary, documents.summary),
+                 summary = COALESCE(EXCLUDED.summary, kv_pairs.summary),
                  updated_at = EXCLUDED.updated_at
                RETURNING id""",
-            doc_id, org_id, collection_id, key, value, value_type, summary,
+            pair_id, org_id, store_id, key, value, value_type, summary,
             created_by_user_id, now,
         )
         await self._pool.execute(
-            "UPDATE collections SET updated_at = $1 WHERE id = $2", now, collection_id
+            "UPDATE kv_stores SET updated_at = $1 WHERE id = $2", now, store_id
         )
         return row["id"]
 
-    async def get_document(
+    async def get_kv_pair(
         self,
-        collection_id: str,
+        store_id: str,
         key: str,
         *,
-        user_id: str | None = None,  # noqa: ARG002 — call-site uniformity; documents inherit collection scope
+        user_id: str | None = None,  # noqa: ARG002 — call-site uniformity; pairs inherit store scope
         org_id: str | None = None,
         trusted: bool = False,
     ) -> dict | None:
-        """Fetch a document, enforcing its collection's org visibility unless
+        """Fetch a kv pair, enforcing its store's org visibility unless
         ``trusted``. Pass ``**ctx.view_filter``."""
         if trusted:
             row = await self._pool.fetchrow(
-                "SELECT * FROM documents WHERE collection_id = $1 AND key = $2",
-                collection_id, key,
+                "SELECT * FROM kv_pairs WHERE store_id = $1 AND key = $2",
+                store_id, key,
             )
         else:
             row = await self._pool.fetchrow(
-                "SELECT d.* FROM documents d"
-                " JOIN collections c ON c.id = d.collection_id"
-                " WHERE d.collection_id = $1 AND d.key = $2"
-                " AND (c.org_id IS NULL OR c.org_id = $3)",
-                collection_id, key, org_id,
+                "SELECT p.* FROM kv_pairs p"
+                " JOIN kv_stores s ON s.id = p.store_id"
+                " WHERE p.store_id = $1 AND p.key = $2"
+                " AND (s.org_id IS NULL OR s.org_id = $3)",
+                store_id, key, org_id,
             )
         return dict(row) if row else None
 
-    async def list_documents(self, collection_id: str) -> list[dict]:
+    async def list_kv_pairs(self, store_id: str) -> list[dict]:
         rows = await self._pool.fetch(
-            "SELECT * FROM documents WHERE collection_id = $1 ORDER BY key",
-            collection_id,
+            "SELECT * FROM kv_pairs WHERE store_id = $1 ORDER BY key",
+            store_id,
         )
         return [dict(r) for r in rows]
 
-    async def delete_document(self, collection_id: str, key: str) -> bool:
+    async def delete_kv_pair(self, store_id: str, key: str) -> bool:
         result = await self._pool.execute(
-            "DELETE FROM documents WHERE collection_id = $1 AND key = $2",
-            collection_id, key,
+            "DELETE FROM kv_pairs WHERE store_id = $1 AND key = $2",
+            store_id, key,
         )
         return result == "DELETE 1"
 

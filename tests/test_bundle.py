@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from magpie.bundle import parse_collection_items, parse_entry_items, scan_entries
+from magpie.bundle import parse_entry_items, parse_kv_items, scan_entries
 
 
 def write(root: Path, rel: str, text: str) -> None:
@@ -31,7 +31,7 @@ def test_path_is_relative_posix(tmp_path):
 
 def test_skips_reserved_dirs(tmp_path):
     write(tmp_path, "real.md", VALID)
-    write(tmp_path, "collections/strategy.md", VALID)  # not an entry
+    write(tmp_path, "kv/strategy.md", VALID)  # not an entry
     write(tmp_path, "attachments/notes.md", VALID)
     result = scan_entries(tmp_path)
     assert [e.path for e in result.entries] == ["real.md"]
@@ -90,8 +90,8 @@ def test_parse_entry_items_from_memory():
     assert result.errors[0].path == "bad.md"
 
 
-def test_parse_collection_items_from_memory():
-    result = parse_collection_items([("strategy", '{"mrr": 4200}'), ("bad", "{nope")])
-    assert result.collections[0].slug == "strategy"
-    assert result.collections[0].documents[0].value_type == "integer"
-    assert result.errors[0].path == "collections/bad.json"
+def test_parse_kv_items_from_memory():
+    result = parse_kv_items([("strategy", '{"mrr": 4200}'), ("bad", "{nope")])
+    assert result.stores[0].slug == "strategy"
+    assert result.stores[0].pairs[0].value_type == "integer"
+    assert result.errors[0].path == "kv/bad.json"

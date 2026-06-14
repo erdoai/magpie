@@ -1,9 +1,9 @@
-"""Anti-drift checks for repo-canonical collections.
+"""Anti-drift checks for repo-canonical kv stores.
 
 Drift is the real risk in a folder-of-files knowledge store: near-duplicate
 store names for the same thing (``reach-strategy`` vs ``reach_strategy``), or the
 same value landing under different keys. A folder can't stop this on its own — a
-central registry can. ``collections/_manifest.json`` is that registry:
+central registry can. ``kv/_manifest.json`` is that registry:
 
     {
       "stores": {
@@ -12,13 +12,13 @@ central registry can. ``collections/_manifest.json`` is that registry:
       }
     }
 
-On ``magpie push`` we check scanned collections against it:
+On ``magpie push`` we check scanned kv stores against it:
 
-- A collection file whose slug is **not** declared is rejected (with a
+- A kv file whose slug is **not** declared is rejected (with a
   nearest-match suggestion) — creation must be deliberate.
 - Two files whose slugs collapse to the same normalized form are rejected as
   near-duplicates, manifest or not.
-- If a store declares ``keys``, document keys outside that list are **warned**
+- If a store declares ``keys``, keys outside that list are **warned**
   about (soft — they don't block the push) so typo'd keys surface early.
 
 Pure module: structures in, errors/warnings out, no filesystem or DB.
@@ -66,23 +66,23 @@ def validate_manifest(manifest: object) -> list[str]:
     return errors
 
 
-def check_drift(collections, manifest: dict | None) -> DriftResult:
-    """Check scanned collections for drift against the manifest.
+def check_drift(stores, manifest: dict | None) -> DriftResult:
+    """Check scanned kv stores for drift against the manifest.
 
-    ``collections`` is the list of scanned BundleCollection objects (anything
-    with ``.slug`` and ``.documents``). ``manifest`` is the parsed manifest dict,
+    ``stores`` is the list of scanned BundleKvStore objects (anything
+    with ``.slug`` and ``.pairs``). ``manifest`` is the parsed manifest dict,
     or None when the bundle has no manifest.
     """
     result = DriftResult()
 
     # Near-duplicate slugs within the bundle — independent of the manifest.
     by_norm: dict[str, list[str]] = {}
-    for col in collections:
-        by_norm.setdefault(normalize_slug(col.slug), []).append(col.slug)
+    for store in stores:
+        by_norm.setdefault(normalize_slug(store.slug), []).append(store.slug)
     for norm, slugs in by_norm.items():
         if len(slugs) > 1:
             result.errors.append(
-                f"Near-duplicate collection slugs (same normalized form {norm!r}): "
+                f"Near-duplicate kv store slugs (same normalized form {norm!r}): "
                 f"{', '.join(sorted(slugs))}. Pick one canonical name."
             )
 
@@ -94,33 +94,33 @@ def check_drift(collections, manifest: dict | None) -> DriftResult:
         result.errors.extend(structure_errors)
         return result
 
-    stores: dict = manifest["stores"]
-    declared = list(stores.keys())
+    manifest_stores: dict = manifest["stores"]
+    declared = list(manifest_stores.keys())
     declared_norms = {normalize_slug(s) for s in declared}
 
-    for col in collections:
-        if col.slug in stores:
-            spec = stores[col.slug]
+    for store in stores:
+        if store.slug in manifest_stores:
+            spec = manifest_stores[store.slug]
             keys = spec.get("keys")
             if isinstance(keys, list):
                 allowed = set(keys)
-                for doc in col.documents:
-                    if doc.key not in allowed:
+                for pair in store.pairs:
+                    if pair.key not in allowed:
                         result.warnings.append(
-                            f"{col.slug}: key {doc.key!r} is not declared in the manifest"
+                            f"{store.slug}: key {pair.key!r} is not declared in the manifest"
                         )
             continue
 
         # Undeclared store — reject, suggesting the nearest declared slug.
         suggestion = ""
-        close = get_close_matches(col.slug, declared, n=1, cutoff=0.6)
+        close = get_close_matches(store.slug, declared, n=1, cutoff=0.6)
         if close:
             suggestion = f" Did you mean {close[0]!r}?"
-        elif normalize_slug(col.slug) in declared_norms:
-            match = next(s for s in declared if normalize_slug(s) == normalize_slug(col.slug))
+        elif normalize_slug(store.slug) in declared_norms:
+            match = next(s for s in declared if normalize_slug(s) == normalize_slug(store.slug))
             suggestion = f" Did you mean {match!r}? (separator/case differs)"
         result.errors.append(
-            f"Collection {col.slug!r} is not declared in _manifest.json.{suggestion} "
+            f"KV store {store.slug!r} is not declared in _manifest.json.{suggestion} "
             "Add it to the manifest to create it deliberately."
         )
 

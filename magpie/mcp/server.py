@@ -23,9 +23,9 @@ from magpie.attachments import (
     is_browser_safe,
     storage_key_for,
 )
-from magpie.collections import VALUE_TYPES, validate_value
 from magpie.db.database import Database
 from magpie.embeddings.base import EmbeddingProvider
+from magpie.kv import VALUE_TYPES, validate_value
 from magpie.links import normalize_target, sync_entry_links
 from magpie.manifest import normalize_slug
 from magpie.mcp.oauth import MagpieOAuthProvider
@@ -275,7 +275,7 @@ def _register_tools(server: FastMCP) -> None:
 
         Args:
             id: The entry ID.
-            resolved: Render {{collection.paths}}, {{attachment:...}},
+            resolved: Render {{kv.paths}}, {{attachment:...}},
                 and [[wikilinks]] to their current values/links instead
                 of returning the raw Markdown.
         """
@@ -379,8 +379,8 @@ def _register_tools(server: FastMCP) -> None:
     @server.tool()
     async def resolve_knowledge(id: str) -> str:
         """Resolve an entry's references and return rendered Markdown plus
-        a dependency report. References: {{collection.key.path}} values,
-        {{collection:slug/key#path}}, {{attachment:role}}, [[wikilinks]].
+        a dependency report. References: {{kv.key.path}} values,
+        {{kv:slug/key#path}}, {{attachment:role}}, [[wikilinks]].
         Unresolved references appear as ⟦unresolved: ...⟧ with a reason.
 
         Args:
@@ -600,11 +600,11 @@ def _register_tools(server: FastMCP) -> None:
         return "\n".join(lines)
 
     @server.tool()
-    async def list_collections(
+    async def kv_list(
         workspace: str | None = None,
         project: str | None = None,
     ) -> str:
-        """List collections — named JSON document stores for structured
+        """List KV stores — named typed key->value stores for structured
         context (strategy, config, brand tokens, advisories, metrics).
 
         Args:
@@ -615,40 +615,40 @@ def _register_tools(server: FastMCP) -> None:
             return "Error: database not initialized"
 
         ctx = await _tool_context()
-        collections = await _db.list_collections(
+        stores = await _db.list_kv_stores(
             org_id=ctx.org_id, workspace=workspace, project=project
         )
-        collections = [
-            c for c in collections
-            if ctx.can_access({"user_id": None, "org_id": c.get("org_id")})
+        stores = [
+            s for s in stores
+            if ctx.can_access({"user_id": None, "org_id": s.get("org_id")})
         ]
-        if not collections:
-            return "No collections found."
+        if not stores:
+            return "No KV stores found."
 
         lines = []
-        for col in collections:
-            ws = col.get("workspace") or "global"
-            scope = f"{ws}/{col['project']}" if col.get("project") else ws
-            desc = f" — {col['description']}" if col.get("description") else ""
+        for store in stores:
+            ws = store.get("workspace") or "global"
+            scope = f"{ws}/{store['project']}" if store.get("project") else ws
+            desc = f" — {store['description']}" if store.get("description") else ""
             lines.append(
-                f"- **{col['slug']}** [{scope}]"
-                f" ({col['document_count']} documents){desc}"
+                f"- **{store['slug']}** [{scope}]"
+                f" ({store['key_count']} keys){desc}"
             )
         return "\n".join(lines)
 
     @server.tool()
-    async def get_document(
-        collection: str,
+    async def kv_get(
+        store: str,
         key: str,
         workspace: str | None = None,
         project: str | None = None,
     ) -> str:
-        """Read a document from a collection by key. Returns the value
+        """Read a value from a KV store by key. Returns the value
         plus its declared value_type so you can deserialize correctly.
 
         Args:
-            collection: Collection slug (e.g. "reach.strategy").
-            key: Document key within the collection.
+            store: KV store slug (e.g. "reach.strategy").
+            key: Key within the store.
             workspace: Workspace scope for slug lookup.
             project: Project scope for slug lookup.
         """
@@ -656,42 +656,42 @@ def _register_tools(server: FastMCP) -> None:
             return "Error: database not initialized"
 
         ctx = await _tool_context()
-        col = await _db.find_collection(
-            collection, org_id=ctx.org_id, workspace=workspace, project=project
+        kv = await _db.find_kv_store(
+            store, org_id=ctx.org_id, workspace=workspace, project=project
         )
-        if not col or not ctx.can_access({"user_id": None, "org_id": col.get("org_id")}):
-            return f"Collection {collection} not found."
+        if not kv or not ctx.can_access({"user_id": None, "org_id": kv.get("org_id")}):
+            return f"KV store {store} not found."
 
-        doc = await _db.get_document(col["id"], key, **ctx.view_filter)
-        if not doc:
-            keys = [d["key"] for d in await _db.list_documents(col["id"])]
+        pair = await _db.get_kv_pair(kv["id"], key, **ctx.view_filter)
+        if not pair:
+            keys = [p["key"] for p in await _db.list_kv_pairs(kv["id"])]
             hint = f" Available keys: {', '.join(keys)}" if keys else ""
-            return f"Document {key} not found in {collection}.{hint}"
+            return f"Key {key} not found in {store}.{hint}"
 
-        summary = f"Summary: {doc['summary']}\n" if doc.get("summary") else ""
+        summary = f"Summary: {pair['summary']}\n" if pair.get("summary") else ""
         return (
-            f"# {collection}/{key}\n"
-            f"Type: {doc['value_type']} | Updated: {doc['updated_at']}\n"
+            f"# {store}/{key}\n"
+            f"Type: {pair['value_type']} | Updated: {pair['updated_at']}\n"
             f"{summary}\n"
-            f"{json.dumps(doc['value'], indent=2, default=str)}"
+            f"{json.dumps(pair['value'], indent=2, default=str)}"
         )
 
     @server.tool()
-    async def set_document(
-        collection: str,
+    async def kv_set(
+        store: str,
         key: str,
         value: str,
         value_type: str = "json",
         summary: str | None = None,
         workspace: str | None = None,
         project: str | None = None,
-        create_collection: bool = False,
+        create_store: bool = False,
     ) -> str:
-        """Write a document to a collection. Creates or overwrites by key.
+        """Write a value to a KV store. Creates or overwrites by key.
 
         Args:
-            collection: Collection slug (e.g. "reach.strategy").
-            key: Document key within the collection.
+            store: KV store slug (e.g. "reach.strategy").
+            key: Key within the store.
             value: The value, JSON-encoded (e.g. '{"a": 1}', '"text"',
                 '42', 'true', '"2026-06-12T10:00:00Z"').
             value_type: json (default), string, integer, float, boolean,
@@ -699,14 +699,14 @@ def _register_tools(server: FastMCP) -> None:
             summary: Optional human/agent-readable summary of the value.
             workspace: Workspace scope.
             project: Project scope.
-            create_collection: Create the collection if it doesn't exist.
+            create_store: Create the KV store if it doesn't exist.
         """
         if not _db:
             return "Error: database not initialized"
 
         ctx = await _tool_context()
         if not ctx.has_role("editor"):
-            return "Error: your role does not allow writing documents."
+            return "Error: your role does not allow writing KV pairs."
 
         try:
             parsed_value = json.loads(value)
@@ -719,71 +719,71 @@ def _register_tools(server: FastMCP) -> None:
         if error:
             return f"Error: {error}"
 
-        col = await _db.find_collection(
-            collection, org_id=ctx.org_id, workspace=workspace, project=project
+        kv = await _db.find_kv_store(
+            store, org_id=ctx.org_id, workspace=workspace, project=project
         )
-        if col and not ctx.can_access({"user_id": None, "org_id": col.get("org_id")}):
-            col = None
-        if col and col.get("source") == "repo":
+        if kv and not ctx.can_access({"user_id": None, "org_id": kv.get("org_id")}):
+            kv = None
+        if kv and kv.get("source") == "repo":
             return (
-                f"Collection {collection} is repo-canonical; edit the bundle file"
+                f"KV store {store} is repo-canonical; edit the bundle file"
                 f" and run `magpie push` (agent writes are rejected to avoid drift)."
             )
-        if not col:
-            if not create_collection:
+        if not kv:
+            if not create_store:
                 return (
-                    f"Collection {collection} not found."
-                    f" Pass create_collection=true to create it."
+                    f"KV store {store} not found."
+                    f" Pass create_store=true to create it."
                 )
             # Anti-drift: don't let a new store shadow an existing near-duplicate
             # (e.g. creating "reach_strategy" when "reach-strategy" exists).
-            norm = normalize_slug(collection)
-            siblings = await _db.list_collections(
+            norm = normalize_slug(store)
+            siblings = await _db.list_kv_stores(
                 org_id=ctx.org_id, workspace=workspace, project=project
             )
             dup = next(
-                (c for c in siblings
-                 if c["slug"] != collection and normalize_slug(c["slug"]) == norm),
+                (s for s in siblings
+                 if s["slug"] != store and normalize_slug(s["slug"]) == norm),
                 None,
             )
             if dup:
                 return (
-                    f"Refusing to create {collection!r} — near-duplicate of existing "
+                    f"Refusing to create {store!r} — near-duplicate of existing "
                     f"{dup['slug']!r}. Use that slug, or pick a clearly distinct name."
                 )
-            col_id = await _db.create_collection(
-                slug=collection,
-                title=collection,
+            store_id = await _db.create_kv_store(
+                slug=store,
+                title=store,
                 org_id=ctx.org_id,
                 workspace=workspace,
                 project=project,
                 created_by_user_id=ctx.user_id,
             )
-            col = await _db.get_collection(col_id, trusted=True)  # just created above
+            kv = await _db.get_kv_store(store_id, trusted=True)  # just created above
 
-        await _db.set_document(
-            collection_id=col["id"],
+        await _db.set_kv_pair(
+            store_id=kv["id"],
             key=key,
             value=parsed_value,
             value_type=value_type,
             summary=summary,
-            org_id=col.get("org_id"),
+            org_id=kv.get("org_id"),
             created_by_user_id=ctx.user_id,
         )
-        return f"Set {collection}/{key} ({value_type})."
+        return f"Set {store}/{key} ({value_type})."
 
     @server.tool()
-    async def delete_document(
-        collection: str,
+    async def kv_delete(
+        store: str,
         key: str,
         workspace: str | None = None,
         project: str | None = None,
     ) -> str:
-        """Delete a document from a collection.
+        """Delete a key from a KV store.
 
         Args:
-            collection: Collection slug.
-            key: Document key to delete.
+            store: KV store slug.
+            key: Key to delete.
             workspace: Workspace scope.
             project: Project scope.
         """
@@ -792,23 +792,23 @@ def _register_tools(server: FastMCP) -> None:
 
         ctx = await _tool_context()
         if not ctx.has_role("editor"):
-            return "Error: your role does not allow deleting documents."
+            return "Error: your role does not allow deleting KV pairs."
 
-        col = await _db.find_collection(
-            collection, org_id=ctx.org_id, workspace=workspace, project=project
+        kv = await _db.find_kv_store(
+            store, org_id=ctx.org_id, workspace=workspace, project=project
         )
-        if not col or not ctx.can_access({"user_id": None, "org_id": col.get("org_id")}):
-            return f"Collection {collection} not found."
-        if col.get("source") == "repo":
+        if not kv or not ctx.can_access({"user_id": None, "org_id": kv.get("org_id")}):
+            return f"KV store {store} not found."
+        if kv.get("source") == "repo":
             return (
-                f"Collection {collection} is repo-canonical; edit the bundle file"
+                f"KV store {store} is repo-canonical; edit the bundle file"
                 f" and run `magpie push` (agent writes are rejected to avoid drift)."
             )
 
-        ok = await _db.delete_document(col["id"], key)
+        ok = await _db.delete_kv_pair(kv["id"], key)
         if not ok:
-            return f"Document {key} not found in {collection}."
-        return f"Deleted {collection}/{key}."
+            return f"Key {key} not found in {store}."
+        return f"Deleted {store}/{key}."
 
     @server.tool()
     async def find_duplicates(

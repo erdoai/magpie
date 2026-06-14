@@ -42,20 +42,20 @@ Outgoing links and backlinks for an entry. **Params:** `id`.
 ### `resolve_knowledge`
 Resolve an entry's `{{value references}}` and `[[wikilinks]]` at read time, with a dependency list. **Params:** `id`.
 
-## Collections
+## KV stores
 
-### `list_collections`
-List collections in scope. **Key params:** `workspace`, `project`.
+### `kv_list`
+List KV stores in scope. **Key params:** `workspace`, `project`.
 
-### `get_document`
-Read a document (returns value + `value_type`). **Params:** `collection`, `key`.
+### `kv_get`
+Read a key (returns value + `value_type`). **Params:** `store`, `key`.
 
-### `set_document`
-Write a typed document. **Key params:** `collection`, `key`, `value`, `value_type`, `create_collection`.
-Rejected for [repo-canonical](/repo-sync/collections) stores; refuses a near-duplicate new slug.
+### `kv_set`
+Write a typed pair. **Key params:** `store`, `key`, `value`, `value_type`, `create_store`.
+Rejected for [repo-canonical](/repo-sync/kv) stores; refuses a near-duplicate new slug.
 
-### `delete_document`
-Delete a document. **Params:** `collection`, `key`.
+### `kv_delete`
+Delete a key. **Params:** `store`, `key`.
 
 ## Attachments
 

@@ -1,6 +1,6 @@
-"""Typed values for collection documents.
+"""Typed values for kv pairs.
 
-A document's value is JSONB but declares its type in ``value_type`` so
+A pair's value is JSONB but declares its type in ``value_type`` so
 agents and adapters can deserialize without guessing. Writes validate the
 value against the declared type and reject mismatches.
 
@@ -16,7 +16,7 @@ VALUE_TYPES = ("json", "string", "integer", "float", "boolean", "datetime")
 def infer_value_type(value) -> str:
     """Infer a ``value_type`` from a native JSON value.
 
-    Used when loading repo-canonical collection files, where documents are
+    Used when loading repo-canonical kv files, where pairs are
     written as plain JSON. ``datetime`` is never inferred (it is a string on
     the wire and indistinguishable from a plain string) — declare it explicitly
     if needed. ``bool`` is checked before ``int`` because ``True`` is an int.

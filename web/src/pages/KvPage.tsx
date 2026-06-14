@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, Collection, CollectionDocument, ValueType } from '@/lib/api';
+import { api, KvStore, KvPair, ValueType } from '@/lib/api';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -13,14 +13,14 @@ import { Plus, Trash2 } from 'lucide-react';
 
 const VALUE_TYPES: ValueType[] = ['json', 'string', 'integer', 'float', 'boolean', 'datetime'];
 
-function formatValue(doc: CollectionDocument): string {
+function formatValue(doc: KvPair): string {
   return JSON.stringify(doc.value, null, doc.value_type === 'json' ? 2 : 0);
 }
 
-export function CollectionsPage() {
-  const [collections, setCollections] = useState<Collection[]>([]);
+export function KvPage() {
+  const [collections, setCollections] = useState<KvStore[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
-  const [documents, setDocuments] = useState<CollectionDocument[]>([]);
+  const [documents, setDocuments] = useState<KvPair[]>([]);
   const [creating, setCreating] = useState(false);
   const [newCollection, setNewCollection] = useState({ slug: '', title: '', workspace: '', project: '' });
   const [editor, setEditor] = useState<{
@@ -29,7 +29,7 @@ export function CollectionsPage() {
   const [error, setError] = useState<string | null>(null);
 
   const loadCollections = () =>
-    api.listCollections().then(cols => {
+    api.listKvStores().then(cols => {
       setCollections(cols);
       if (cols.length > 0 && !selected) setSelected(cols[0].slug);
     }).catch(() => {});
@@ -38,11 +38,11 @@ export function CollectionsPage() {
 
   useEffect(() => {
     if (!selected) { setDocuments([]); return; }
-    api.listDocuments(selected).then(r => setDocuments(r.documents)).catch(() => setDocuments([]));
+    api.listKeys(selected).then(r => setDocuments(r.pairs)).catch(() => setDocuments([]));
   }, [selected]);
 
   const reloadDocuments = () => {
-    if (selected) api.listDocuments(selected).then(r => setDocuments(r.documents)).catch(() => {});
+    if (selected) api.listKeys(selected).then(r => setDocuments(r.pairs)).catch(() => {});
     loadCollections();
   };
 
@@ -50,7 +50,7 @@ export function CollectionsPage() {
     e.preventDefault();
     setError(null);
     try {
-      await api.createCollection({
+      await api.createKvStore({
         slug: newCollection.slug,
         title: newCollection.title || newCollection.slug,
         workspace: newCollection.workspace || undefined,
@@ -77,7 +77,7 @@ export function CollectionsPage() {
       else { setError('Value must be valid JSON'); return; }
     }
     try {
-      await api.setDocument(selected, editor.key, {
+      await api.setKey(selected, editor.key, {
         value,
         value_type: editor.valueType,
         summary: editor.summary || undefined,
@@ -91,7 +91,7 @@ export function CollectionsPage() {
 
   const handleDeleteDocument = async (key: string) => {
     if (!selected || !confirm(`Delete document "${key}"?`)) return;
-    await api.deleteDocument(selected, key);
+    await api.deleteKey(selected, key);
     reloadDocuments();
   };
 
@@ -161,7 +161,7 @@ export function CollectionsPage() {
                 <div className="font-mono text-xs truncate">{col.slug}</div>
                 <div className="text-[11px] text-muted-foreground">
                   {col.workspace ? `${col.workspace}${col.project ? '/' + col.project : ''} · ` : ''}
-                  {col.document_count ?? 0} docs
+                  {col.key_count ?? 0} docs
                 </div>
               </button>
             ))}

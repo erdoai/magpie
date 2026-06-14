@@ -529,37 +529,37 @@ program
     }
   });
 
-// -- Collections --
+// -- KV stores --
 
-const collections = program.command('collections').description('Collection commands');
+const kv = program.command('kv').description('KV store commands');
 
-collections
+kv
   .command('list')
-  .description('List collections')
+  .description('List KV stores')
   .option('--workspace <workspace>')
   .option('--project <project>')
   .action(async (opts: { workspace?: string; project?: string }) => {
     requireToken();
     try {
       const s = scope(opts);
-      const list = await api<{ slug: string; title: string; document_count: number }[]>(
-        `/api/collections${qs({ workspace: s.workspace, project: s.project })}`
+      const list = await api<{ slug: string; title: string; key_count: number }[]>(
+        `/api/kv${qs({ workspace: s.workspace, project: s.project })}`
       );
-      if (!list.length) return console.log('No collections.');
-      for (const c of list) console.log(`- ${c.slug} (${c.document_count} docs) — ${c.title}`);
+      if (!list.length) return console.log('No KV stores.');
+      for (const c of list) console.log(`- ${c.slug} (${c.key_count} keys) — ${c.title}`);
     } catch (err) {
       fail(err);
     }
   });
 
-collections
+kv
   .command('get <slug> <key>')
-  .description('Read a document (prints the value as JSON)')
+  .description('Read a key (prints the value as JSON)')
   .action(async (slug: string, key: string) => {
     requireToken();
     try {
       const doc = await api<{ value: unknown; value_type: string }>(
-        `/api/collections/${slug}/documents/${key}`
+        `/api/kv/${slug}/keys/${key}`
       );
       console.log(JSON.stringify(doc.value, null, 2));
     } catch (err) {
@@ -567,9 +567,9 @@ collections
     }
   });
 
-collections
+kv
   .command('set <slug> <key>')
-  .description('Write a document from a JSON file or inline value')
+  .description('Write a key from a JSON file or inline value')
   .option('--file <path>', 'JSON file with the value')
   .option('--value <json>', 'Inline JSON value')
   .option('--type <type>', 'json | string | integer | float | boolean | datetime', 'json')
@@ -582,7 +582,7 @@ collections
       const raw = opts.file ? readFileSync(opts.file, 'utf-8') : opts.value;
       if (raw === undefined) fail(new Error('Provide --file or --value'));
       const value = JSON.parse(raw);
-      await api(`/api/collections/${slug}/documents/${key}`, {
+      await api(`/api/kv/${slug}/keys/${key}`, {
         method: 'PUT',
         body: { value, value_type: opts.type, summary: opts.summary },
       });
@@ -684,8 +684,8 @@ program
 interface PushResult {
   created: number;
   updated: number;
-  collections: number;
-  documents: number;
+  stores: number;
+  pairs: number;
   warnings: string[];
 }
 
@@ -697,14 +697,14 @@ program
   .action(async (dir: string, opts: { workspace?: string; project?: string }) => {
     requireToken();
     try {
-      // Entries: every .md outside the reserved collections/ and attachments/ dirs.
+      // Entries: every .md outside the reserved kv/ and attachments/ dirs.
       const entries: { path: string; text: string }[] = [];
       const walk = (d: string, relBase = '') => {
         for (const name of readdirSync(d)) {
           const abs = join(d, name);
           const rel = relBase ? `${relBase}/${name}` : name;
           if (statSync(abs).isDirectory()) {
-            if (!relBase && (name === 'collections' || name === 'attachments')) continue;
+            if (!relBase && (name === 'kv' || name === 'attachments')) continue;
             walk(abs, rel);
           } else if (extname(name) === '.md') {
             entries.push({ path: rel, text: readFileSync(abs, 'utf-8') });
@@ -713,27 +713,27 @@ program
       };
       walk(dir);
 
-      // Repo-canonical collections + the anti-drift manifest.
-      const collections: { slug: string; text: string }[] = [];
+      // Repo-canonical KV stores + the anti-drift manifest.
+      const kv: { slug: string; text: string }[] = [];
       let manifest: unknown = null;
-      const colDir = join(dir, 'collections');
-      if (existsSync(colDir)) {
-        for (const name of readdirSync(colDir)) {
+      const kvDir = join(dir, 'kv');
+      if (existsSync(kvDir)) {
+        for (const name of readdirSync(kvDir)) {
           if (extname(name) !== '.json') continue;
-          const text = readFileSync(join(colDir, name), 'utf-8');
+          const text = readFileSync(join(kvDir, name), 'utf-8');
           if (name === '_manifest.json') manifest = JSON.parse(text);
-          else collections.push({ slug: basename(name, '.json'), text });
+          else kv.push({ slug: basename(name, '.json'), text });
         }
       }
 
       const res = await api<PushResult>('/api/bundle/push', {
         method: 'POST',
-        body: { entries, collections, manifest, ...scope(opts) },
+        body: { entries, kv, manifest, ...scope(opts) },
       });
       for (const w of res.warnings) console.log(`  warning: ${w}`);
       console.log(
         `Pushed ${res.created + res.updated} entries (${res.created} created, ` +
-          `${res.updated} updated) and ${res.collections} repo collections (${res.documents} docs).`
+          `${res.updated} updated) and ${res.stores} repo KV stores (${res.pairs} keys).`
       );
     } catch (err) {
       fail(err);
@@ -742,14 +742,14 @@ program
 
 program
   .command('export <dir>')
-  .description('Export entries and repo-canonical collections as a bundle on disk')
+  .description('Export entries and repo-canonical KV stores as a bundle on disk')
   .option('--workspace <workspace>')
   .option('--project <project>')
   .action(async (dir: string, opts: { workspace?: string; project?: string }) => {
     requireToken();
     try {
       const s = scope(opts);
-      const res = await api<{ files: { path: string; content: string }[]; entries: number; collections: number }>(
+      const res = await api<{ files: { path: string; content: string }[]; entries: number; stores: number }>(
         `/api/bundle/export${qs({ workspace: s.workspace, project: s.project })}`
       );
       for (const file of res.files) {
@@ -758,7 +758,7 @@ program
         writeFileSync(dest, file.content);
       }
       console.log(
-        `Exported ${res.entries} entries and ${res.collections} repo collections to ${dir} ` +
+        `Exported ${res.entries} entries and ${res.stores} repo KV stores to ${dir} ` +
           `(open ${join(dir, 'index.html')} to browse).`
       );
     } catch (err) {

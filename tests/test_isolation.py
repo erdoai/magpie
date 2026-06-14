@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 
 from magpie.server.auth import AuthMiddleware
 from magpie.server.context import AuthContext
-from magpie.server.routes import attachments, collections, entries, keys, orgs
+from magpie.server.routes import attachments, entries, keys, kv, orgs
 
 
 def _hash(token: str) -> str:
@@ -39,8 +39,8 @@ class FakeDatabase:
         self.invited: list[tuple[str, str, str]] = []
         self.search_calls: list[dict] = []
         self.links: dict[str, list[dict]] = {}  # source_id -> outgoing links
-        self.collections: dict[str, dict] = {}
-        self.documents: dict[tuple[str, str], dict] = {}  # (collection_id, key)
+        self.kv_stores: dict[str, dict] = {}
+        self.kv_pairs: dict[tuple[str, str], dict] = {}  # (store_id, key)
         self.attachments: dict[str, dict] = {}
         self.sessions: dict[str, dict] = {}  # session_id -> {user_id}
         self.user_default_org: dict[str, str | None] = {}  # user_id -> org_id
@@ -160,33 +160,33 @@ class FakeDatabase:
     async def delete_project(self, proj_id):
         return self.projects.pop(proj_id, None) is not None
 
-    # -- collections / documents --
+    # -- kv stores / pairs --
 
-    async def create_collection(self, slug, title, description=None, visibility="org",
-                                org_id=None, workspace=None, project=None,
-                                created_by_user_id=None):
-        col_id = uuid4().hex
+    async def create_kv_store(self, slug, title, description=None, visibility="org",
+                              org_id=None, workspace=None, project=None,
+                              created_by_user_id=None):
+        store_id = uuid4().hex
         now = datetime.now(UTC)
-        self.collections[col_id] = {
-            "id": col_id, "org_id": org_id, "workspace": workspace,
+        self.kv_stores[store_id] = {
+            "id": store_id, "org_id": org_id, "workspace": workspace,
             "project": project, "slug": slug, "title": title,
             "description": description, "visibility": visibility,
             "created_by_user_id": created_by_user_id,
             "created_at": now, "updated_at": now,
         }
-        return col_id
+        return store_id
 
-    async def get_collection(self, col_id, *, user_id=None, org_id=None, trusted=False):
-        col = self.collections.get(col_id)
-        if col is None or trusted:
-            return col
-        if col.get("org_id") is None or col.get("org_id") == org_id:
-            return col
+    async def get_kv_store(self, store_id, *, user_id=None, org_id=None, trusted=False):
+        store = self.kv_stores.get(store_id)
+        if store is None or trusted:
+            return store
+        if store.get("org_id") is None or store.get("org_id") == org_id:
+            return store
         return None
 
-    async def find_collection(self, slug, org_id=None, workspace=None, project=None):
+    async def find_kv_store(self, slug, org_id=None, workspace=None, project=None):
         matches = [
-            c for c in self.collections.values()
+            c for c in self.kv_stores.values()
             if c["slug"] == slug
             and (not org_id or c["org_id"] in (org_id, None))
             and (not workspace or c["workspace"] in (workspace, None))
@@ -196,57 +196,57 @@ class FakeDatabase:
                                     c["project"] is None))
         return matches[0] if matches else None
 
-    async def list_collections(self, org_id=None, workspace=None, project=None):
+    async def list_kv_stores(self, org_id=None, workspace=None, project=None):
         result = []
-        for c in self.collections.values():
+        for c in self.kv_stores.values():
             if org_id and c["org_id"] not in (org_id, None):
                 continue
             if workspace and c["workspace"] != workspace:
                 continue
             if project and c["project"] != project:
                 continue
-            count = sum(1 for (cid, _k) in self.documents if cid == c["id"])
-            result.append({**c, "document_count": count})
+            count = sum(1 for (sid, _k) in self.kv_pairs if sid == c["id"])
+            result.append({**c, "key_count": count})
         return result
 
-    async def delete_collection(self, col_id):
-        if col_id not in self.collections:
+    async def delete_kv_store(self, store_id):
+        if store_id not in self.kv_stores:
             return False
-        del self.collections[col_id]
-        for key in [k for k in self.documents if k[0] == col_id]:
-            del self.documents[key]
+        del self.kv_stores[store_id]
+        for key in [k for k in self.kv_pairs if k[0] == store_id]:
+            del self.kv_pairs[key]
         return True
 
-    async def set_document(self, collection_id, key, value, value_type="json",
-                           summary=None, org_id=None, created_by_user_id=None):
+    async def set_kv_pair(self, store_id, key, value, value_type="json",
+                          summary=None, org_id=None, created_by_user_id=None):
         now = datetime.now(UTC)
-        existing = self.documents.get((collection_id, key))
-        doc_id = existing["id"] if existing else uuid4().hex
-        self.documents[(collection_id, key)] = {
-            "id": doc_id, "org_id": org_id, "collection_id": collection_id,
+        existing = self.kv_pairs.get((store_id, key))
+        pair_id = existing["id"] if existing else uuid4().hex
+        self.kv_pairs[(store_id, key)] = {
+            "id": pair_id, "org_id": org_id, "store_id": store_id,
             "key": key, "value": value, "value_type": value_type,
             "summary": summary or (existing or {}).get("summary"),
             "metadata_json": {}, "created_by_user_id": created_by_user_id,
             "created_at": (existing or {}).get("created_at", now), "updated_at": now,
         }
-        return doc_id
+        return pair_id
 
-    async def get_document(self, collection_id, key, *, user_id=None, org_id=None, trusted=False):
-        doc = self.documents.get((collection_id, key))
-        if doc is None or trusted:
-            return doc
-        col = self.collections.get(collection_id)
-        col_org = col.get("org_id") if col else None
-        if col_org is None or col_org == org_id:
-            return doc
+    async def get_kv_pair(self, store_id, key, *, user_id=None, org_id=None, trusted=False):
+        pair = self.kv_pairs.get((store_id, key))
+        if pair is None or trusted:
+            return pair
+        store = self.kv_stores.get(store_id)
+        store_org = store.get("org_id") if store else None
+        if store_org is None or store_org == org_id:
+            return pair
         return None
 
-    async def list_documents(self, collection_id):
-        return [d for (cid, _k), d in sorted(self.documents.items())
-                if cid == collection_id]
+    async def list_kv_pairs(self, store_id):
+        return [d for (sid, _k), d in sorted(self.kv_pairs.items())
+                if sid == store_id]
 
-    async def delete_document(self, collection_id, key):
-        return self.documents.pop((collection_id, key), None) is not None
+    async def delete_kv_pair(self, store_id, key):
+        return self.kv_pairs.pop((store_id, key), None) is not None
 
     # -- attachments --
 
@@ -391,7 +391,7 @@ class FakeDatabase:
 def make_client(db: FakeDatabase, storage=None) -> TestClient:
     app = FastAPI()
     app.include_router(entries.router)
-    app.include_router(collections.router)
+    app.include_router(kv.router)
     app.include_router(attachments.router)
     app.include_router(keys.router)
     app.include_router(orgs.router)

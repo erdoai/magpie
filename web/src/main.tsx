@@ -4,7 +4,7 @@ import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-route
 import { App } from '@/App';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { BrowsePage } from '@/pages/BrowsePage';
-import { CollectionsPage } from '@/pages/CollectionsPage';
+import { KvPage } from '@/pages/KvPage';
 import { ProjectsPage } from '@/pages/ProjectsPage';
 import { SearchPage } from '@/pages/SearchPage';
 import { EntryPage } from '@/pages/EntryPage';
@@ -88,7 +88,7 @@ function Root() {
         <Route element={<App />}>
           <Route index element={<DashboardPage />} />
           <Route path="browse" element={<BrowsePage />} />
-          <Route path="collections" element={<CollectionsPage />} />
+          <Route path="kv" element={<KvPage />} />
           <Route path="projects" element={<ProjectsPage />} />
           <Route path="search" element={<SearchPage />} />
           <Route path="entries/:id" element={<EntryPage />} />

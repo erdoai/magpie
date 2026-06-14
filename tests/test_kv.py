@@ -1,6 +1,6 @@
-"""Collection/document CRUD, typed value validation, and isolation tests."""
+"""KV store/pair CRUD, typed value validation, and isolation tests."""
 
-from magpie.collections import validate_value
+from magpie.kv import validate_value
 
 from .test_isolation import FakeDatabase, add_key, auth, make_client
 
@@ -39,11 +39,11 @@ def _setup():
     return db, make_client(db)
 
 
-def test_collection_and_document_roundtrip():
+def test_store_and_pair_roundtrip():
     db, client = _setup()
 
     res = client.post(
-        "/api/collections",
+        "/api/kv",
         headers=auth("key-a"),
         json={"slug": "reach.strategy", "title": "Reach strategy",
               "workspace": "reach", "project": "alertee"},
@@ -52,36 +52,36 @@ def test_collection_and_document_roundtrip():
     assert res.json()["org_id"] == "org-a"
 
     res = client.put(
-        "/api/collections/reach.strategy/documents/current",
+        "/api/kv/reach.strategy/keys/current",
         headers=auth("key-a"),
         json={"value": {"wedge": "fast alerts"}, "value_type": "json",
               "summary": "current strategy"},
     )
     assert res.status_code == 200
-    doc = res.json()
-    assert doc["value"] == {"wedge": "fast alerts"}
-    assert doc["value_type"] == "json"
+    pair = res.json()
+    assert pair["value"] == {"wedge": "fast alerts"}
+    assert pair["value_type"] == "json"
 
     res = client.get(
-        "/api/collections/reach.strategy/documents/current", headers=auth("key-a")
+        "/api/kv/reach.strategy/keys/current", headers=auth("key-a")
     )
     assert res.json()["value"] == {"wedge": "fast alerts"}
 
     res = client.get(
-        "/api/collections/reach.strategy/documents", headers=auth("key-a")
+        "/api/kv/reach.strategy/keys", headers=auth("key-a")
     )
-    assert len(res.json()["documents"]) == 1
+    assert len(res.json()["pairs"]) == 1
 
     res = client.delete(
-        "/api/collections/reach.strategy/documents/current", headers=auth("key-a")
+        "/api/kv/reach.strategy/keys/current", headers=auth("key-a")
     )
     assert res.json() == {"ok": True}
 
 
-def test_typed_scalar_documents():
+def test_typed_scalar_pairs():
     db, client = _setup()
     client.post(
-        "/api/collections", headers=auth("key-a"),
+        "/api/kv", headers=auth("key-a"),
         json={"slug": "metrics", "title": "Metrics"},
     )
 
@@ -93,25 +93,25 @@ def test_typed_scalar_documents():
         ("launched_at", "2026-01-15T09:00:00Z", "datetime"),
     ]:
         res = client.put(
-            f"/api/collections/metrics/documents/{key}",
+            f"/api/kv/metrics/keys/{key}",
             headers=auth("key-a"),
             json={"value": value, "value_type": value_type},
         )
         assert res.status_code == 200, res.text
-        doc = res.json()
-        assert doc["value"] == value
-        assert doc["value_type"] == value_type
+        pair = res.json()
+        assert pair["value"] == value
+        assert pair["value_type"] == value_type
 
 
 def test_type_mismatch_rejected():
     db, client = _setup()
     client.post(
-        "/api/collections", headers=auth("key-a"),
+        "/api/kv", headers=auth("key-a"),
         json={"slug": "metrics", "title": "Metrics"},
     )
 
     res = client.put(
-        "/api/collections/metrics/documents/mrr",
+        "/api/kv/metrics/keys/mrr",
         headers=auth("key-a"),
         json={"value": "lots", "value_type": "float"},
     )
@@ -119,7 +119,7 @@ def test_type_mismatch_rejected():
     assert "float" in res.json()["error"]
 
     res = client.put(
-        "/api/collections/metrics/documents/x",
+        "/api/kv/metrics/keys/x",
         headers=auth("key-a"),
         json={"value": 1, "value_type": "money"},
     )
@@ -129,7 +129,7 @@ def test_type_mismatch_rejected():
 def test_invalid_slug_rejected():
     db, client = _setup()
     res = client.post(
-        "/api/collections", headers=auth("key-a"),
+        "/api/kv", headers=auth("key-a"),
         json={"slug": "Bad Slug!", "title": "x"},
     )
     assert res.status_code == 400
@@ -138,77 +138,77 @@ def test_invalid_slug_rejected():
 def test_duplicate_slug_rejected():
     db, client = _setup()
     body = {"slug": "reach.strategy", "title": "x"}
-    assert client.post("/api/collections", headers=auth("key-a"), json=body).status_code == 200
-    assert client.post("/api/collections", headers=auth("key-a"), json=body).status_code == 409
+    assert client.post("/api/kv", headers=auth("key-a"), json=body).status_code == 200
+    assert client.post("/api/kv", headers=auth("key-a"), json=body).status_code == 409
 
 
 # -- Roles and isolation --
 
 
-def test_viewer_cannot_write_documents():
+def test_viewer_cannot_write_pairs():
     db = FakeDatabase()
     add_key(db, "viewer-key", user_id="ua", org_id="org-a", role="viewer")
     add_key(db, "editor-key", user_id="ub", org_id="org-a", role="editor")
     client = make_client(db)
 
     client.post(
-        "/api/collections", headers=auth("editor-key"),
+        "/api/kv", headers=auth("editor-key"),
         json={"slug": "c", "title": "C"},
     )
 
     res = client.post(
-        "/api/collections", headers=auth("viewer-key"), json={"slug": "v", "title": "V"}
+        "/api/kv", headers=auth("viewer-key"), json={"slug": "v", "title": "V"}
     )
     assert res.status_code == 403
 
     res = client.put(
-        "/api/collections/c/documents/k", headers=auth("viewer-key"),
+        "/api/kv/c/keys/k", headers=auth("viewer-key"),
         json={"value": 1, "value_type": "integer"},
     )
     assert res.status_code == 403
 
     # but viewer can read
     client.put(
-        "/api/collections/c/documents/k", headers=auth("editor-key"),
+        "/api/kv/c/keys/k", headers=auth("editor-key"),
         json={"value": 1, "value_type": "integer"},
     )
-    res = client.get("/api/collections/c/documents/k", headers=auth("viewer-key"))
+    res = client.get("/api/kv/c/keys/k", headers=auth("viewer-key"))
     assert res.status_code == 200
 
 
-def test_collections_isolated_across_orgs():
+def test_kv_stores_isolated_across_orgs():
     db = FakeDatabase()
     add_key(db, "key-a", user_id="ua", org_id="org-a")
     add_key(db, "key-b", user_id="ub", org_id="org-b")
     client = make_client(db)
 
     client.post(
-        "/api/collections", headers=auth("key-b"),
+        "/api/kv", headers=auth("key-b"),
         json={"slug": "b.secrets", "title": "B"},
     )
     client.put(
-        "/api/collections/b.secrets/documents/k", headers=auth("key-b"),
+        "/api/kv/b.secrets/keys/k", headers=auth("key-b"),
         json={"value": "hidden", "value_type": "string"},
     )
 
     assert client.get(
-        "/api/collections/b.secrets/documents/k", headers=auth("key-a")
+        "/api/kv/b.secrets/keys/k", headers=auth("key-a")
     ).status_code == 404
     assert client.get(
-        "/api/collections/b.secrets/documents", headers=auth("key-a")
+        "/api/kv/b.secrets/keys", headers=auth("key-a")
     ).status_code == 404
-    listed = client.get("/api/collections", headers=auth("key-a")).json()
+    listed = client.get("/api/kv", headers=auth("key-a")).json()
     assert listed == []
 
 
-def test_workspace_scoped_key_clamps_collection_creation():
+def test_workspace_scoped_key_clamps_store_creation():
     db = FakeDatabase()
     add_key(db, "scoped-key", user_id="ua", org_id="org-a",
             workspace="reach", project="alertee")
     client = make_client(db)
 
     res = client.post(
-        "/api/collections", headers=auth("scoped-key"),
+        "/api/kv", headers=auth("scoped-key"),
         json={"slug": "s", "title": "S", "workspace": "other", "project": "x"},
     )
     body = res.json()

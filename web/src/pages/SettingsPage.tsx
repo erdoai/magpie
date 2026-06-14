@@ -22,7 +22,7 @@ export function SettingsPage() {
   const [newWsName, setNewWsName] = useState('');
 
   const loadKeys = async () => {
-    try { setKeys(await api.listKeys()); } catch {}
+    try { setKeys(await api.listApiKeys()); } catch {}
   };
 
   const loadOrgs = async () => {
@@ -42,7 +42,7 @@ export function SettingsPage() {
   const handleCreateKey = async () => {
     if (!newKeyName.trim()) return;
     try {
-      const key = await api.createKey(newKeyName);
+      const key = await api.createApiKey(newKeyName);
       setNewKey(key.key!);
       setNewKeyName('');
       loadKeys();
@@ -260,7 +260,7 @@ export function SettingsPage() {
                     className="h-7 w-7 text-destructive hover:text-destructive"
                     onClick={async () => {
                       if (!confirm('Delete this API key?')) return;
-                      await api.deleteKey(key.id);
+                      await api.deleteApiKey(key.id);
                       loadKeys();
                     }}
                   >

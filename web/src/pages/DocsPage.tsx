@@ -10,7 +10,7 @@ const SECTIONS = [
   { id: 'cli', label: 'CLI' },
   { id: 'mcp', label: 'MCP tools' },
   { id: 'rest', label: 'REST API' },
-  { id: 'collections', label: 'Collections' },
+  { id: 'kv', label: 'KV stores' },
   { id: 'links', label: 'Links & references' },
   { id: 'attachments', label: 'Attachments' },
   { id: 'selfhost', label: 'Self-hosting' },
@@ -127,7 +127,7 @@ export function DocsPage() {
           <H2 id="quickstart">Quickstart</H2>
           <P>
             Magpie is a knowledge and context store for agents and teams: durable Markdown entries,
-            typed JSON collections, file attachments, and links — searchable, scoped, and exposed over
+            typed KV stores, file attachments, and links — searchable, scoped, and exposed over
             REST, CLI, and MCP. The web UI exists; you never need it.
           </P>
           <H3>Hosted</H3>
@@ -157,7 +157,7 @@ claude mcp add magpie -- npx @erdo/magpie mcp`}
               ['workspace', 'Broad app/product namespace — "reach", "alertee", "personal".'],
               ['project', 'Narrower work area inside a workspace — a customer, a product, a codebase. Workspace + project travel together on every entry, search, and API key.'],
               ['entry', 'A Markdown knowledge document with category (PARA), tags, source, and scope.'],
-              ['collection', 'A named store of typed JSON documents, read whole by key.'],
+              ['kv store', 'A named store of typed values, read whole by key.'],
               ['attachment', 'A file owned by an entry — logo, screenshot, SQL snippet, brief.'],
               ['visibility', 'You see your entries + your org’s entries + global entries. Cross-org access is never possible.'],
             ]}
@@ -178,7 +178,7 @@ magpie read <id> [--resolved]
 magpie write --title T (--file F | --content C) [--tags a,b]
 magpie archive <id>
 
-magpie collections list | get <slug> <key> | set <slug> <key> --file v.json --type json
+magpie kv list | get <slug> <key> | set <slug> <key> --file v.json --type json
 magpie attachments add <entry-id> ./logo.svg --role logo-primary
 magpie attachments list <entry-id>
 
@@ -207,7 +207,7 @@ magpie mcp                   # stdio MCP server for local agents`}
               ['archive', 'Retire an entry from search'],
               ['list_links', 'Outgoing links + backlinks for an entry'],
               ['resolve_knowledge', 'Rendered Markdown + dependency report'],
-              ['list_collections / get_document / set_document / delete_document', 'Typed document store'],
+              ['list_kv / get_key / set_key / delete_key', 'Typed KV store'],
               ['upload_attachment / list_attachments / get_attachment', 'Files with stable magpie:<id> handles'],
               ['find_duplicates / merge', 'Knowledge hygiene — cluster near-duplicates, merge with lineage'],
             ]}
@@ -224,8 +224,8 @@ magpie mcp                   # stdio MCP server for local agents`}
               ['POST /api/entries/:id/archive', 'Archive'],
               ['GET /api/entries/:id/links', 'Links + backlinks'],
               ['POST /api/entries/:id/resolve', 'Rendered Markdown + dependencies'],
-              ['POST|GET /api/collections', 'Create / list collections'],
-              ['GET|PUT|DELETE /api/collections/:slug/documents/:key', 'Typed documents'],
+              ['POST|GET /api/kv', 'Create / list KV stores'],
+              ['GET|PUT|DELETE /api/kv/:slug/keys/:key', 'Typed key/value pairs'],
               ['POST /api/entries/:id/attachments', 'Upload (multipart)'],
               ['GET /api/attachments/:id[/download]', 'Metadata + inline text / file bytes'],
               ['GET /public/assets/:id', 'Stable public URL for opted-in browser-safe images'],
@@ -234,19 +234,19 @@ magpie mcp                   # stdio MCP server for local agents`}
             ]}
           />
 
-          <H2 id="collections">Collections</H2>
+          <H2 id="kv">KV stores</H2>
           <P>
-            Collections hold structured context that should be read whole by key — strategy, config,
-            brand tokens, advisories, metrics. Every document declares a <Mono>value_type</Mono>:{' '}
+            KV stores hold structured context that should be read whole by key — strategy, config,
+            brand tokens, advisories, metrics. Every value declares a <Mono>value_type</Mono>:{' '}
             <Mono>json</Mono>, <Mono>string</Mono>, <Mono>integer</Mono>, <Mono>float</Mono>,{' '}
             <Mono>boolean</Mono>, or <Mono>datetime</Mono>. Writes are validated against the declared
             type; reads return the type so agents deserialize without guessing.
           </P>
           <CodeBlock
             language="shell"
-            code={`magpie collections set reach.strategy current --file strategy.json
-magpie collections set metrics mrr --value 4200.5 --type float
-magpie collections get reach.strategy current`}
+            code={`magpie kv set reach.strategy current --file strategy.json
+magpie kv set metrics mrr --value 4200.5 --type float
+magpie kv get reach.strategy current`}
           />
 
           <H2 id="links">Links &amp; references</H2>
@@ -257,8 +257,8 @@ magpie collections get reach.strategy current`}
               ['[[Entry Title]]', 'Link to another entry by title (alias: [[Title|display]]). Stored as a durable edge; backlinks appear on the target — even if the target is created later.'],
               ['[[https://...]]', 'External URL'],
               ['[[alertee:check:42]]', 'Product resource reference (app:type:id)'],
-              ['{{reach.strategy.current.wedge}}', 'Collection value by dotted path, resolved at read time'],
-              ['{{collection:reach.strategy/current#wedge}}', 'Explicit long form'],
+              ['{{reach.strategy.current.wedge}}', 'KV value by dotted path, resolved at read time'],
+              ['{{kv:reach.strategy/current#wedge}}', 'Explicit long form'],
               ['{{attachment:logo-primary}}', 'Attachment on this entry by role or filename'],
             ]}
           />

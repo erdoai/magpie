@@ -20,10 +20,10 @@ from magpie.server.routes import (
     attachments,
     auth,
     bundle,
-    collections,
     entries,
     health,
     keys,
+    kv,
     oauth,
     orgs,
 )
@@ -110,7 +110,7 @@ def _create_inner_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(auth.router)
     app.include_router(entries.router)
-    app.include_router(collections.router)
+    app.include_router(kv.router)
     app.include_router(bundle.router)
     app.include_router(attachments.router)
     app.include_router(keys.router)

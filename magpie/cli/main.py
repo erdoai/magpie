@@ -14,7 +14,7 @@ from rich.console import Console
 
 from magpie.__version__ import __version__
 from magpie.attachments import handle_for, infer_kind, storage_key_for
-from magpie.bundle import load_manifest, scan_collections, scan_entries
+from magpie.bundle import load_manifest, scan_entries, scan_kv_stores
 from magpie.config.settings import Settings
 from magpie.db.database import Database
 from magpie.db.migrate import run_migrations
@@ -208,9 +208,9 @@ def push(
         raise typer.Exit(1)
 
     result = scan_entries(directory)
-    col_result = scan_collections(directory)
+    kv_result = scan_kv_stores(directory)
     manifest, manifest_err = load_manifest(directory)
-    file_errors = list(result.errors) + list(col_result.errors)
+    file_errors = list(result.errors) + list(kv_result.errors)
     if manifest_err:
         file_errors.append(manifest_err)
     if file_errors:
@@ -219,8 +219,8 @@ def push(
             console.print(f"  [red]{err.path}[/red]: {err.message}")
         raise typer.Exit(1)
 
-    # Anti-drift: reject undeclared/near-duplicate collections before any writes.
-    drift = check_drift(col_result.collections, manifest)
+    # Anti-drift: reject undeclared/near-duplicate kv stores before any writes.
+    drift = check_drift(kv_result.stores, manifest)
     for warning in drift.warnings:
         console.print(f"  [yellow]warning[/yellow]: {warning}")
     if not drift.ok:
@@ -229,8 +229,8 @@ def push(
             console.print(f"  [red]{err}[/red]")
         raise typer.Exit(1)
 
-    if not result.entries and not col_result.collections:
-        console.print("[yellow]No entries or collections found in bundle.[/yellow]")
+    if not result.entries and not kv_result.stores:
+        console.print("[yellow]No entries or kv stores found in bundle.[/yellow]")
         return
 
     async def _run():
@@ -245,7 +245,7 @@ def push(
             )
 
         outcome = await apply_push(
-            db, embedder, result.entries, col_result.collections,
+            db, embedder, result.entries, kv_result.stores,
             org_id=org_id, workspace=workspace, project=project,
         )
 
@@ -255,7 +255,7 @@ def push(
 
         if not outcome.ok:
             console.print(
-                "[red]Refusing to push — these collections already exist as "
+                "[red]Refusing to push — these kv stores already exist as "
                 "server-canonical (live) stores:[/red]"
             )
             for slug in outcome.conflicts:
@@ -267,7 +267,7 @@ def push(
         console.print(
             f"[green]Pushed {len(result.entries)} entries "
             f"({outcome.created} created, {outcome.updated} updated) and "
-            f"{outcome.collections} repo collections ({outcome.documents} docs) "
+            f"{outcome.stores} repo kv stores ({outcome.pairs} keys) "
             f"into '{workspace}'[/green]"
         )
 
@@ -281,11 +281,11 @@ def export(
     project: str = typer.Option(None, help="Limit to a project"),
     org_id: str = typer.Option(None, help="Limit to an org (NULL = global)"),
 ):
-    """Export entries and repo-canonical collections as a bundle on disk.
+    """Export entries and repo-canonical kv stores as a bundle on disk.
 
     The inverse of `push`: writes Markdown entries (re-using their original
-    paths) and `collections/<slug>.json` for repo-canonical stores, plus a
-    generated `_manifest.json`. Live (server-canonical) collections are not
+    paths) and `kv/<slug>.json` for repo-canonical stores, plus a
+    generated `_manifest.json`. Live (server-canonical) kv stores are not
     exported — runtime data stays out of the bundle.
     """
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(name)s: %(message)s")
@@ -297,14 +297,14 @@ def export(
 
     async def _run():
         db = await Database.connect(settings.database_url)
-        entries, collections = await gather_export(
+        entries, stores = await gather_export(
             db, org_id=org_id, workspace=workspace, project=project
         )
         await db.close()
-        summary = write_bundle(directory, entries, collections)
+        summary = write_bundle(directory, entries, stores)
         console.print(
             f"[green]Exported {summary['entries']} entries and "
-            f"{summary['collections']} repo collections to {directory}[/green]"
+            f"{summary['stores']} repo kv stores to {directory}[/green]"
         )
 
     asyncio.run(_run())

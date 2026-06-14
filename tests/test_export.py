@@ -2,12 +2,12 @@
 
 import json
 
-from magpie.bundle import load_manifest, scan_collections, scan_entries
+from magpie.bundle import load_manifest, scan_entries, scan_kv_stores
 from magpie.export import (
     build_manifest,
     entry_path,
-    render_collection,
     render_entry,
+    render_kv_store,
     slugify,
     write_bundle,
 )
@@ -69,17 +69,17 @@ def test_full_bundle_roundtrips(tmp_path):
             "source_path": "sales/orders.md",
         },
     ]
-    collections = [
+    stores = [
         {
             "slug": "strategy",
             "title": "Strategy",
-            "documents": [
+            "pairs": [
                 {"key": "wedge", "value": "simplicity"},
                 {"key": "mrr", "value": 4200},
             ],
         }
     ]
-    write_bundle(tmp_path, entries, collections)
+    write_bundle(tmp_path, entries, stores)
 
     # Entries scan back cleanly.
     scan = scan_entries(tmp_path)
@@ -87,10 +87,10 @@ def test_full_bundle_roundtrips(tmp_path):
     assert scan.entries[0].path == "sales/orders.md"
     assert scan.entries[0].title == "Orders"
 
-    # Collections scan back with inferred types.
-    cols = scan_collections(tmp_path)
-    assert cols.ok
-    by_key = {d.key: d.value for d in cols.collections[0].documents}
+    # KV stores scan back with inferred types.
+    kv = scan_kv_stores(tmp_path)
+    assert kv.ok
+    by_key = {d.key: d.value for d in kv.stores[0].pairs}
     assert by_key == {"wedge": "simplicity", "mrr": 4200}
 
     # Manifest is valid and declares the store.
@@ -109,11 +109,11 @@ def test_collision_paths_disambiguated(tmp_path):
     assert files == ["same-name-2.md", "same-name.md"]
 
 
-def test_no_manifest_when_no_collections(tmp_path):
+def test_no_manifest_when_no_kv_stores(tmp_path):
     write_bundle(tmp_path, [{"title": "X", "content": "y", "category": "resource"}], [])
-    assert not (tmp_path / "collections" / "_manifest.json").exists()
+    assert not (tmp_path / "kv" / "_manifest.json").exists()
 
 
-def test_render_collection_is_sorted_json(tmp_path):
-    out = render_collection([{"key": "b", "value": 2}, {"key": "a", "value": 1}])
+def test_render_kv_store_is_sorted_json(tmp_path):
+    out = render_kv_store([{"key": "b", "value": 2}, {"key": "a", "value": 1}])
     assert list(json.loads(out)) == ["a", "b"]  # sort_keys

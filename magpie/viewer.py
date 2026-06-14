@@ -1,6 +1,6 @@
 """Self-contained static HTML viewer for an exported bundle.
 
-Renders a single ``index.html`` with the bundle's entries and collections
+Renders a single ``index.html`` with the bundle's entries and kv stores
 embedded as JSON — no backend, no build step, no CDN. Open it by double-clicking
 and browse the knowledge as a linked graph offline. It pairs with
 ``magpie export``: a bundle plus this file is a portable, browsable artifact and
@@ -100,9 +100,9 @@ function renderNav() {
     html += `<div class="group">${esc(cat)}</div>`;
     cats[cat].forEach(e => { html += `<a class="item" data-i="${e._i}">${esc(e.title)}</a>`; });
   });
-  if (DATA.collections.length) {
-    html += '<div class="group">Collections</div>';
-    DATA.collections.forEach((c,i) => { html += `<a class="item" data-c="${i}">${esc(c.title||c.slug)}</a>`; });
+  if (DATA.stores.length) {
+    html += '<div class="group">KV stores</div>';
+    DATA.stores.forEach((c,i) => { html += `<a class="item" data-c="${i}">${esc(c.title||c.slug)}</a>`; });
   }
   nav.innerHTML = html;
 }
@@ -120,14 +120,14 @@ function selectEntry(i) {
   bindLinks();
 }
 
-function selectCollection(i) {
-  const c = DATA.collections[i];
+function selectStore(i) {
+  const c = DATA.stores[i];
   setActive(`[data-c="${i}"]`);
-  const rows = c.documents.map(d =>
+  const rows = c.pairs.map(d =>
     `<tr><td class="k">${esc(d.key)}</td><td><div class="type">${esc(d.value_type||'json')}</div><pre style="margin:4px 0 0">${esc(JSON.stringify(d.value, null, 2))}</pre></td></tr>`
   ).join('');
   document.getElementById('main').innerHTML =
-    `<h1>${esc(c.title||c.slug)}</h1><div class="meta">collection &middot; ${c.documents.length} documents</div>` +
+    `<h1>${esc(c.title||c.slug)}</h1><div class="meta">kv store &middot; ${c.pairs.length} keys</div>` +
     `<table class="kv">${rows}</table>`;
 }
 
@@ -140,11 +140,11 @@ function bindLinks() {
 }
 document.getElementById('nav').addEventListener('click', ev => {
   const a = ev.target.closest('a.item'); if (!a) return;
-  if (a.dataset.i != null) selectEntry(+a.dataset.i); else if (a.dataset.c != null) selectCollection(+a.dataset.c);
+  if (a.dataset.i != null) selectEntry(+a.dataset.i); else if (a.dataset.c != null) selectStore(+a.dataset.c);
 });
 
 renderNav();
-if (DATA.entries.length) selectEntry(0); else if (DATA.collections.length) selectCollection(0);
+if (DATA.entries.length) selectEntry(0); else if (DATA.stores.length) selectStore(0);
 else document.getElementById('main').innerHTML = '<p class="empty">Empty bundle.</p>';
 </script>
 </body>
@@ -152,7 +152,7 @@ else document.getElementById('main').innerHTML = '<p class="empty">Empty bundle.
 """
 
 
-def render_viewer(entries: list[dict], collections: list[dict]) -> str:
+def render_viewer(entries: list[dict], stores: list[dict]) -> str:
     """Render a self-contained viewer HTML string for a bundle."""
     payload = {
         "entries": [
@@ -165,20 +165,20 @@ def render_viewer(entries: list[dict], collections: list[dict]) -> str:
             }
             for e in entries
         ],
-        "collections": [
+        "stores": [
             {
-                "slug": c["slug"],
-                "title": c.get("title"),
-                "documents": [
+                "slug": s["slug"],
+                "title": s.get("title"),
+                "pairs": [
                     {
-                        "key": d["key"],
-                        "value": d["value"],
-                        "value_type": d.get("value_type", "json"),
+                        "key": p["key"],
+                        "value": p["value"],
+                        "value_type": p.get("value_type", "json"),
                     }
-                    for d in c["documents"]
+                    for p in s["pairs"]
                 ],
             }
-            for c in collections
+            for s in stores
         ],
     }
     # Escape "<" so an embedded "</script>" can't terminate the script tag.

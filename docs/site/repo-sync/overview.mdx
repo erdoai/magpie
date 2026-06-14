@@ -3,7 +3,7 @@ title: Repo sync
 description: Author knowledge as a folder of files in git, then sync it to the server.
 ---
 
-Repo sync is docs-as-code for knowledge. You author entries and curated collections as plain files, review them in pull requests, and sync them to Magpie. **The repo is the source of truth; the server is the search and serving index.**
+Repo sync is docs-as-code for knowledge. You author entries and curated KV stores as plain files, review them in pull requests, and sync them to Magpie. **The repo is the source of truth; the server is the search and serving index.**
 
 ```bash
 magpie push ./knowledge --workspace support     # repo  → server
@@ -17,9 +17,9 @@ Both commands exist in the [CLI](/cli/commands) and as REST endpoints (`POST /ap
 ```
 knowledge/
 ├── <entry>.md                  # markdown + frontmatter (entries)
-├── collections/
+├── kv/
 │   ├── _manifest.json          # canonical store/key registry (anti-drift)
-│   └── <slug>.json             # repo-canonical collection: { key: value }
+│   └── <slug>.json             # repo-canonical KV store: { key: value }
 └── index.html                  # self-contained offline viewer (written by export)
 ```
 
@@ -29,7 +29,7 @@ An entry is identified by its **relative path** in the bundle. Re-running `push`
 
 ## Idempotent and atomic
 
-`push` validates the whole bundle first. If any file is off-spec — bad [frontmatter](/repo-sync/frontmatter), an undeclared collection, a near-duplicate slug — it **aborts and reports every problem**, leaving the server untouched. Nothing is written until everything is valid.
+`push` validates the whole bundle first. If any file is off-spec — bad [frontmatter](/repo-sync/frontmatter), an undeclared KV store, a near-duplicate slug — it **aborts and reports every problem**, leaving the server untouched. Nothing is written until everything is valid.
 
 ## The offline viewer
 
@@ -39,7 +39,7 @@ An entry is identified by its **relative path** in the bundle. Re-running `push`
   <Card title="Frontmatter spec" icon="hashtag" href="/repo-sync/frontmatter">
     The strict, versioned schema at the top of every entry file.
   </Card>
-  <Card title="Repo collections" icon="layer-group" href="/repo-sync/collections">
+  <Card title="Repo KV stores" icon="layer-group" href="/repo-sync/kv">
     Curated key/value stores that live in git.
   </Card>
   <Card title="Anti-drift" icon="shield-check" href="/repo-sync/anti-drift">

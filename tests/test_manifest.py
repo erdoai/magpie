@@ -6,20 +6,20 @@ from magpie.manifest import check_drift, normalize_slug, validate_manifest
 
 
 @dataclass
-class FakeDoc:
+class FakePair:
     key: str
     value: object = None
     value_type: str = "json"
 
 
 @dataclass
-class FakeCol:
+class FakeStore:
     slug: str
-    documents: list = None
+    pairs: list = None
 
     def __post_init__(self):
-        if self.documents is None:
-            self.documents = []
+        if self.pairs is None:
+            self.pairs = []
 
 
 def manifest(stores):
@@ -33,24 +33,24 @@ def test_normalize_slug_collapses_separators_and_case():
 
 
 def test_no_manifest_only_checks_near_duplicates():
-    result = check_drift([FakeCol("strategy")], None)
+    result = check_drift([FakeStore("strategy")], None)
     assert result.ok
 
 
 def test_near_duplicate_slugs_rejected_without_manifest():
-    result = check_drift([FakeCol("reach-strategy"), FakeCol("reach_strategy")], None)
+    result = check_drift([FakeStore("reach-strategy"), FakeStore("reach_strategy")], None)
     assert not result.ok
     assert "Near-duplicate" in result.errors[0]
 
 
 def test_declared_store_passes():
-    result = check_drift([FakeCol("strategy")], manifest({"strategy": {"title": "S"}}))
+    result = check_drift([FakeStore("strategy")], manifest({"strategy": {"title": "S"}}))
     assert result.ok
 
 
 def test_undeclared_store_rejected_with_suggestion():
     result = check_drift(
-        [FakeCol("stratagy")], manifest({"strategy": {"title": "S"}})
+        [FakeStore("stratagy")], manifest({"strategy": {"title": "S"}})
     )
     assert not result.ok
     assert "not declared" in result.errors[0]
@@ -59,7 +59,7 @@ def test_undeclared_store_rejected_with_suggestion():
 
 def test_separator_variant_suggests_canonical():
     result = check_drift(
-        [FakeCol("reach_strategy")], manifest({"reach-strategy": {"title": "S"}})
+        [FakeStore("reach_strategy")], manifest({"reach-strategy": {"title": "S"}})
     )
     assert not result.ok
     assert "reach-strategy" in result.errors[0]
@@ -67,7 +67,7 @@ def test_separator_variant_suggests_canonical():
 
 def test_undeclared_key_warns_but_does_not_block():
     result = check_drift(
-        [FakeCol("strategy", [FakeDoc("wedge"), FakeDoc("typo")])],
+        [FakeStore("strategy", [FakePair("wedge"), FakePair("typo")])],
         manifest({"strategy": {"keys": ["wedge"]}}),
     )
     assert result.ok  # warning, not error
@@ -76,7 +76,7 @@ def test_undeclared_key_warns_but_does_not_block():
 
 def test_declared_keys_all_present_no_warning():
     result = check_drift(
-        [FakeCol("strategy", [FakeDoc("wedge")])],
+        [FakeStore("strategy", [FakePair("wedge")])],
         manifest({"strategy": {"keys": ["wedge", "mrr"]}}),
     )
     assert result.ok

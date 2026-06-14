@@ -297,24 +297,24 @@ export async function runMcpServer(): Promise<void> {
   );
 
   server.tool(
-    'list_collections',
-    'List collections — named JSON document stores for structured context (config, brand tokens, metrics).',
+    'kv_list',
+    'List KV stores — named typed key→value stores for structured context (config, brand tokens, metrics).',
     { ...scopeArgs },
     async (args) =>
       guarded(async () => {
         const s = applyScope(args);
         const cols = await api<{
-          slug: string; description: string | null; document_count: number;
+          slug: string; description: string | null; key_count: number;
           workspace: string | null; project: string | null;
-        }[]>(`/api/collections${qs({ workspace: s.workspace, project: s.project })}`);
-        if (!cols.length) return text('No collections found.');
+        }[]>(`/api/kv${qs({ workspace: s.workspace, project: s.project })}`);
+        if (!cols.length) return text('No KV stores found.');
         return text(
           cols
             .map((c) => {
               const ws = c.workspace || 'global';
               const scope = c.project ? `${ws}/${c.project}` : ws;
               const desc = c.description ? ` — ${c.description}` : '';
-              return `- **${c.slug}** [${scope}] (${c.document_count} documents)${desc}`;
+              return `- **${c.slug}** [${scope}] (${c.key_count} keys)${desc}`;
             })
             .join('\n')
         );
@@ -322,10 +322,10 @@ export async function runMcpServer(): Promise<void> {
   );
 
   server.tool(
-    'get_document',
-    'Read a typed document from a collection by key.',
+    'kv_get',
+    'Read a typed value from a KV store by key.',
     {
-      collection: z.string().describe('Collection slug (e.g. reach.strategy)'),
+      store: z.string().describe('KV store slug (e.g. reach.strategy)'),
       key: z.string(),
       ...scopeArgs,
     },
@@ -333,23 +333,23 @@ export async function runMcpServer(): Promise<void> {
       guarded(async () => {
         const s = applyScope(args);
         const doc = await api<{ value: unknown; value_type: string; updated_at: string }>(
-          `/api/collections/${args.collection}/documents/${args.key}${qs({
+          `/api/kv/${args.store}/keys/${args.key}${qs({
             workspace: s.workspace,
             project: s.project,
           })}`
         );
         return text(
-          `# ${args.collection}/${args.key}\nType: ${doc.value_type} | Updated: ${doc.updated_at}\n\n` +
+          `# ${args.store}/${args.key}\nType: ${doc.value_type} | Updated: ${doc.updated_at}\n\n` +
             JSON.stringify(doc.value, null, 2)
         );
       })
   );
 
   server.tool(
-    'set_document',
-    'Write a typed document to a collection (creates or overwrites by key).',
+    'kv_set',
+    'Write a typed value to a KV store (creates or overwrites by key).',
     {
-      collection: z.string(),
+      store: z.string(),
       key: z.string(),
       value: z.string().describe('JSON-encoded value (e.g. \'{"a":1}\', \'42\', \'"text"\')'),
       value_type: z
@@ -363,7 +363,7 @@ export async function runMcpServer(): Promise<void> {
       guarded(async () => {
         const s = applyScope(args);
         await api(
-          `/api/collections/${args.collection}/documents/${args.key}${qs({
+          `/api/kv/${args.store}/keys/${args.key}${qs({
             workspace: s.workspace,
             project: s.project,
           })}`,
@@ -376,25 +376,25 @@ export async function runMcpServer(): Promise<void> {
             },
           }
         );
-        return text(`Set ${args.collection}/${args.key}.`);
+        return text(`Set ${args.store}/${args.key}.`);
       })
   );
 
   server.tool(
-    'delete_document',
-    'Delete a document from a collection by key. Rejected for repo-canonical stores.',
-    { collection: z.string(), key: z.string(), ...scopeArgs },
+    'kv_delete',
+    'Delete a key from a KV store. Rejected for repo-canonical stores.',
+    { store: z.string(), key: z.string(), ...scopeArgs },
     async (args) =>
       guarded(async () => {
         const s = applyScope(args);
         await api(
-          `/api/collections/${args.collection}/documents/${args.key}${qs({
+          `/api/kv/${args.store}/keys/${args.key}${qs({
             workspace: s.workspace,
             project: s.project,
           })}`,
           { method: 'DELETE' }
         );
-        return text(`Deleted ${args.collection}/${args.key}.`);
+        return text(`Deleted ${args.store}/${args.key}.`);
       })
   );
 

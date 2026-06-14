@@ -57,7 +57,7 @@ A key can never be created with a role higher than the caller's own.
 
 ## Security model
 
-- **Fail-closed reads.** Entry/collection/document lookups filter visibility in SQL. A cross-tenant fetch by ID returns nothing — the isolation does not depend on the application remembering to check.
+- **Fail-closed reads.** Entry/KV-store/pair lookups filter visibility in SQL. A cross-tenant fetch by ID returns nothing — the isolation does not depend on the application remembering to check.
 - **Org is the wall.** Workspace and project are filters within a trusted org boundary, not security boundaries (see [Multi-tenancy](/concepts/multi-tenancy)).
 - **Identity is trusted, org hints are validated.** `X-Organization-ID` is a hint checked against membership on every request.
 

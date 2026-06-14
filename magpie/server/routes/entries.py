@@ -193,7 +193,7 @@ async def get_entry_links(entry_id: str, request: Request):
 
 @router.post("/entries/{entry_id}/resolve")
 async def resolve_entry_refs(entry_id: str, request: Request):
-    """Render the entry's Markdown with [[wikilinks]], {{collection.paths}},
+    """Render the entry's Markdown with [[wikilinks]], {{kv.paths}},
     and {{attachment:...}} references resolved. Returns the rendered
     markdown plus a dependency list with per-reference status."""
     db = request.app.state.db

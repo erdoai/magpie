@@ -26,7 +26,7 @@ export function OnboardingPage({ onComplete }: { onComplete: () => void }) {
     try {
       await api.createOrg(orgName);
       // Create an API key for the user
-      const key = await api.createKey('default');
+      const key = await api.createApiKey('default');
       setApiKey(key.key!);
       setStep('connect');
     } catch {

@@ -7,7 +7,7 @@ import { Separator } from '@/components/ui/separator';
 const NAV = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard },
   { path: '/browse', label: 'Notes', icon: FileText },
-  { path: '/collections', label: 'KV', icon: Database },
+  { path: '/kv', label: 'KV', icon: Database },
   { path: '/projects', label: 'Projects', icon: FolderGit2 },
   { path: '/search', label: 'Search', icon: Search },
   { path: '/new', label: 'New', icon: Plus },

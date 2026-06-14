@@ -10,16 +10,16 @@ def _ctx():
     return AuthContext(user_id="ua", org_id="org-a", role="editor")
 
 
-async def _make_collection(db, slug, docs, org_id="org-a"):
-    col_id = await db.create_collection(slug=slug, title=slug, org_id=org_id)
-    for key, value in docs.items():
-        await db.set_document(col_id, key, value, org_id=org_id)
-    return col_id
+async def _make_kv_store(db, slug, pairs, org_id="org-a"):
+    store_id = await db.create_kv_store(slug=slug, title=slug, org_id=org_id)
+    for key, value in pairs.items():
+        await db.set_kv_pair(store_id, key, value, org_id=org_id)
+    return store_id
 
 
-async def test_shorthand_collection_reference():
+async def test_shorthand_kv_reference():
     db = FakeDatabase()
-    await _make_collection(db, "reach.strategy", {
+    await _make_kv_store(db, "reach.strategy", {
         "alertee": {"positioning": {"wedge": "fast alerts"}},
     })
     entry_id = db.add_entry(
@@ -31,15 +31,15 @@ async def test_shorthand_collection_reference():
     assert result["markdown"] == "Our wedge: fast alerts"
     (dep,) = result["dependencies"]
     assert dep["status"] == "resolved"
-    assert dep["kind"] == "collection"
+    assert dep["kind"] == "kv"
 
 
-async def test_explicit_collection_reference_and_scalars():
+async def test_explicit_kv_reference_and_scalars():
     db = FakeDatabase()
-    await _make_collection(db, "metrics", {"mrr": 4200.5, "config": {"a": [1, 2, 3]}})
+    await _make_kv_store(db, "metrics", {"mrr": 4200.5, "config": {"a": [1, 2, 3]}})
     entry_id = db.add_entry(
         org_id="org-a",
-        content="MRR is {{collection:metrics/mrr}} and a[1] is {{metrics.config.a.1}}",
+        content="MRR is {{kv:metrics/mrr}} and a[1] is {{metrics.config.a.1}}",
     )
 
     result = await resolve_entry(db, db.entries[entry_id], _ctx(), FakeSettings())
@@ -48,7 +48,7 @@ async def test_explicit_collection_reference_and_scalars():
 
 async def test_object_values_render_as_json_blocks():
     db = FakeDatabase()
-    await _make_collection(db, "brand", {"tokens": {"primary": "#fff"}})
+    await _make_kv_store(db, "brand", {"tokens": {"primary": "#fff"}})
     entry_id = db.add_entry(org_id="org-a", content="Tokens: {{brand.tokens}}")
 
     result = await resolve_entry(db, db.entries[entry_id], _ctx(), FakeSettings())
@@ -58,7 +58,7 @@ async def test_object_values_render_as_json_blocks():
 
 async def test_unresolved_and_unauthorized_references():
     db = FakeDatabase()
-    await _make_collection(db, "b.secrets", {"k": "hidden"}, org_id="org-b")
+    await _make_kv_store(db, "b.secrets", {"k": "hidden"}, org_id="org-b")
     entry_id = db.add_entry(
         org_id="org-a",
         content="Missing {{nope.key}} and foreign {{b.secrets.k}}",
@@ -102,7 +102,7 @@ async def test_wikilinks_resolve_to_markdown_links():
 
 async def test_code_blocks_are_not_resolved():
     db = FakeDatabase()
-    await _make_collection(db, "metrics", {"mrr": 1})
+    await _make_kv_store(db, "metrics", {"mrr": 1})
     entry_id = db.add_entry(
         org_id="org-a",
         content="Real: {{metrics.mrr}}\n```\nNot real: {{metrics.mrr}}\n```",
@@ -122,11 +122,11 @@ def test_resolve_endpoint():
     client = make_client(db)
 
     client.post(
-        "/api/collections", headers=auth("key-a"),
+        "/api/kv", headers=auth("key-a"),
         json={"slug": "metrics", "title": "Metrics"},
     )
     client.put(
-        "/api/collections/metrics/documents/mrr",
+        "/api/kv/metrics/keys/mrr",
         headers=auth("key-a"), json={"value": 42, "value_type": "integer"},
     )
     res = client.post(

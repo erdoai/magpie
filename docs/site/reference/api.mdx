@@ -1,6 +1,6 @@
 ---
 title: REST API
-description: HTTP endpoints for entries, search, collections, attachments, and bundles.
+description: HTTP endpoints for entries, search, KV stores, attachments, and bundles.
 ---
 
 All endpoints are under `/api`. Authenticate with `Authorization: Bearer <key>` or a session cookie. Where relevant, requests accept `workspace` and `project` to scope. Interactive docs are served at `/docs` on a running server.
@@ -21,18 +21,19 @@ Multi-org users select their **active org** with the `X-Organization-ID` header 
 | `POST` | `/api/entries/{id}/resolve` | Resolve `{{references}}` and `[[wikilinks]]` |
 | `POST` | `/api/search` | Dual semantic + keyword search |
 
-## Collections
+## KV stores
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/api/collections` | List collections |
-| `POST` | `/api/collections` | Create a collection |
-| `GET` | `/api/collections/{slug}/documents` | List documents |
-| `GET` | `/api/collections/{slug}/documents/{key}` | Get a document |
-| `PUT` | `/api/collections/{slug}/documents/{key}` | Set a document |
-| `DELETE` | `/api/collections/{slug}/documents/{key}` | Delete a document |
+| `GET` | `/api/kv` | List KV stores (each exposes `key_count`) |
+| `POST` | `/api/kv` | Create a KV store |
+| `DELETE` | `/api/kv/{store_id}` | Delete a KV store |
+| `GET` | `/api/kv/{slug}/keys` | List keys (`{ store, pairs }`) |
+| `GET` | `/api/kv/{slug}/keys/{key}` | Get a key |
+| `PUT` | `/api/kv/{slug}/keys/{key}` | Set a key |
+| `DELETE` | `/api/kv/{slug}/keys/{key}` | Delete a key |
 
-Writes to a `repo`-canonical collection are rejected (the bundle is the source of truth).
+Writes to a `repo`-canonical KV store are rejected (the bundle is the source of truth).
 
 ## Attachments
 

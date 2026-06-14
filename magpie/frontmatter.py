@@ -18,7 +18,7 @@ keys. A bundle file is Markdown with a YAML-style frontmatter block fenced by
 
 Only the fields below are allowed. Unknown keys are rejected so the frontmatter
 never drifts into a second, unvalidated key/value store — structured data
-belongs in a collection, not here.
+belongs in a kv store, not here.
 
 This spec is deliberately self-contained (no YAML dependency): the field set is
 small and known, so we parse and validate it explicitly. That strictness is the
@@ -144,7 +144,7 @@ def validate(raw: dict[str, str]) -> Frontmatter:
         raise FrontmatterError(
             f"Unknown frontmatter field(s): {', '.join(sorted(unknown))}. "
             f"Allowed: {', '.join(ALLOWED_FIELDS)}. "
-            "Structured data belongs in a collection, not the frontmatter."
+            "Structured data belongs in a kv store, not the frontmatter."
         )
 
     missing = [k for k in REQUIRED_FIELDS if k not in raw]

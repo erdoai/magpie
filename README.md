@@ -14,10 +14,10 @@ Postgres + pgvector. REST API + MCP server + CLI + management UI — one product
 ## What it does
 
 - **Dual search** — semantic (vector embeddings) + keyword (Postgres full-text), fused with Reciprocal Rank Fusion. Works keyword-only without an embedding key.
-- **Typed collections** — named JSON key/value stores for structured context (config, brand tokens, metrics), read whole by key and returned typed.
-- **Links & references** — `[[wikilinks]]` with backlinks, and `{{collection.key}}` / `{{attachment:…}}` references that resolve to live values at read time.
+- **Typed KV stores** — named typed key/value stores for structured context (config, brand tokens, metrics), read whole by key and returned typed.
+- **Links & references** — `[[wikilinks]]` with backlinks, and `{{kv.key}}` / `{{attachment:…}}` references that resolve to live values at read time.
 - **Attachments** — files owned by entries (logos, screenshots, SQL, briefs) with stable `magpie:<id>` handles.
-- **Stays coherent** — dedupe-on-write, semantic duplicate detection, merge, and a collection registry keep the store from fragmenting. See [Staying coherent](docs/site/concepts/coherence.mdx).
+- **Stays coherent** — dedupe-on-write, semantic duplicate detection, merge, and a KV-store registry keep the store from fragmenting. See [Staying coherent](docs/site/concepts/coherence.mdx).
 - **Orgs + teams** — share within an org with roles (owner > admin > editor > viewer); fail-closed visibility.
 - **Every surface** — [REST API](docs/site/reference/api.mdx), [MCP server](docs/site/mcp/overview.mdx), [CLI](docs/site/cli/commands.mdx), and a management UI.
 
@@ -62,7 +62,7 @@ That exposes Magpie's full tool set (identical on the remote server and the stdi
 | Knowledge | `search`, `read`, `write`, `list_entries`, `archive` |
 | Coherence | `find_duplicates`, `merge` (and `write` with `dedupe`) |
 | Links & references | `list_links`, `resolve_knowledge` |
-| Collections | `list_collections`, `get_document`, `set_document`, `delete_document` |
+| KV | `kv_list`, `kv_get`, `kv_set`, `kv_delete` |
 | Attachments | `upload_attachment`, `list_attachments`, `get_attachment` |
 
 Full reference: [MCP tools](docs/site/mcp/tools.mdx) · setup for other clients: [MCP setup](docs/site/mcp/setup.mdx).

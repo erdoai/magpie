@@ -3,9 +3,9 @@ title: Staying coherent
 description: How Magpie stops a knowledge store from fragmenting into near-duplicates and drift.
 ---
 
-Every shared memory store rots the same way. Agents write the same fact under slightly different titles, the same value lands in two collections with different keys, and six months in nobody trusts what's canonical. Search still works — it just returns five near-identical answers.
+Every shared memory store rots the same way. Agents write the same fact under slightly different titles, the same value lands in two KV stores with different keys, and six months in nobody trusts what's canonical. Search still works — it just returns five near-identical answers.
 
-Magpie treats coherence as a first-class job, defended at every layer: when an entry is written, when duplicates are found, when they're merged, and when collections are declared.
+Magpie treats coherence as a first-class job, defended at every layer: when an entry is written, when duplicates are found, when they're merged, and when KV stores are declared.
 
 ## Dedupe on write
 
@@ -40,12 +40,12 @@ magpie merge <id-a> <id-b> --title "Refunds" --file merged.md
 
 Merging requires the `editor` role and at least two sources. Available as the `merge` MCP tool and `POST /api/entries/merge`.
 
-## Collections can't drift
+## KV stores can't drift
 
-Structured values get their own defense. A [collection](/concepts/collections) registry — the `_manifest.json` — declares the canonical stores, and Magpie refuses any store whose slug isn't declared or that near-duplicates an existing one (`Did you mean 'config'?`), **at push time and on live writes**. Repo-canonical stores reject agent writes entirely, so curated config stays pinned to git.
+Structured values get their own defense. A [KV store](/concepts/kv) registry — the `_manifest.json` — declares the canonical stores, and Magpie refuses any store whose slug isn't declared or that near-duplicates an existing one (`Did you mean 'config'?`), **at push time and on live writes**. Repo-canonical stores reject agent writes entirely, so curated config stays pinned to git.
 
 See [Anti-drift](/repo-sync/anti-drift) for the manifest in full.
 
 ## Why it matters
 
-These aren't separate features so much as one principle: a knowledge store is only useful if it stays trustworthy. Dedupe-on-write prevents fragmentation, find/merge repairs it, and the collection registry stops it structurally — so what an agent reads back is one coherent source of truth, not a pile of near-duplicates.
+These aren't separate features so much as one principle: a knowledge store is only useful if it stays trustworthy. Dedupe-on-write prevents fragmentation, find/merge repairs it, and the KV store registry stops it structurally — so what an agent reads back is one coherent source of truth, not a pile of near-duplicates.

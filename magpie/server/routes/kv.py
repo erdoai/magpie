@@ -1,4 +1,4 @@
-"""Collection and document endpoints — named JSON document stores."""
+"""KV store and pair endpoints — named typed key->value stores."""
 
 import logging
 import re
@@ -8,7 +8,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from magpie.collections import VALUE_TYPES, validate_value
+from magpie.kv import VALUE_TYPES, validate_value
 from magpie.manifest import normalize_slug
 from magpie.server.context import AuthContext, auth_context
 
@@ -31,35 +31,35 @@ def _bad_request(message: str) -> JSONResponse:
     return JSONResponse(status_code=400, content={"error": message})
 
 
-def _collection_visible(col: dict, ctx: AuthContext) -> bool:
-    # Collections are org-scoped (or global); reuse entry visibility rules.
-    return ctx.can_access({"user_id": None, "org_id": col.get("org_id")})
+def _store_visible(store: dict, ctx: AuthContext) -> bool:
+    # KV stores are org-scoped (or global); reuse entry visibility rules.
+    return ctx.can_access({"user_id": None, "org_id": store.get("org_id")})
 
 
-def _repo_locked(col: dict) -> JSONResponse | None:
-    """Reject writes to repo-canonical collections — the bundle is the source
+def _repo_locked(store: dict) -> JSONResponse | None:
+    """Reject writes to repo-canonical stores — the bundle is the source
     of truth, so they're edited in the repo and synced with `magpie push`."""
-    if col.get("source") == "repo":
+    if store.get("source") == "repo":
         return _forbidden(
-            "Collection is repo-canonical; edit the bundle file and run "
+            "KV store is repo-canonical; edit the bundle file and run "
             "`magpie push` (server writes are rejected to prevent drift)"
         )
     return None
 
 
-async def _find_visible_collection(
+async def _find_visible_store(
     db, slug: str, ctx: AuthContext, workspace: str | None, project: str | None
 ) -> dict | None:
     workspace, project = ctx.clamp_scope(workspace, project)
-    col = await db.find_collection(
+    store = await db.find_kv_store(
         slug, org_id=ctx.org_id, workspace=workspace, project=project
     )
-    if not col or not _collection_visible(col, ctx):
+    if not store or not _store_visible(store, ctx):
         return None
-    return col
+    return store
 
 
-class CollectionCreate(BaseModel):
+class KvStoreCreate(BaseModel):
     slug: str
     title: str
     description: str | None = None
@@ -68,17 +68,17 @@ class CollectionCreate(BaseModel):
     visibility: str = "org"
 
 
-class DocumentSet(BaseModel):
+class KvPairSet(BaseModel):
     value: Any
     value_type: str = "json"
     summary: str | None = None
 
 
-# -- Collections --
+# -- KV stores --
 
 
-@router.post("/collections")
-async def create_collection(body: CollectionCreate, request: Request):
+@router.post("/kv")
+async def create_kv_store(body: KvStoreCreate, request: Request):
     db = request.app.state.db
     ctx = auth_context(request)
 
@@ -92,32 +92,32 @@ async def create_collection(body: CollectionCreate, request: Request):
 
     workspace, project = ctx.clamp_scope(body.workspace, body.project)
 
-    existing = await db.find_collection(
+    existing = await db.find_kv_store(
         body.slug, org_id=ctx.org_id, workspace=workspace, project=project
     )
     if existing and existing.get("org_id") == ctx.org_id:
         return JSONResponse(
-            status_code=409, content={"error": "Collection slug already exists"}
+            status_code=409, content={"error": "KV store slug already exists"}
         )
 
     # Anti-drift: refuse a slug that near-duplicates an existing store in scope
     # (e.g. "reach_strategy" when "reach-strategy" exists).
     norm = normalize_slug(body.slug)
-    siblings = await db.list_collections(
+    siblings = await db.list_kv_stores(
         org_id=ctx.org_id, workspace=workspace, project=project
     )
     dup = next(
-        (c for c in siblings
-         if c["slug"] != body.slug and normalize_slug(c["slug"]) == norm),
+        (s for s in siblings
+         if s["slug"] != body.slug and normalize_slug(s["slug"]) == norm),
         None,
     )
     if dup:
         return _bad_request(
-            f"Near-duplicate of existing collection '{dup['slug']}'. "
+            f"Near-duplicate of existing KV store '{dup['slug']}'. "
             "Use that slug, or pick a clearly distinct name."
         )
 
-    col_id = await db.create_collection(
+    store_id = await db.create_kv_store(
         slug=body.slug,
         title=body.title,
         description=body.description,
@@ -127,11 +127,11 @@ async def create_collection(body: CollectionCreate, request: Request):
         project=project,
         created_by_user_id=ctx.user_id,
     )
-    return await db.get_collection(col_id, trusted=True)  # just created by caller
+    return await db.get_kv_store(store_id, trusted=True)  # just created by caller
 
 
-@router.get("/collections")
-async def list_collections(
+@router.get("/kv")
+async def list_kv_stores(
     request: Request,
     workspace: str | None = None,
     project: str | None = None,
@@ -139,33 +139,33 @@ async def list_collections(
     db = request.app.state.db
     ctx = auth_context(request)
     workspace, project = ctx.clamp_scope(workspace, project)
-    collections = await db.list_collections(
+    stores = await db.list_kv_stores(
         org_id=ctx.org_id, workspace=workspace, project=project
     )
-    return [c for c in collections if _collection_visible(c, ctx)]
+    return [s for s in stores if _store_visible(s, ctx)]
 
 
-@router.delete("/collections/{col_id}")
-async def delete_collection(col_id: str, request: Request):
+@router.delete("/kv/{store_id}")
+async def delete_kv_store(store_id: str, request: Request):
     db = request.app.state.db
     ctx = auth_context(request)
 
     if not ctx.has_role("editor"):
         return _forbidden("Write access requires editor role")
 
-    col = await db.get_collection(col_id, **ctx.view_filter)
-    if not col or not _collection_visible(col, ctx):
+    store = await db.get_kv_store(store_id, **ctx.view_filter)
+    if not store or not _store_visible(store, ctx):
         return _not_found()
 
-    await db.delete_collection(col_id)
+    await db.delete_kv_store(store_id)
     return {"ok": True}
 
 
-# -- Documents --
+# -- KV pairs --
 
 
-@router.get("/collections/{slug}/documents")
-async def list_documents(
+@router.get("/kv/{slug}/keys")
+async def list_kv_pairs(
     slug: str,
     request: Request,
     workspace: str | None = None,
@@ -173,15 +173,15 @@ async def list_documents(
 ):
     db = request.app.state.db
     ctx = auth_context(request)
-    col = await _find_visible_collection(db, slug, ctx, workspace, project)
-    if not col:
+    store = await _find_visible_store(db, slug, ctx, workspace, project)
+    if not store:
         return _not_found()
-    documents = await db.list_documents(col["id"])
-    return {"collection": col, "documents": documents}
+    pairs = await db.list_kv_pairs(store["id"])
+    return {"store": store, "pairs": pairs}
 
 
-@router.get("/collections/{slug}/documents/{key}")
-async def get_document(
+@router.get("/kv/{slug}/keys/{key}")
+async def get_kv_pair(
     slug: str,
     key: str,
     request: Request,
@@ -190,20 +190,20 @@ async def get_document(
 ):
     db = request.app.state.db
     ctx = auth_context(request)
-    col = await _find_visible_collection(db, slug, ctx, workspace, project)
-    if not col:
+    store = await _find_visible_store(db, slug, ctx, workspace, project)
+    if not store:
         return _not_found()
-    doc = await db.get_document(col["id"], key, **ctx.view_filter)
-    if not doc:
+    pair = await db.get_kv_pair(store["id"], key, **ctx.view_filter)
+    if not pair:
         return _not_found()
-    return doc
+    return pair
 
 
-@router.put("/collections/{slug}/documents/{key}")
-async def set_document(
+@router.put("/kv/{slug}/keys/{key}")
+async def set_kv_pair(
     slug: str,
     key: str,
-    body: DocumentSet,
+    body: KvPairSet,
     request: Request,
     workspace: str | None = None,
     project: str | None = None,
@@ -223,27 +223,27 @@ async def set_document(
     if error:
         return _bad_request(error)
 
-    col = await _find_visible_collection(db, slug, ctx, workspace, project)
-    if not col:
+    store = await _find_visible_store(db, slug, ctx, workspace, project)
+    if not store:
         return _not_found()
-    locked = _repo_locked(col)
+    locked = _repo_locked(store)
     if locked:
         return locked
 
-    await db.set_document(
-        collection_id=col["id"],
+    await db.set_kv_pair(
+        store_id=store["id"],
         key=key,
         value=body.value,
         value_type=body.value_type,
         summary=body.summary,
-        org_id=col.get("org_id"),
+        org_id=store.get("org_id"),
         created_by_user_id=ctx.user_id,
     )
-    return await db.get_document(col["id"], key, trusted=True)  # just written by caller
+    return await db.get_kv_pair(store["id"], key, trusted=True)  # just written by caller
 
 
-@router.delete("/collections/{slug}/documents/{key}")
-async def delete_document(
+@router.delete("/kv/{slug}/keys/{key}")
+async def delete_kv_pair(
     slug: str,
     key: str,
     request: Request,
@@ -256,14 +256,14 @@ async def delete_document(
     if not ctx.has_role("editor"):
         return _forbidden("Write access requires editor role")
 
-    col = await _find_visible_collection(db, slug, ctx, workspace, project)
-    if not col:
+    store = await _find_visible_store(db, slug, ctx, workspace, project)
+    if not store:
         return _not_found()
-    locked = _repo_locked(col)
+    locked = _repo_locked(store)
     if locked:
         return locked
 
-    ok = await db.delete_document(col["id"], key)
+    ok = await db.delete_kv_pair(store["id"], key)
     if not ok:
         return _not_found()
     return {"ok": True}

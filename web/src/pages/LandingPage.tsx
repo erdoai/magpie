@@ -62,12 +62,12 @@ magpie serve                          # REST + MCP + UI on :8200`,
 }
 
 const COLLECTIONS_EXAMPLE = `# Curated config — canonical in git, typed on write
-magpie collections set config trial_days    --value 14      --type integer
-magpie collections set config price_monthly  --value '"$29"' --type string
-magpie collections set config signups_open   --value true    --type boolean
+magpie kv set config trial_days    --value 14      --type integer
+magpie kv set config price_monthly  --value '"$29"' --type string
+magpie kv set config signups_open   --value true    --type boolean
 
 # Read one whole, by key — comes back as the real type
-magpie collections get config trial_days        # → 14  (integer, not "14")`;
+magpie kv get config trial_days        # → 14  (integer, not "14")`;
 
 const COHERENCE_EXAMPLE = `# Don't fork a near-duplicate — update the closest match
 magpie write --title "Pricing decision" --file note.md --dedupe
@@ -94,7 +94,7 @@ const COHERENCE_POINTS = [
   },
   {
     icon: ShieldCheck,
-    title: "Collections can't drift",
+    title: "KV stores can't drift",
     body: 'A manifest registry rejects undeclared or near-duplicate stores ("Did you mean \'config\'?") — at push time and on live writes.',
   },
 ];
@@ -166,7 +166,7 @@ const FEATURES = [
   {
     icon: Link2,
     title: 'Links & references',
-    body: '[[wikilinks]] become durable edges with backlinks. {{collection.key}} references resolve to live, typed values at read time.',
+    body: '[[wikilinks]] become durable edges with backlinks. {{kv.key}} references resolve to live, typed values at read time.',
   },
   {
     icon: Paperclip,
@@ -257,7 +257,7 @@ export function LandingPage() {
           </h1>
           <p className="mx-auto mt-5 max-w-2xl text-pretty text-muted-foreground">
             Memory APIs remember your users. Magpie remembers your projects — durable Markdown,
-            typed collections, and real files that agents write and read across every product you build.
+            typed KV stores, and real files that agents write and read across every product you build.
           </p>
           <div className="mt-9 flex flex-col items-center gap-3">
             <InlineCommand code="npx @erdo/magpie login" />
@@ -286,15 +286,15 @@ export function LandingPage() {
         <CodeBlock code={active.code} language={tab === 'rest' ? 'bash' : 'shell'} />
       </section>
 
-      {/* Collections spotlight */}
+      {/* KV stores spotlight */}
       <section className="mx-auto max-w-5xl px-6 pb-20">
         <div className="grid items-center gap-8 rounded-2xl border border-border bg-card/40 p-6 sm:p-8 lg:grid-cols-2 [&>*]:min-w-0">
           <div>
-            <Eyebrow>New · Typed collections</Eyebrow>
+            <Eyebrow>New · Typed KV stores</Eyebrow>
             <h2 className="text-2xl font-semibold">Not all knowledge is prose</h2>
             <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
               Some context is a <span className="text-foreground">value</span> — a trial length,
-              a support email, a set of brand tokens. Collections are named key/value stores your
+              a support email, a set of brand tokens. KV stores are named key/value stores your
               agents read whole by key, with typed values that deserialize without guessing.
             </p>
             <ul className="mt-5 space-y-3 text-sm">
@@ -323,7 +323,7 @@ export function LandingPage() {
             </ul>
             <Link to="/docs" className="mt-6 inline-flex">
               <Button variant="outline" size="sm">
-                Collections docs <ArrowRight size={14} className="ml-1.5" />
+                KV stores docs <ArrowRight size={14} className="ml-1.5" />
               </Button>
             </Link>
           </div>

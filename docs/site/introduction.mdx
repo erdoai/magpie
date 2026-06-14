@@ -3,23 +3,23 @@ title: Introduction
 description: The knowledge and context store for AI agents and teams — durable prose, typed structured data, links, and files in one place, with semantic + keyword search and an MCP interface.
 ---
 
-Magpie is a **store**, not a search box. It holds two kinds of context an agent needs and keeps them together: durable **prose knowledge** (Markdown) and **structured data** (typed key/value collections), connected by links and references, with files attached. You write context once, and agents read it back — by key, by reference, by search, over the Model Context Protocol. It's the shared memory and data layer your apps and agents delegate to instead of each rebuilding their own.
+Magpie is a **store**, not a search box. It holds two kinds of context an agent needs and keeps them together: durable **prose knowledge** (Markdown) and **structured data** (typed key/value stores), connected by links and references, with files attached. You write context once, and agents read it back — by key, by reference, by search, over the Model Context Protocol. It's the shared memory and data layer your apps and agents delegate to instead of each rebuilding their own.
 
 ## Two halves of context, one store
 
 - **Knowledge entries** — durable Markdown with typed metadata, organized by [PARA](/concepts/entries) category and scoped by org / workspace / project. The prose: decisions, runbooks, policies, notes.
-- **Collections** — typed JSON **key/value data stores**. The structured half: config, metrics, brand tokens, resolved facts, preferences. An agent reads a value by key (and gets it typed — a number is a number), not by parsing prose. Stores can be live and agent-written, or curated in git. See [Collections](/concepts/collections).
+- **KV stores** — typed JSON **key/value data stores**. The structured half: config, metrics, brand tokens, resolved facts, preferences. An agent reads a value by key (and gets it typed — a number is a number), not by parsing prose. Stores can be live and agent-written, or curated in git. See [KV stores](/concepts/kv).
 
 Then the connective tissue across both:
 
-- **Links & references** — `[[wikilinks]]` between entries with backlinks, and `{{value references}}` that pull a typed collection value into an entry at read time. See [Links](/concepts/links).
+- **Links & references** — `[[wikilinks]]` between entries with backlinks, and `{{value references}}` that pull a typed KV value into an entry at read time. See [Links](/concepts/links).
 - **Attachments** — logos, screenshots, SQL snippets, PDFs owned by an entry, with stable handles. See [Attachments](/concepts/attachments).
-- **Coherence** — dedupe-on-write, duplicate detection and merge, and a collection registry keep the store from fragmenting into near-duplicates over time. See [Staying coherent](/concepts/coherence).
+- **Coherence** — dedupe-on-write, duplicate detection and merge, and a KV store registry keep the store from fragmenting into near-duplicates over time. See [Staying coherent](/concepts/coherence).
 
 ## How agents get it back
 
 - **By search** — [dual semantic + keyword search](/concepts/search), fused with Reciprocal Rank Fusion, for when the agent doesn't know the key.
-- **By key / reference** — direct collection reads and read-time resolution, for when it does.
+- **By key / reference** — direct KV reads and read-time resolution, for when it does.
 - **Over three surfaces** — a REST API, an [MCP server](/mcp/overview), and a [CLI](/cli/installation), plus a management UI.
 
 ## How you use it

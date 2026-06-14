@@ -5,9 +5,9 @@ server with ``magpie push``. Layout:
 
     knowledge/
     ├── <entry>.md                 # markdown + frontmatter (entries)
-    ├── collections/
+    ├── kv/
     │   ├── _manifest.json          # canonical store/key registry (anti-drift)
-    │   └── <slug>.json             # repo-canonical collection: { key: value }
+    │   └── <slug>.json             # repo-canonical kv store: { key: value }
     └── attachments/
         ├── <file>                  # binary
         └── <file>.json             # sidecar metadata
@@ -27,14 +27,14 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from magpie.collections import infer_value_type
 from magpie.frontmatter import Frontmatter, FrontmatterError, parse
+from magpie.kv import infer_value_type
 
 # Subdirectories under a bundle root that are not entry Markdown.
-RESERVED_DIRS = ("collections", "attachments")
+RESERVED_DIRS = ("kv", "attachments")
 
-# Files in collections/ that are not collection stores.
-COLLECTIONS_DIR = "collections"
+# Directory under a bundle root holding repo-canonical kv stores.
+KV_DIR = "kv"
 MANIFEST_FILE = "_manifest.json"
 
 
@@ -75,8 +75,8 @@ class ScanResult:
 
 
 @dataclass
-class BundleDocument:
-    """One typed key/value in a repo-canonical collection."""
+class BundleKvPair:
+    """One typed key/value in a repo-canonical kv store."""
 
     key: str
     value: object
@@ -84,16 +84,16 @@ class BundleDocument:
 
 
 @dataclass
-class BundleCollection:
-    """A repo-canonical collection parsed from ``collections/<slug>.json``."""
+class BundleKvStore:
+    """A repo-canonical kv store parsed from ``kv/<slug>.json``."""
 
     slug: str
-    documents: list[BundleDocument] = field(default_factory=list)
+    pairs: list[BundleKvPair] = field(default_factory=list)
 
 
 @dataclass
-class CollectionScanResult:
-    collections: list[BundleCollection]
+class KvScanResult:
+    stores: list[BundleKvStore]
     errors: list[BundleError]
 
     @property
@@ -109,12 +109,12 @@ def _valid_slug(slug: str) -> bool:
 
 
 def load_manifest(root: str | Path) -> tuple[dict | None, BundleError | None]:
-    """Load ``collections/_manifest.json`` if present.
+    """Load ``kv/_manifest.json`` if present.
 
     Returns (manifest, error). Both None means there is no manifest (allowed —
     drift checks then fall back to near-duplicate detection only).
     """
-    path = Path(root) / COLLECTIONS_DIR / MANIFEST_FILE
+    path = Path(root) / KV_DIR / MANIFEST_FILE
     if not path.is_file():
         return None, None
     rel = path.relative_to(root).as_posix()
@@ -124,18 +124,18 @@ def load_manifest(root: str | Path) -> tuple[dict | None, BundleError | None]:
         return None, BundleError(rel, f"Invalid JSON: {exc}")
 
 
-def parse_collection_items(items: list[tuple[str, str]]) -> CollectionScanResult:
-    """Parse ``(slug, json_text)`` pairs into repo-canonical collections.
+def parse_kv_items(items: list[tuple[str, str]]) -> KvScanResult:
+    """Parse ``(slug, json_text)`` pairs into repo-canonical kv stores.
 
     The in-memory core shared by the disk scanner and the REST push endpoint, so
     validation and type inference live in exactly one place.
     """
-    collections: list[BundleCollection] = []
+    stores: list[BundleKvStore] = []
     errors: list[BundleError] = []
     for slug, text in items:
-        rel = f"{COLLECTIONS_DIR}/{slug}.json"
+        rel = f"{KV_DIR}/{slug}.json"
         if not _valid_slug(slug):
-            errors.append(BundleError(rel, f"Invalid collection slug {slug!r}"))
+            errors.append(BundleError(rel, f"Invalid kv store slug {slug!r}"))
             continue
         try:
             data = json.loads(text)
@@ -143,32 +143,32 @@ def parse_collection_items(items: list[tuple[str, str]]) -> CollectionScanResult
             errors.append(BundleError(rel, f"Invalid JSON: {exc}"))
             continue
         if not isinstance(data, dict):
-            errors.append(BundleError(rel, "Collection file must be a JSON object of key/value"))
+            errors.append(BundleError(rel, "KV file must be a JSON object of key/value"))
             continue
-        docs = [
-            BundleDocument(key=key, value=value, value_type=infer_value_type(value))
+        pairs = [
+            BundleKvPair(key=key, value=value, value_type=infer_value_type(value))
             for key, value in data.items()
         ]
-        collections.append(BundleCollection(slug=slug, documents=docs))
-    return CollectionScanResult(collections=collections, errors=errors)
+        stores.append(BundleKvStore(slug=slug, pairs=pairs))
+    return KvScanResult(stores=stores, errors=errors)
 
 
-def scan_collections(root: str | Path) -> CollectionScanResult:
-    """Scan ``collections/*.json`` for repo-canonical stores.
+def scan_kv_stores(root: str | Path) -> KvScanResult:
+    """Scan ``kv/*.json`` for repo-canonical stores.
 
     Each file is a flat ``{ key: value }`` map of native JSON values; the slug
     is the filename stem and value types are inferred. ``_manifest.json`` is not
     a store and is skipped here (it drives anti-drift checks separately).
     """
-    col_dir = Path(root) / COLLECTIONS_DIR
-    if not col_dir.is_dir():
-        return CollectionScanResult([], [])
+    kv_dir = Path(root) / KV_DIR
+    if not kv_dir.is_dir():
+        return KvScanResult([], [])
     items = [
         (path.stem, path.read_text())
-        for path in sorted(col_dir.glob("*.json"))
+        for path in sorted(kv_dir.glob("*.json"))
         if path.name != MANIFEST_FILE
     ]
-    return parse_collection_items(items)
+    return parse_kv_items(items)
 
 
 def _iter_markdown(root: Path):

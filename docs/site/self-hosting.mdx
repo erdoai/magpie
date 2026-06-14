@@ -81,10 +81,10 @@ Storage keys are bucket-agnostic, so moving providers later is an object copy pl
 
 Your knowledge lives in two places — back up both:
 
-1. **Postgres** — the source of truth for entries, collections, links, and metadata. Use your platform's managed backups, or schedule `pg_dump`.
+1. **Postgres** — the source of truth for entries, KV stores, links, and metadata. Use your platform's managed backups, or schedule `pg_dump`.
 2. **Object storage** — the attachment bytes. Enable bucket versioning / lifecycle rules on R2/S3.
 
-You can also export everything to a portable [bundle](/repo-sync/overview) with `magpie export ./backup` — Markdown entries plus repo collections as files you can keep in git. That's a logical backup and a guard against lock-in, not a substitute for a database backup.
+You can also export everything to a portable [bundle](/repo-sync/overview) with `magpie export ./backup` — Markdown entries plus repo KV stores as files you can keep in git. That's a logical backup and a guard against lock-in, not a substitute for a database backup.
 
 ## Connecting agents
 

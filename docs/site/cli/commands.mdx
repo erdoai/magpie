@@ -63,15 +63,15 @@ magpie merge <id-a> <id-b> --title "Refunds" --file merged.md
 
 `duplicates` reports clusters of entries that cover the same ground by semantic similarity (lower `--threshold` is stricter). `merge` collapses two or more into one — you supply the synthesized `--title` and `--file`/`--content`, and the sources are archived with lineage. See [Staying coherent](/concepts/coherence).
 
-## Collections
+## KV stores
 
 ```bash
-magpie collections list
-magpie collections get config trial_days
-magpie collections set config trial_days --value 14 --type integer
+magpie kv list
+magpie kv get config trial_days
+magpie kv set config trial_days --value 14 --type integer
 ```
 
-`set` takes `--value <json>` or `--file <path>`, and `--type` (`json`, `string`, `integer`, `float`, `boolean`, `datetime`). See [Collections](/concepts/collections).
+`set` takes `--value <json>` or `--file <path>`, and `--type` (`json`, `string`, `integer`, `float`, `boolean`, `datetime`). See [KV stores](/concepts/kv).
 
 ## Attachments
 
@@ -87,7 +87,7 @@ magpie push ./knowledge --workspace support    # repo  → server
 magpie export ./knowledge --workspace support   # server → repo
 ```
 
-`push` validates the whole [bundle](/repo-sync/overview) and aborts on any off-spec file or drift issue. `export` writes entries, repo collections, a manifest, and a self-contained `index.html` viewer. See [Repo sync](/repo-sync/overview).
+`push` validates the whole [bundle](/repo-sync/overview) and aborts on any off-spec file or drift issue. `export` writes entries, repo KV stores, a manifest, and a self-contained `index.html` viewer. See [Repo sync](/repo-sync/overview).
 
 ## MCP
 

@@ -33,6 +33,6 @@ The schema is **closed** — only these fields are allowed:
 
 ## Why it's strict
 
-Unknown keys are **rejected** on `push`, not silently stored. This is deliberate: an open frontmatter bag would quietly become a second, unvalidated key/value store and drift against your real [collections](/concepts/collections).
+Unknown keys are **rejected** on `push`, not silently stored. This is deliberate: an open frontmatter bag would quietly become a second, unvalidated key/value store and drift against your real [KV stores](/concepts/kv).
 
-The rule of thumb: **frontmatter describes the entry; structured data belongs in a collection.** If you're reaching to add a field, it's either a genuine schema change (which bumps `magpie_version`) or it's a collection document.
+The rule of thumb: **frontmatter describes the entry; structured data belongs in a KV store.** If you're reaching to add a field, it's either a genuine schema change (which bumps `magpie_version`) or it's a KV pair.

@@ -79,7 +79,7 @@ export interface EntryLinks {
   backlinks: Backlink[];
 }
 
-export interface Collection {
+export interface KvStore {
   id: string;
   org_id: string | null;
   workspace: string | null;
@@ -88,16 +88,16 @@ export interface Collection {
   title: string;
   description: string | null;
   visibility: string;
-  document_count?: number;
+  key_count?: number;
   created_at: string;
   updated_at: string;
 }
 
 export type ValueType = 'json' | 'string' | 'integer' | 'float' | 'boolean' | 'datetime';
 
-export interface CollectionDocument {
+export interface KvPair {
   id: string;
-  collection_id: string;
+  store_id: string;
   key: string;
   value: unknown;
   value_type: ValueType;
@@ -205,32 +205,32 @@ export const api = {
       body: JSON.stringify({ query, ...opts }),
     }),
 
-  // Collections
-  listCollections: (params?: Record<string, string>) => {
+  // KV
+  listKvStores: (params?: Record<string, string>) => {
     const qs = params ? '?' + new URLSearchParams(params).toString() : '';
-    return request<Collection[]>(`/api/collections${qs}`);
+    return request<KvStore[]>(`/api/kv${qs}`);
   },
-  createCollection: (data: {
+  createKvStore: (data: {
     slug: string; title: string; description?: string;
     workspace?: string; project?: string;
   }) =>
-    request<Collection>('/api/collections', {
+    request<KvStore>('/api/kv', {
       method: 'POST', body: JSON.stringify(data),
     }),
-  deleteCollection: (id: string) =>
-    request<{ ok: boolean }>(`/api/collections/${id}`, { method: 'DELETE' }),
-  listDocuments: (slug: string) =>
-    request<{ collection: Collection; documents: CollectionDocument[] }>(
-      `/api/collections/${slug}/documents`
+  deleteKvStore: (id: string) =>
+    request<{ ok: boolean }>(`/api/kv/${id}`, { method: 'DELETE' }),
+  listKeys: (slug: string) =>
+    request<{ store: KvStore; pairs: KvPair[] }>(
+      `/api/kv/${slug}/keys`
     ),
-  setDocument: (slug: string, key: string, data: {
+  setKey: (slug: string, key: string, data: {
     value: unknown; value_type?: ValueType; summary?: string;
   }) =>
-    request<CollectionDocument>(`/api/collections/${slug}/documents/${key}`, {
+    request<KvPair>(`/api/kv/${slug}/keys/${key}`, {
       method: 'PUT', body: JSON.stringify(data),
     }),
-  deleteDocument: (slug: string, key: string) =>
-    request<{ ok: boolean }>(`/api/collections/${slug}/documents/${key}`, {
+  deleteKey: (slug: string, key: string) =>
+    request<{ ok: boolean }>(`/api/kv/${slug}/keys/${key}`, {
       method: 'DELETE',
     }),
 
@@ -257,11 +257,11 @@ export const api = {
   deleteAttachment: (id: string) =>
     request<{ ok: boolean }>(`/api/attachments/${id}`, { method: 'DELETE' }),
 
-  // Keys
-  listKeys: () => request<ApiKey[]>('/api/keys'),
-  createKey: (name: string, opts?: { workspace?: string; project?: string; role?: string }) =>
+  // API keys
+  listApiKeys: () => request<ApiKey[]>('/api/keys'),
+  createApiKey: (name: string, opts?: { workspace?: string; project?: string; role?: string }) =>
     request<ApiKey>('/api/keys', { method: 'POST', body: JSON.stringify({ name, ...opts }) }),
-  deleteKey: (id: string) =>
+  deleteApiKey: (id: string) =>
     request<{ ok: boolean }>(`/api/keys/${id}`, { method: 'DELETE' }),
 
   // Orgs

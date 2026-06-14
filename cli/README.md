@@ -11,9 +11,9 @@ magpie read <entry-id> --resolved
 magpie write --title "Alertee positioning" --file positioning.md
 magpie archive <entry-id>
 
-magpie collections list
-magpie collections get reach.strategy alertee
-magpie collections set reach.strategy alertee --file strategy.json
+magpie kv list
+magpie kv get reach.strategy alertee
+magpie kv set reach.strategy alertee --file strategy.json
 
 magpie attachments add <entry-id> ./logo.svg --role logo-primary
 magpie attachments list <entry-id>

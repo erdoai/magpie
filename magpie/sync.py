@@ -2,7 +2,7 @@
 
 Keeping this in one place is the point: ``magpie push`` (Python CLI, direct DB)
 and ``POST /api/bundle/push`` (REST, for the TS CLI) run the *same* upsert,
-server-conflict, and collection-sync code, so the two surfaces can never drift
+server-conflict, and kv-sync code, so the two surfaces can never drift
 apart. Validation and anti-drift parsing live in :mod:`magpie.bundle` and
 :mod:`magpie.manifest`; this module applies the parsed result to the database.
 """
@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from magpie.bundle import BundleCollection, BundleEntry
+from magpie.bundle import BundleEntry, BundleKvStore
 from magpie.links import sync_entry_links
 
 
@@ -19,8 +19,8 @@ from magpie.links import sync_entry_links
 class PushOutcome:
     created: int = 0
     updated: int = 0
-    collections: int = 0
-    documents: int = 0
+    stores: int = 0
+    pairs: int = 0
     # Slugs that already exist as live (server-canonical) stores — a refusal,
     # set when the push was rejected before any writes.
     conflicts: list[str] = field(default_factory=list)
@@ -32,20 +32,20 @@ class PushOutcome:
         return not self.conflicts
 
 
-async def _collection_conflicts(
-    db, collections: list[BundleCollection], *, org_id, workspace, project
+async def _store_conflicts(
+    db, stores: list[BundleKvStore], *, org_id, workspace, project
 ) -> tuple[list[str], dict[str, dict]]:
-    """Find repo collections that collide with a live server-canonical store."""
+    """Find repo kv stores that collide with a live server-canonical store."""
     conflicts: list[str] = []
     existing: dict[str, dict] = {}
-    for col in collections:
-        found = await db.find_collection(
-            col.slug, org_id=org_id, workspace=workspace, project=project
+    for store in stores:
+        found = await db.find_kv_store(
+            store.slug, org_id=org_id, workspace=workspace, project=project
         )
         if found and found.get("org_id") == org_id:
             if found.get("source") != "repo":
-                conflicts.append(col.slug)
-            existing[col.slug] = found
+                conflicts.append(store.slug)
+            existing[store.slug] = found
     return conflicts, existing
 
 
@@ -53,7 +53,7 @@ async def apply_push(
     db,
     embedder,
     entries: list[BundleEntry],
-    collections: list[BundleCollection],
+    stores: list[BundleKvStore],
     *,
     org_id: str | None = None,
     workspace: str | None = None,
@@ -63,12 +63,12 @@ async def apply_push(
 
     Caller is responsible for parsing (``magpie.bundle``) and anti-drift checks
     (``magpie.manifest.check_drift``) first. This does the server-side
-    server-conflict pre-check, then upserts entries and repo collections.
+    server-conflict pre-check, then upserts entries and repo kv stores.
     """
     outcome = PushOutcome()
 
-    conflicts, existing = await _collection_conflicts(
-        db, collections, org_id=org_id, workspace=workspace, project=project
+    conflicts, existing = await _store_conflicts(
+        db, stores, org_id=org_id, workspace=workspace, project=project
     )
     if conflicts:
         outcome.conflicts = conflicts
@@ -99,29 +99,29 @@ async def apply_push(
         outcome.created += not was_updated
         outcome.entry_log.append(("updated" if was_updated else "created", entry.path))
 
-    for col in collections:
-        found = existing.get(col.slug)
+    for store in stores:
+        found = existing.get(store.slug)
         if found:
-            col_id = found["id"]
+            store_id = found["id"]
         else:
-            col_id = await db.create_collection(
-                slug=col.slug,
-                title=col.slug,
+            store_id = await db.create_kv_store(
+                slug=store.slug,
+                title=store.slug,
                 org_id=org_id,
                 workspace=workspace,
                 project=project,
                 source="repo",
             )
-        for doc in col.documents:
-            await db.set_document(
-                collection_id=col_id,
-                key=doc.key,
-                value=doc.value,
-                value_type=doc.value_type,
+        for pair in store.pairs:
+            await db.set_kv_pair(
+                store_id=store_id,
+                key=pair.key,
+                value=pair.value,
+                value_type=pair.value_type,
                 org_id=org_id,
             )
-            outcome.documents += 1
-        outcome.collections += 1
+            outcome.pairs += 1
+        outcome.stores += 1
 
     return outcome
 
@@ -129,10 +129,10 @@ async def apply_push(
 async def gather_export(
     db, *, org_id: str | None = None, workspace: str | None = None, project: str | None = None
 ) -> tuple[list[dict], list[dict]]:
-    """Collect entries and repo-canonical collections for export.
+    """Collect entries and repo-canonical kv stores for export.
 
-    Returns ``(entries, collections)`` where collections are
-    ``{"slug", "title", "documents"}`` dicts. Live (server-canonical) stores are
+    Returns ``(entries, stores)`` where stores are
+    ``{"slug", "title", "pairs"}`` dicts. Live (server-canonical) stores are
     excluded so an export never drags runtime data into a bundle.
     """
     entries: list[dict] = []
@@ -146,13 +146,13 @@ async def gather_export(
         entries.extend(batch)
         offset += len(batch)
 
-    collections: list[dict] = []
-    for col in await db.list_collections(org_id=org_id, workspace=workspace, project=project):
-        if col.get("source") != "repo":
+    stores: list[dict] = []
+    for store in await db.list_kv_stores(org_id=org_id, workspace=workspace, project=project):
+        if store.get("source") != "repo":
             continue
-        documents = await db.list_documents(col["id"])
-        collections.append(
-            {"slug": col["slug"], "title": col.get("title"), "documents": documents}
+        pairs = await db.list_kv_pairs(store["id"])
+        stores.append(
+            {"slug": store["slug"], "title": store.get("title"), "pairs": pairs}
         )
 
-    return entries, collections
+    return entries, stores

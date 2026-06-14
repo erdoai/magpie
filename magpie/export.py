@@ -1,8 +1,8 @@
 """Writing a Magpie knowledge bundle to disk (`magpie export`).
 
 The inverse of :mod:`magpie.bundle`: take entries and repo-canonical
-collections from the server and render a folder a developer can read, diff,
-and re-``push``. Only repo-canonical collections are exported — live
+kv stores from the server and render a folder a developer can read, diff,
+and re-``push``. Only repo-canonical kv stores are exported — live
 (server-canonical) stores are deliberately left out, so an export never drags
 runtime data into git.
 
@@ -54,24 +54,24 @@ def render_entry(entry: dict) -> str:
     return serialize(meta, entry.get("content") or "")
 
 
-def render_collection(documents: list[dict]) -> str:
-    """Render a repo collection's documents as a flat ``{key: value}`` JSON file."""
-    data = {doc["key"]: doc["value"] for doc in documents}
+def render_kv_store(pairs: list[dict]) -> str:
+    """Render a repo kv store's pairs as a flat ``{key: value}`` JSON file."""
+    data = {pair["key"]: pair["value"] for pair in pairs}
     return json.dumps(data, indent=2, ensure_ascii=False, sort_keys=True) + "\n"
 
 
-def build_manifest(collections: list[dict]) -> dict:
-    """Build a manifest registry from exported repo collections.
+def build_manifest(stores: list[dict]) -> dict:
+    """Build a manifest registry from exported repo kv stores.
 
-    ``collections`` is a list of ``{"slug", "title", "keys"}`` dicts.
+    ``stores`` is a list of ``{"slug", "title", "keys"}`` dicts.
     """
-    stores = {}
-    for col in sorted(collections, key=lambda c: c["slug"]):
-        stores[col["slug"]] = {
-            "title": col.get("title") or col["slug"],
-            "keys": sorted(col.get("keys") or []),
+    out = {}
+    for store in sorted(stores, key=lambda s: s["slug"]):
+        out[store["slug"]] = {
+            "title": store.get("title") or store["slug"],
+            "keys": sorted(store.get("keys") or []),
         }
-    return {"stores": stores}
+    return {"stores": out}
 
 
 def _unique_path(rel: str, used: set[str]) -> str:
@@ -91,15 +91,15 @@ def _unique_path(rel: str, used: set[str]) -> str:
 
 def render_bundle(
     entries: list[dict],
-    collections: list[dict],
+    stores: list[dict],
     viewer: bool = True,
 ) -> dict[str, str]:
     """Render a whole bundle in memory as ``{relative_path: file_content}``.
 
     The single source of bundle rendering, shared by the local writer
     (``write_bundle``) and the REST export endpoint (which returns these files
-    for a thin client to write). ``collections`` is a list of
-    ``{"slug", "title", "documents"}`` dicts (repo-canonical only).
+    for a thin client to write). ``stores`` is a list of
+    ``{"slug", "title", "pairs"}`` dicts (repo-canonical only).
     """
     files: dict[str, str] = {}
 
@@ -108,22 +108,22 @@ def render_bundle(
         rel = _unique_path(entry_path(entry), used)
         files[rel] = render_entry(entry)
 
-    manifest_cols = []
-    for col in collections:
-        docs = col["documents"]
-        files[f"collections/{col['slug']}.json"] = render_collection(docs)
-        manifest_cols.append(
-            {"slug": col["slug"], "title": col.get("title"), "keys": [d["key"] for d in docs]}
+    manifest_stores = []
+    for store in stores:
+        pairs = store["pairs"]
+        files[f"kv/{store['slug']}.json"] = render_kv_store(pairs)
+        manifest_stores.append(
+            {"slug": store["slug"], "title": store.get("title"), "keys": [p["key"] for p in pairs]}
         )
 
-    if manifest_cols:
-        manifest = build_manifest(manifest_cols)
-        files["collections/_manifest.json"] = (
+    if manifest_stores:
+        manifest = build_manifest(manifest_stores)
+        files["kv/_manifest.json"] = (
             json.dumps(manifest, indent=2, ensure_ascii=False) + "\n"
         )
 
     if viewer:
-        files["index.html"] = render_viewer(entries, collections)
+        files["index.html"] = render_viewer(entries, stores)
 
     return files
 
@@ -131,13 +131,13 @@ def render_bundle(
 def write_bundle(
     root: str | Path,
     entries: list[dict],
-    collections: list[dict],
+    stores: list[dict],
     viewer: bool = True,
 ) -> dict:
     """Write a bundle to ``root`` on disk. Returns a summary of what was written."""
     root = Path(root)
-    for rel, content in render_bundle(entries, collections, viewer=viewer).items():
+    for rel, content in render_bundle(entries, stores, viewer=viewer).items():
         path = root / rel
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content)
-    return {"entries": len(entries), "collections": len(collections)}
+    return {"entries": len(entries), "stores": len(stores)}

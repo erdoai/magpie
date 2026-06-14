@@ -71,8 +71,8 @@ class AuthContext:
 
     @property
     def view_filter(self) -> dict:
-        """Visibility kwargs for fail-closed DB reads (get_entry/get_collection/
-        get_document). Unrestricted contexts read everything; tenant contexts
+        """Visibility kwargs for fail-closed DB reads (get_entry/get_kv_store/
+        get_kv_pair). Unrestricted contexts read everything; tenant contexts
         are clamped to their own + org + global rows in SQL. Spread into the
         call: ``await db.get_entry(id, **ctx.view_filter)``."""
         if self.is_unrestricted:

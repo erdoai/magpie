@@ -43,7 +43,7 @@
               "concepts/entries",
               "concepts/multi-tenancy",
               "concepts/search",
-              "concepts/collections",
+              "concepts/kv",
               "concepts/links",
               "concepts/attachments",
               "concepts/coherence"
@@ -51,7 +51,7 @@
           },
           {
             "group": "Repo sync",
-            "pages": ["repo-sync/overview", "repo-sync/frontmatter", "repo-sync/collections", "repo-sync/anti-drift"]
+            "pages": ["repo-sync/overview", "repo-sync/frontmatter", "repo-sync/kv", "repo-sync/anti-drift"]
           },
           {
             "group": "Reference",

@@ -16,7 +16,7 @@ See [Setup](/mcp/setup) to connect.
 
 - **Find and read** — `search` (semantic + keyword), `read` (with optional resolved references), `list_entries`, `list_links`, `resolve_knowledge`.
 - **Write** — `write`, `archive`, `merge`, `find_duplicates`.
-- **Structured values** — `list_collections`, `get_document`, `set_document`, `delete_document`.
+- **Structured values** — `kv_list`, `kv_get`, `kv_set`, `kv_delete`.
 - **Files** — `upload_attachment`, `list_attachments`, `get_attachment`.
 
-Every call is scoped by the caller's org and role — agents see and change only what they're allowed to, the same rules as the REST API. Writes to [repo-canonical collections](/repo-sync/collections) are rejected, and creating a near-duplicate store is refused.
+Every call is scoped by the caller's org and role — agents see and change only what they're allowed to, the same rules as the REST API. Writes to [repo-canonical KV stores](/repo-sync/kv) are rejected, and creating a near-duplicate store is refused.

@@ -4,9 +4,9 @@ Entries can embed value references that resolve when read — the stored
 Markdown is never mutated:
 
 - ``{{reach.strategy.alertee.positioning.wedge}}`` — short form: longest
-  matching collection slug, then document key, then JSON path into the value.
-- ``{{collection:reach.strategy/alertee#positioning.wedge}}`` — explicit
-  long form: ``collection:<slug>/<key>[#<json.path>]``.
+  matching kv store slug, then key, then JSON path into the value.
+- ``{{kv:reach.strategy/alertee#positioning.wedge}}`` — explicit
+  long form: ``kv:<slug>/<key>[#<json.path>]``.
 - ``{{attachment:logo-primary}}`` — attachment on the current entry by
   role or filename.
 - ``[[wikilinks]]`` resolve to Markdown links (handled via stored link edges).
@@ -31,7 +31,7 @@ REF_RE = re.compile(r"\{\{([^{}\n]+)\}\}")
 @dataclass
 class Dependency:
     ref: str
-    kind: str  # collection, attachment, entry
+    kind: str  # kv, attachment, entry
     status: str  # resolved, not_found, unauthorized, invalid
     target_id: str | None = None
     detail: str | None = None
@@ -62,9 +62,9 @@ def _render_value(value) -> str:
 
 
 def _split_ref(ref: str) -> tuple[str, str]:
-    """Split into (scheme, rest). Bare dotted refs are collection shorthand."""
-    if ref.startswith("collection:"):
-        return "collection", ref[len("collection:"):]
+    """Split into (scheme, rest). Bare dotted refs are kv shorthand."""
+    if ref.startswith("kv:"):
+        return "kv", ref[len("kv:"):]
     if ref.startswith("attachment:"):
         return "attachment", ref[len("attachment:"):]
     return "shorthand", ref
@@ -140,9 +140,9 @@ class Resolver:
         scheme, rest = _split_ref(ref)
         if scheme == "attachment":
             return await self._resolve_attachment(ref, rest)
-        if scheme == "collection":
-            return await self._resolve_collection_explicit(ref, rest)
-        return await self._resolve_collection_shorthand(ref)
+        if scheme == "kv":
+            return await self._resolve_kv_explicit(ref, rest)
+        return await self._resolve_kv_shorthand(ref)
 
     async def _resolve_attachment(self, ref: str, name: str) -> str:
         attachments = await self._db.list_attachments(self._entry["id"])
@@ -167,89 +167,89 @@ class Resolver:
             return f"![{match.get('description') or match['filename']}]({url})"
         return f"[{match['filename']}]({url})"
 
-    async def _resolve_collection_explicit(self, ref: str, rest: str) -> str:
-        # collection:<slug>/<key>[#<json.path>]
+    async def _resolve_kv_explicit(self, ref: str, rest: str) -> str:
+        # kv:<slug>/<key>[#<json.path>]
         slug, sep, key_part = rest.partition("/")
         if not sep or not key_part:
             self.dependencies.append(Dependency(
-                ref=ref, kind="collection", status="invalid",
-                detail="expected collection:<slug>/<key>[#path]",
+                ref=ref, kind="kv", status="invalid",
+                detail="expected kv:<slug>/<key>[#path]",
             ))
             return _placeholder(ref)
         key, _, path = key_part.partition("#")
         path_parts = [p for p in path.split(".") if p] if path else []
-        return await self._lookup_document(ref, slug, key, path_parts)
+        return await self._lookup_pair(ref, slug, key, path_parts)
 
-    async def _resolve_collection_shorthand(self, ref: str) -> str:
-        # Longest collection-slug prefix wins; next segment is the key,
+    async def _resolve_kv_shorthand(self, ref: str) -> str:
+        # Longest kv-store-slug prefix wins; next segment is the key,
         # the rest is a JSON path into the value.
         segments = ref.split(".")
         if len(segments) < 2:
             self.dependencies.append(Dependency(
-                ref=ref, kind="collection", status="invalid",
-                detail="expected at least <collection>.<key>",
+                ref=ref, kind="kv", status="invalid",
+                detail="expected at least <store>.<key>",
             ))
             return _placeholder(ref)
 
         for split in range(len(segments) - 1, 0, -1):
             slug = ".".join(segments[:split])
-            col = await self._find_collection(slug)
-            if col:
+            store = await self._find_kv_store(slug)
+            if store:
                 key = segments[split]
                 path_parts = segments[split + 1:]
-                return await self._lookup_document(ref, slug, key, path_parts, col=col)
+                return await self._lookup_pair(ref, slug, key, path_parts, store=store)
 
         self.dependencies.append(Dependency(
-            ref=ref, kind="collection", status="not_found",
-            detail="no matching collection slug prefix",
+            ref=ref, kind="kv", status="not_found",
+            detail="no matching kv store slug prefix",
         ))
         return _placeholder(ref)
 
-    async def _find_collection(self, slug: str) -> dict | None:
-        col = await self._db.find_collection(
+    async def _find_kv_store(self, slug: str) -> dict | None:
+        store = await self._db.find_kv_store(
             slug,
             org_id=self._ctx.org_id or self._entry.get("org_id"),
             workspace=self._entry.get("workspace"),
             project=self._entry.get("project"),
         )
-        if col and not self._ctx.can_access({"user_id": None, "org_id": col.get("org_id")}):
+        if store and not self._ctx.can_access({"user_id": None, "org_id": store.get("org_id")}):
             return None
-        return col
+        return store
 
-    async def _lookup_document(
-        self, ref: str, slug: str, key: str, path: list[str], col: dict | None = None
+    async def _lookup_pair(
+        self, ref: str, slug: str, key: str, path: list[str], store: dict | None = None
     ) -> str:
-        col = col or await self._find_collection(slug)
-        if not col:
+        store = store or await self._find_kv_store(slug)
+        if not store:
             self.dependencies.append(Dependency(
-                ref=ref, kind="collection", status="not_found",
-                detail=f"collection '{slug}' not found or not authorized",
+                ref=ref, kind="kv", status="not_found",
+                detail=f"kv store '{slug}' not found or not authorized",
             ))
             return _placeholder(ref)
 
-        # Collection visibility already enforced by _find_collection above.
-        doc = await self._db.get_document(col["id"], key, trusted=True)
-        if not doc:
+        # KV store visibility already enforced by _find_kv_store above.
+        pair = await self._db.get_kv_pair(store["id"], key, trusted=True)
+        if not pair:
             self.dependencies.append(Dependency(
-                ref=ref, kind="collection", status="not_found",
-                detail=f"document '{key}' not found in '{slug}'",
+                ref=ref, kind="kv", status="not_found",
+                detail=f"key '{key}' not found in '{slug}'",
             ))
             return _placeholder(ref)
 
-        value = doc["value"]
+        value = pair["value"]
         if path:
             try:
                 value = _json_path(value, path)
             except (KeyError, IndexError, ValueError, TypeError):
                 self.dependencies.append(Dependency(
-                    ref=ref, kind="collection", status="not_found",
-                    target_id=doc["id"],
+                    ref=ref, kind="kv", status="not_found",
+                    target_id=pair["id"],
                     detail=f"path '{'.'.join(path)}' not found in value",
                 ))
                 return _placeholder(ref)
 
         self.dependencies.append(Dependency(
-            ref=ref, kind="collection", status="resolved", target_id=doc["id"],
+            ref=ref, kind="kv", status="resolved", target_id=pair["id"],
         ))
         return _render_value(value)
 

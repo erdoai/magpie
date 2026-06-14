@@ -7,14 +7,14 @@ ENTRIES = [
     {"title": "Orders", "category": "resource", "tags": ["sales"], "content": "See [[Customers]]."},
     {"title": "Customers", "category": "resource", "tags": [], "content": "People."},
 ]
-COLLECTIONS = [
+STORES = [
     {"slug": "strategy", "title": "Strategy",
-     "documents": [{"key": "wedge", "value": "simplicity", "value_type": "string"}]},
+     "pairs": [{"key": "wedge", "value": "simplicity", "value_type": "string"}]},
 ]
 
 
 def test_render_is_self_contained():
-    html = render_viewer(ENTRIES, COLLECTIONS)
+    html = render_viewer(ENTRIES, STORES)
     assert html.startswith("<!doctype html>")
     # No network dependencies — everything is inline.
     assert "http://" not in html
@@ -22,8 +22,8 @@ def test_render_is_self_contained():
     assert "src=" not in html  # no external scripts/styles
 
 
-def test_embeds_entry_and_collection_data():
-    html = render_viewer(ENTRIES, COLLECTIONS)
+def test_embeds_entry_and_kv_data():
+    html = render_viewer(ENTRIES, STORES)
     assert "Orders" in html
     assert "Customers" in html
     assert "strategy" in html
@@ -39,7 +39,7 @@ def test_escapes_script_breakout():
 
 
 def test_write_bundle_emits_index_html(tmp_path):
-    write_bundle(tmp_path, ENTRIES, COLLECTIONS)
+    write_bundle(tmp_path, ENTRIES, STORES)
     index = tmp_path / "index.html"
     assert index.exists()
     assert index.read_text().startswith("<!doctype html>")

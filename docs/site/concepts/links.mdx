@@ -24,8 +24,8 @@ Entries can embed values that resolve at **read time** — the stored Markdown i
 
 | Syntax | Resolves to |
 |--------|-------------|
-| `{{config.trial_days}}` | A [collection](/concepts/collections) value by dotted path |
-| `{{collection:config#trial_days}}` | The same, explicit long form |
+| `{{config.trial_days}}` | A [KV store](/concepts/kv) value by dotted path |
+| `{{kv:config#trial_days}}` | The same, explicit long form |
 | `{{attachment:logo-primary}}` | An [attachment](/concepts/attachments) on the entry, by role/filename |
 
 Resolution is permission-checked per target. Anything unresolved or unauthorized renders as a visible placeholder and is reported in a dependency list, so an agent knows exactly what's missing.

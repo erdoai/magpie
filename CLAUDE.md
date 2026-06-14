@@ -7,7 +7,7 @@ Knowledge store with semantic + keyword search. Postgres + pgvector.
 Single FastAPI server exposing:
 - **REST API** at `/api/` — CRUD + search for knowledge entries
 - **MCP server** at `/mcp` — 16 tools for AI agents (search/read/write/list/archive,
-  find_duplicates/merge, list_links/resolve_knowledge, collection get/set/delete/list,
+  find_duplicates/merge, list_links/resolve_knowledge, kv list/get/set/delete,
   attachment upload/list/get) — kept in lockstep across both MCP servers
 
 Storage: Postgres with pgvector for embeddings and tsvector for full-text search.
@@ -29,7 +29,7 @@ Search: Reciprocal Rank Fusion combining semantic (vector similarity) and keywor
 magpie serve              # start server on :8200
 magpie migrate            # run migrations only
 magpie push ./bundle      # sync a knowledge bundle (repo -> server)
-magpie export ./bundle    # write entries + repo collections to a bundle (server -> repo)
+magpie export ./bundle    # write entries + repo kv stores to a bundle (server -> repo)
 magpie import markdown .  # import foreign markdown/claude memories
 magpie version            # show version
 ```
@@ -83,7 +83,7 @@ pytest
 - Search fusion in `magpie/search/fusion.py` — runs semantic + keyword in parallel, merges with RRF.
 - Migration runner copied from crow pattern — numbered SQL files in `magpie/db/migrations/`.
 - MCP tools initialized with db + embedder at startup via `init_mcp()`.
-- **Fail-closed reads**: `db.get_entry/get_collection/get_document` filter
+- **Fail-closed reads**: `db.get_entry/get_kv_store/get_kv_pair` filter
   visibility in SQL. Pass `**ctx.view_filter` (REST + both MCP servers) or
   `trusted=True` for server-internal reads (links, resolve, CLI, post-write
   round-trips). No scope + not trusted ⇒ only global rows. Don't add a raw
