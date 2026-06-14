@@ -100,9 +100,14 @@ export function CollectionsPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-5">
-        <h1 className="text-xl font-semibold">Collections</h1>
+        <div>
+          <h1 className="text-xl font-semibold">KV</h1>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Key-value stores — typed values (JSON, strings, numbers) read whole by key.
+          </p>
+        </div>
         <Button size="sm" onClick={() => setCreating(!creating)}>
-          <Plus size={14} className="mr-1.5" /> New collection
+          <Plus size={14} className="mr-1.5" /> New store
         </Button>
       </div>
 
@@ -136,7 +141,8 @@ export function CollectionsPage() {
 
       {collections.length === 0 ? (
         <p className="text-muted-foreground text-sm">
-          No collections yet. Collections hold structured JSON/typed documents read whole by key.
+          No KV stores yet. A store holds typed values addressed by key — handy for config,
+          counters, and structured state an agent reads whole.
         </p>
       ) : (
         <div className="flex gap-5">
@@ -175,14 +181,14 @@ export function CollectionsPage() {
                     variant="outline" size="sm"
                     onClick={() => setEditor({ key: '', value: '', valueType: 'json', summary: '', isNew: true })}
                   >
-                    <Plus size={14} className="mr-1.5" /> Document
+                    <Plus size={14} className="mr-1.5" /> Key
                   </Button>
                 </div>
 
                 {editor && (
                   <Card className="mb-4">
                     <CardContent className="pt-4 flex flex-col gap-2">
-                      <div className="flex gap-2">
+                      <div className="flex flex-wrap gap-2">
                         <Input
                           value={editor.key}
                           onChange={e => setEditor({ ...editor, key: e.target.value })}
@@ -220,17 +226,17 @@ export function CollectionsPage() {
                 )}
 
                 {documents.length === 0 ? (
-                  <p className="text-muted-foreground text-sm">No documents.</p>
+                  <p className="text-muted-foreground text-sm">Empty — no keys yet.</p>
                 ) : (
                   <div className="flex flex-col rounded-lg border border-border overflow-hidden">
                     {documents.map(doc => (
                       <div key={doc.id} className="px-4 py-3 bg-card border-b border-border">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono text-sm font-medium">{doc.key}</span>
-                            <Badge variant="outline" className="text-[10px]">{doc.value_type}</Badge>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="font-mono text-sm font-medium truncate">{doc.key}</span>
+                            <Badge variant="outline" className="text-[10px] shrink-0">{doc.value_type}</Badge>
                           </div>
-                          <div className="flex gap-1">
+                          <div className="flex gap-1 shrink-0">
                             <Button
                               variant="ghost" size="sm" className="h-7 text-xs"
                               onClick={() => setEditor({
@@ -255,7 +261,7 @@ export function CollectionsPage() {
                         {doc.summary && (
                           <p className="text-xs text-muted-foreground mt-0.5">{doc.summary}</p>
                         )}
-                        <pre className="text-xs font-mono text-muted-foreground mt-1.5 max-h-32 overflow-auto whitespace-pre-wrap">
+                        <pre className="text-xs font-mono text-muted-foreground mt-1.5 max-h-32 overflow-auto whitespace-pre-wrap break-all">
                           {formatValue(doc)}
                         </pre>
                       </div>

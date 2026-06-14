@@ -1,13 +1,14 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
-import { Search, Library, Plus, Settings, LogOut, LayoutDashboard, FolderKanban } from 'lucide-react';
+import { Search, FileText, Plus, Settings, LogOut, LayoutDashboard, Database, FolderGit2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 
 const NAV = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { path: '/browse', label: 'Browse', icon: Library },
-  { path: '/collections', label: 'Collections', icon: FolderKanban },
+  { path: '/browse', label: 'Notes', icon: FileText },
+  { path: '/collections', label: 'KV', icon: Database },
+  { path: '/projects', label: 'Projects', icon: FolderGit2 },
   { path: '/search', label: 'Search', icon: Search },
   { path: '/new', label: 'New', icon: Plus },
   { path: '/settings', label: 'Settings', icon: Settings },
@@ -58,8 +59,10 @@ export function App() {
           </Button>
         </div>
       </nav>
-      <main className="flex-1 p-6 max-w-4xl">
-        <Outlet />
+      <main className="flex-1 min-w-0 p-6">
+        <div className="max-w-4xl">
+          <Outlet />
+        </div>
       </main>
     </div>
   );

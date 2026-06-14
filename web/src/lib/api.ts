@@ -145,6 +145,14 @@ export interface Workspace {
   created_at: string;
 }
 
+export interface Project {
+  id: string;
+  workspace_id: string;
+  name: string;
+  slug: string;
+  created_at?: string;
+}
+
 export const api = {
   // Auth
   sendCode: (email: string) =>
@@ -284,4 +292,14 @@ export const api = {
     }),
   deleteWorkspace: (wsId: string) =>
     request<{ ok: boolean }>(`/api/workspaces/${wsId}`, { method: 'DELETE' }),
+
+  // Projects (managed children of workspaces)
+  listProjects: (wsId: string) =>
+    request<Project[]>(`/api/workspaces/${wsId}/projects`),
+  createProject: (wsId: string, name: string) =>
+    request<Project>(`/api/workspaces/${wsId}/projects`, {
+      method: 'POST', body: JSON.stringify({ name }),
+    }),
+  deleteProject: (projId: string) =>
+    request<{ ok: boolean }>(`/api/projects/${projId}`, { method: 'DELETE' }),
 };

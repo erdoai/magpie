@@ -4,13 +4,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { Entry } from '@/lib/api';
 
-const CATEGORY_COLORS: Record<string, string> = {
-  project: 'text-[oklch(0.6_0.16_250)]',
-  area: 'text-[oklch(0.65_0.18_300)]',
-  resource: 'text-[oklch(0.65_0.17_145)]',
-  archive: 'text-muted-foreground',
-};
-
 export function EntryCard({
   entry,
   onArchive,
@@ -32,11 +25,8 @@ export function EntryCard({
           >
             {entry.title}
           </Link>
-          <Badge variant="outline" className={CATEGORY_COLORS[entry.category]}>
-            {entry.category}
-          </Badge>
           {entry.workspace && (
-            <Badge variant="secondary" className="text-[10px]">
+            <Badge variant="secondary" className="text-[10px] shrink-0">
               {entry.project ? `${entry.workspace}/${entry.project}` : entry.workspace}
             </Badge>
           )}

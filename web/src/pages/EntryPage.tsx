@@ -6,7 +6,6 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowLeft, Copy, ExternalLink, Link2, Paperclip, Pencil, Trash2, Upload } from 'lucide-react';
 import Markdown from 'react-markdown';
 
@@ -46,7 +45,7 @@ export function EntryPage() {
   const [uploading, setUploading] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ title: '', content: '', category: '', tags: '' });
+  const [form, setForm] = useState({ title: '', content: '', tags: '' });
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -56,7 +55,6 @@ export function EntryPage() {
       setForm({
         title: e.title,
         content: e.content,
-        category: e.category,
         tags: e.tags.join(', '),
       });
     });
@@ -92,7 +90,6 @@ export function EntryPage() {
       const updated = await api.updateEntry(id, {
         title: form.title,
         content: form.content,
-        category: form.category,
         tags: form.tags.split(',').map(t => t.trim()).filter(Boolean),
       });
       setEntry(updated);
@@ -142,15 +139,6 @@ export function EntryPage() {
       {editing ? (
         <div className="flex flex-col gap-3 max-w-2xl">
           <Input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="Title" />
-          <Select value={form.category} onValueChange={(v) => v && setForm({ ...form, category: v })}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="project">Project</SelectItem>
-              <SelectItem value="area">Area</SelectItem>
-              <SelectItem value="resource">Resource</SelectItem>
-              <SelectItem value="archive">Archive</SelectItem>
-            </SelectContent>
-          </Select>
           <Input value={form.tags} onChange={e => setForm({ ...form, tags: e.target.value })} placeholder="Tags (comma separated)" />
           <Textarea
             value={form.content}
@@ -161,9 +149,8 @@ export function EntryPage() {
         </div>
       ) : (
         <div>
-          <div className="flex items-center gap-2.5 mb-3">
+          <div className="flex flex-wrap items-center gap-2.5 mb-3">
             <h1 className="text-xl font-semibold">{entry.title}</h1>
-            <Badge variant="outline">{entry.category}</Badge>
             {entry.workspace && (
               <Badge variant="secondary">
                 {entry.project ? `${entry.workspace}/${entry.project}` : entry.workspace}
@@ -171,12 +158,12 @@ export function EntryPage() {
             )}
           </div>
           {entry.tags.length > 0 && (
-            <div className="flex gap-1 mb-4">
+            <div className="flex flex-wrap gap-1 mb-4">
               {entry.tags.map(t => <Badge key={t} variant="secondary">{t}</Badge>)}
             </div>
           )}
           <p className="text-xs text-muted-foreground mb-4">
-            ID: {entry.id} &middot; Source: {entry.source || 'manual'} &middot; Updated: {new Date(entry.updated_at).toLocaleString()}
+            Source: {entry.source || 'manual'} &middot; Updated: {new Date(entry.updated_at).toLocaleString()}
           </p>
           <Card>
             <CardContent className="pt-5 prose prose-invert prose-sm max-w-none">

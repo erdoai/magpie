@@ -12,7 +12,6 @@ export function NewEntryPage() {
   const [form, setForm] = useState({
     title: '',
     content: '',
-    category: 'resource',
     workspace: '',
     project: '',
     tags: '',
@@ -39,7 +38,6 @@ export function NewEntryPage() {
       const entry = await api.createEntry({
         title: form.title,
         content: form.content,
-        category: form.category,
         workspace: form.workspace || null,
         project: form.project || null,
         tags: form.tags.split(',').map(t => t.trim()).filter(Boolean),
@@ -63,15 +61,7 @@ export function NewEntryPage() {
           required
           autoFocus
         />
-        <div className="flex gap-3">
-          <Select value={form.category} onValueChange={(v) => v && setForm({ ...form, category: v })}>
-            <SelectTrigger><SelectValue placeholder="Category" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="project">Project</SelectItem>
-              <SelectItem value="area">Area</SelectItem>
-              <SelectItem value="resource">Resource</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="flex flex-wrap gap-3">
           {workspaces.length > 0 ? (
             <Select value={form.workspace} onValueChange={(v) => v && setForm({ ...form, workspace: v })}>
               <SelectTrigger><SelectValue placeholder="Workspace" /></SelectTrigger>

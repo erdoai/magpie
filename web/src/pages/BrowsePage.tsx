@@ -1,24 +1,21 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api, Entry, Workspace } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { EntryCard } from '@/components/EntryCard';
-import { cn } from '@/lib/utils';
-import { Plus } from 'lucide-react';
-
-const CATEGORIES = ['all', 'project', 'area', 'resource', 'archive'] as const;
+import { Plus, Archive } from 'lucide-react';
 
 export function BrowsePage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [entries, setEntries] = useState<Entry[]>([]);
-  const [category, setCategory] = useState<string>('all');
-  const [workspace, setWorkspace] = useState<string>('all');
-  const [project, setProject] = useState<string>('');
+  const [workspace, setWorkspace] = useState<string>(searchParams.get('workspace') || 'all');
+  const [project, setProject] = useState<string>(searchParams.get('project') || '');
+  const [showArchived, setShowArchived] = useState(false);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Load workspaces from first org
     api.listOrgs().then(orgs => {
       if (orgs.length > 0) {
         api.listWorkspaces(orgs[0].id).then(setWorkspaces);
@@ -30,17 +27,27 @@ export function BrowsePage() {
     setLoading(true);
     try {
       const params: Record<string, string> = {};
-      if (category !== 'all') params.category = category;
       if (workspace !== 'all') params.workspace = workspace;
       if (project.trim()) params.project = project.trim();
-      setEntries(await api.listEntries(params));
+      if (showArchived) params.category = 'archive';
+      const rows = await api.listEntries(params);
+      // Active view hides archived; archived view shows only archived (handled by API param).
+      setEntries(showArchived ? rows : rows.filter(e => e.category !== 'archive'));
     } catch (e) {
       console.error(e);
     }
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [category, workspace, project]);
+  useEffect(() => {
+    // Keep the URL in sync so scoped links are shareable/refresh-safe.
+    const next: Record<string, string> = {};
+    if (workspace !== 'all') next.workspace = workspace;
+    if (project.trim()) next.project = project.trim();
+    setSearchParams(next, { replace: true });
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspace, project, showArchived]);
 
   const handleArchive = async (id: string) => {
     await api.archiveEntry(id);
@@ -56,29 +63,16 @@ export function BrowsePage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-5">
-        <h1 className="text-xl font-semibold">Entries</h1>
+        <h1 className="text-xl font-semibold">{showArchived ? 'Archived notes' : 'Notes'}</h1>
         <Link to="/new">
           <Button size="sm"><Plus size={14} className="mr-1.5" /> New</Button>
         </Link>
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-4 mb-5">
-        <div className="flex gap-1.5">
-          {CATEGORIES.map(c => (
-            <Button
-              key={c}
-              variant={c === category ? 'default' : 'outline'}
-              size="sm"
-              className="capitalize text-xs"
-              onClick={() => setCategory(c)}
-            >
-              {c}
-            </Button>
-          ))}
-        </div>
+      <div className="flex flex-wrap items-center gap-2 mb-5">
         {workspaces.length > 0 && (
-          <div className="flex gap-1.5">
+          <div className="flex flex-wrap gap-1.5">
             <Button
               variant={workspace === 'all' ? 'default' : 'outline'}
               size="sm"
@@ -106,6 +100,14 @@ export function BrowsePage() {
           placeholder="Filter by project"
           className="h-8 w-44 text-xs"
         />
+        <Button
+          variant={showArchived ? 'default' : 'outline'}
+          size="sm"
+          className="text-xs ml-auto"
+          onClick={() => setShowArchived(v => !v)}
+        >
+          <Archive size={13} className="mr-1.5" /> Archived
+        </Button>
       </div>
 
       {loading ? (
@@ -113,18 +115,18 @@ export function BrowsePage() {
       ) : entries.length === 0 ? (
         <div className="text-center py-12">
           <p className="text-muted-foreground text-sm mb-3">
-            No entries found.
+            {showArchived ? 'No archived notes.' : 'No notes found.'}
           </p>
-          <Link to="/new">
-            <Button variant="outline" size="sm">
-              Create your first entry
-            </Button>
-          </Link>
+          {!showArchived && (
+            <Link to="/new">
+              <Button variant="outline" size="sm">
+                Create your first note
+              </Button>
+            </Link>
+          )}
         </div>
       ) : (
-        <div className={cn(
-          "flex flex-col rounded-lg border border-border overflow-hidden"
-        )}>
+        <div className="flex flex-col rounded-lg border border-border overflow-hidden">
           {entries.map(entry => (
             <EntryCard
               key={entry.id}
