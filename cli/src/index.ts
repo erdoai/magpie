@@ -91,7 +91,7 @@ function fail(err: unknown): never {
 
 program
   .command('login')
-  .description('Sign in with email OTP and store an API key locally')
+  .description('Sign in with email OTP and store an access token locally')
   .option('--api-url <url>', `Magpie server URL (default: ${DEFAULT_API_URL})`)
   .action(async (opts: { apiUrl?: string }) => {
     try {
@@ -122,19 +122,19 @@ program
       const cookie = res.headers.get('set-cookie');
       if (!cookie) fail(new ApiError(500, 'No session cookie returned'));
 
-      // Mint an API key for the CLI using the fresh session
-      const keyRes = await fetch(`${base}/api/keys`, {
+      // Mint an access token for the CLI using the fresh session
+      const tokenRes = await fetch(`${base}/api/tokens`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Cookie: cookie.split(';')[0] },
         body: JSON.stringify({ name: `cli-${new Date().toISOString().slice(0, 10)}` }),
       });
-      if (!keyRes.ok) fail(new ApiError(keyRes.status, await keyRes.text()));
-      const key = (await keyRes.json()) as { key: string };
+      if (!tokenRes.ok) fail(new ApiError(tokenRes.status, await tokenRes.text()));
+      const minted = (await tokenRes.json()) as { token: string };
 
       const config = loadConfig();
-      config.token = key.key;
+      config.token = minted.token;
       saveConfig(config);
-      console.log(`Signed in as ${body.user.email}. API key stored in ~/.config/magpie/.`);
+      console.log(`Signed in as ${body.user.email}. Access token stored in ~/.config/magpie/.`);
     } catch (err) {
       fail(err);
     }
@@ -142,7 +142,7 @@ program
 
 program
   .command('logout')
-  .description('Remove the stored API key')
+  .description('Remove the stored access token')
   .action(() => {
     clearToken();
     console.log('Logged out.');
@@ -161,7 +161,7 @@ program
       console.log('Auth: not signed in');
       return;
     }
-    console.log(`Auth: API key ${token.slice(0, 12)}…`);
+    console.log(`Auth: access token ${token.slice(0, 12)}…`);
     const activeOrg = resolveOrg();
     if (activeOrg) console.log(`Active org: ${activeOrg}`);
     if (config.workspace || config.project) {

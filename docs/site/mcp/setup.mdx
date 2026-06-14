@@ -7,13 +7,13 @@ Both options expose the [same tools](/mcp/tools).
 
 ## Remote server
 
-Add your Magpie server's `/mcp` endpoint to your client. With a static API key:
+Add your Magpie server's `/mcp` endpoint to your client. With an access token:
 
 **Claude Code**
 
 ```bash
 claude mcp add --transport http magpie https://your-magpie-server/mcp \
-  --header "Authorization: Bearer YOUR_API_KEY"
+  --header "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
 **Cursor / other clients** — add it as an MCP URL:
@@ -23,7 +23,7 @@ claude mcp add --transport http magpie https://your-magpie-server/mcp \
   "mcpServers": {
     "magpie": {
       "url": "https://your-magpie-server/mcp",
-      "headers": { "Authorization": "Bearer YOUR_API_KEY" }
+      "headers": { "Authorization": "Bearer YOUR_ACCESS_TOKEN" }
     }
   }
 }
@@ -52,4 +52,4 @@ Wire it into a client that launches stdio servers, for example:
 }
 ```
 
-The local server proxies to the same REST API with your stored key, so all the same scoping and guards apply.
+The local server proxies to the same REST API with your stored access token, so all the same scoping and guards apply.

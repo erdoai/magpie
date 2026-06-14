@@ -9,7 +9,7 @@ export function OnboardingPage({ onComplete }: { onComplete: () => void }) {
   const [step, setStep] = useState<'name' | 'org' | 'connect'>('name');
   const [displayName, setDisplayName] = useState('');
   const [orgName, setOrgName] = useState('');
-  const [apiKey, setApiKey] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const handleName = async () => {
@@ -25,9 +25,9 @@ export function OnboardingPage({ onComplete }: { onComplete: () => void }) {
     setLoading(true);
     try {
       await api.createOrg(orgName);
-      // Create an API key for the user
-      const key = await api.createApiKey('default');
-      setApiKey(key.key!);
+      // Create an access token for the user
+      const newToken = await api.createToken('default');
+      setToken(newToken.token!);
       setStep('connect');
     } catch {
       // org might already exist
@@ -85,12 +85,12 @@ export function OnboardingPage({ onComplete }: { onComplete: () => void }) {
 
           {step === 'connect' && (
             <div className="flex flex-col gap-4">
-              {apiKey && (
+              {token && (
                 <div className="p-3 rounded-md border border-border bg-card">
                   <p className="text-xs text-muted-foreground mb-1.5">
-                    Your API key:
+                    Your access token:
                   </p>
-                  <code className="text-xs break-all">{apiKey}</code>
+                  <code className="text-xs break-all">{token}</code>
                 </div>
               )}
 
@@ -104,7 +104,7 @@ export function OnboardingPage({ onComplete }: { onComplete: () => void }) {
                 <pre className="text-xs bg-background p-2 rounded overflow-x-auto">
 {`claude mcp add --transport http magpie \\
   ${window.location.origin}/mcp \\
-  --header "Authorization: Bearer ${apiKey || 'YOUR_API_KEY'}"`}
+  --header "Authorization: Bearer ${token || 'YOUR_TOKEN'}"`}
                 </pre>
               </div>
 

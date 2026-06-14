@@ -17,7 +17,7 @@ Requires Node 18+.
 magpie login
 ```
 
-Enter your email, then the one-time code sent to it. The CLI mints an API key and stores it at `~/.config/magpie/config.json`.
+Enter your email, then the one-time code sent to it. The CLI mints an access token and stores it at `~/.config/magpie/config.json`.
 
 Point at a specific server (hosted or self-hosted) with `--api-url`, or the `MAGPIE_API_URL` environment variable:
 
@@ -25,7 +25,7 @@ Point at a specific server (hosted or self-hosted) with `--api-url`, or the `MAG
 magpie login --api-url https://your-magpie-server
 ```
 
-For CI or scripts, skip login and set `MAGPIE_TOKEN` to an API key directly.
+For CI or scripts, skip login and set `MAGPIE_TOKEN` to an access token directly.
 
 ## Set a default scope
 

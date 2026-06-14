@@ -14,7 +14,7 @@ async function request<T>(path: string, opts?: RequestInit): Promise<T> {
     credentials: 'include',
   });
   if (res.status === 401 && !path.includes('/auth/')) {
-    // Try clearing API key and redirecting
+    // Try clearing token and redirecting
     localStorage.removeItem('magpie_api_key');
     window.location.reload();
     throw new Error('Unauthorized');
@@ -39,11 +39,11 @@ export interface Entry {
   updated_at: string;
 }
 
-export interface ApiKey {
+export interface Token {
   id: string;
   name: string;
-  key_prefix: string;
-  key?: string;
+  token_prefix: string;
+  token?: string;
   user_id: string | null;
   org_id: string | null;
   workspace: string | null;
@@ -257,12 +257,12 @@ export const api = {
   deleteAttachment: (id: string) =>
     request<{ ok: boolean }>(`/api/attachments/${id}`, { method: 'DELETE' }),
 
-  // API keys
-  listApiKeys: () => request<ApiKey[]>('/api/keys'),
-  createApiKey: (name: string, opts?: { workspace?: string; project?: string; role?: string }) =>
-    request<ApiKey>('/api/keys', { method: 'POST', body: JSON.stringify({ name, ...opts }) }),
-  deleteApiKey: (id: string) =>
-    request<{ ok: boolean }>(`/api/keys/${id}`, { method: 'DELETE' }),
+  // Access tokens
+  listTokens: () => request<Token[]>('/api/tokens'),
+  createToken: (name: string, opts?: { workspace?: string; project?: string; role?: string }) =>
+    request<Token>('/api/tokens', { method: 'POST', body: JSON.stringify({ name, ...opts }) }),
+  deleteToken: (id: string) =>
+    request<{ ok: boolean }>(`/api/tokens/${id}`, { method: 'DELETE' }),
 
   // Orgs
   listOrgs: () => request<Org[]>('/api/orgs'),

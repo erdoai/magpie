@@ -58,7 +58,7 @@ export function resolveToken(): string | undefined {
 }
 
 /** Active org sent as X-Organization-ID. Lets a multi-org user point a single
- *  key at different orgs. Ignored server-side for org-pinned keys. */
+ *  token at different orgs. Ignored server-side for org-pinned tokens. */
 export function resolveOrg(): string | undefined {
   return process.env.MAGPIE_ORG || loadConfig().org;
 }

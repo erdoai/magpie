@@ -8,8 +8,8 @@ Most commands accept `--workspace` and `--project` to scope, falling back to wha
 ## Auth & account
 
 ```bash
-magpie login              # email one-time code → store an API key
-magpie logout             # remove the stored key
+magpie login              # email one-time code → store an access token
+magpie logout             # remove the stored token
 magpie whoami             # server, auth, active org, linked scope, orgs
 magpie link --workspace support --project billing
 magpie workspace list <orgId>
@@ -92,7 +92,7 @@ magpie export ./knowledge --workspace support   # server → repo
 ## MCP
 
 ```bash
-magpie mcp                # run a local stdio MCP server over your stored key
+magpie mcp                # run a local stdio MCP server over your stored access token
 ```
 
 See [MCP setup](/mcp/setup).

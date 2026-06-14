@@ -61,8 +61,8 @@ are filter tags within a trusted org, not security boundaries. A user can belong
 to many orgs but acts in one **active org** at a time, resolved as:
 `X-Organization-ID` header (membership-validated, 403 if not a member) > saved
 `users.default_org_id` (via `POST /api/orgs/{id}/select`) > first membership.
-Shared resolver: `context.resolve_active_org()`. A user API key can switch among
-the user's orgs via the header, capped by the key's role (`context.cap_role`).
+Shared resolver: `context.resolve_active_org()`. A user token can switch among
+the user's orgs via the header, capped by the token's role (`context.cap_role`).
 
 ## Development
 

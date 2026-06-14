@@ -2,7 +2,7 @@
 
 from magpie.kv import validate_value
 
-from .test_isolation import FakeDatabase, add_key, auth, make_client
+from .test_isolation import FakeDatabase, add_token, auth, make_client
 
 # -- Typed value validation --
 
@@ -35,7 +35,7 @@ def test_validate_value_rejects_mismatches():
 
 def _setup():
     db = FakeDatabase()
-    add_key(db, "key-a", user_id="ua", org_id="org-a")
+    add_token(db, "key-a", user_id="ua", org_id="org-a")
     return db, make_client(db)
 
 
@@ -147,8 +147,8 @@ def test_duplicate_slug_rejected():
 
 def test_viewer_cannot_write_pairs():
     db = FakeDatabase()
-    add_key(db, "viewer-key", user_id="ua", org_id="org-a", role="viewer")
-    add_key(db, "editor-key", user_id="ub", org_id="org-a", role="editor")
+    add_token(db, "viewer-key", user_id="ua", org_id="org-a", role="viewer")
+    add_token(db, "editor-key", user_id="ub", org_id="org-a", role="editor")
     client = make_client(db)
 
     client.post(
@@ -178,8 +178,8 @@ def test_viewer_cannot_write_pairs():
 
 def test_kv_stores_isolated_across_orgs():
     db = FakeDatabase()
-    add_key(db, "key-a", user_id="ua", org_id="org-a")
-    add_key(db, "key-b", user_id="ub", org_id="org-b")
+    add_token(db, "key-a", user_id="ua", org_id="org-a")
+    add_token(db, "key-b", user_id="ub", org_id="org-b")
     client = make_client(db)
 
     client.post(
@@ -203,7 +203,7 @@ def test_kv_stores_isolated_across_orgs():
 
 def test_workspace_scoped_key_clamps_store_creation():
     db = FakeDatabase()
-    add_key(db, "scoped-key", user_id="ua", org_id="org-a",
+    add_token(db, "scoped-key", user_id="ua", org_id="org-a",
             workspace="reach", project="alertee")
     client = make_client(db)
 

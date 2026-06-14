@@ -155,7 +155,7 @@ claude mcp add magpie -- npx @erdo/magpie mcp`}
             rows={[
               ['org', 'Team/account boundary. Roles: owner > admin > editor > viewer. Editors write knowledge; admins manage members and workspaces.'],
               ['workspace', 'Broad app/product namespace — "reach", "alertee", "personal".'],
-              ['project', 'Narrower work area inside a workspace — a customer, a product, a codebase. Workspace + project travel together on every entry, search, and API key.'],
+              ['project', 'Narrower work area inside a workspace — a customer, a product, a codebase. Workspace + project travel together on every entry, search, and token.'],
               ['entry', 'A Markdown knowledge document with category (PARA), tags, source, and scope.'],
               ['kv store', 'A named store of typed values, read whole by key.'],
               ['attachment', 'A file owned by an entry — logo, screenshot, SQL snippet, brief.'],
@@ -163,14 +163,14 @@ claude mcp add magpie -- npx @erdo/magpie mcp`}
             ]}
           />
           <P>
-            API keys can be pinned to a workspace/project — everything done with that key is clamped to
+            Tokens can be pinned to a workspace/project — everything done with that token is clamped to
             that scope, which is how you give one product (or one agent) its own slice of memory.
           </P>
 
           <H2 id="cli">CLI</H2>
           <CodeBlock
             language="shell"
-            code={`npx @erdo/magpie login        # email OTP → API key in ~/.config/magpie/
+            code={`npx @erdo/magpie login        # email OTP → token in ~/.config/magpie/
 magpie logout | whoami | link
 
 magpie search "query" [--workspace W] [--project P] [--category C]
@@ -195,7 +195,7 @@ magpie mcp                   # stdio MCP server for local agents`}
           <P>
             The hosted <Mono>/mcp</Mono> endpoint speaks Streamable HTTP with OAuth — each user
             authorizes their own access, and tools are scoped to their org automatically.
-            <Mono>magpie mcp</Mono> runs the same tools over stdio using your API key.
+            <Mono>magpie mcp</Mono> runs the same tools over stdio using your token.
           </P>
           <Table
             headers={['Tool', 'Does']}
@@ -214,7 +214,7 @@ magpie mcp                   # stdio MCP server for local agents`}
           />
 
           <H2 id="rest">REST API</H2>
-          <P>Auth: <Mono>Authorization: Bearer &lt;api-key&gt;</Mono>. All list/search endpoints accept <Mono>workspace</Mono> and <Mono>project</Mono>.</P>
+          <P>Auth: <Mono>Authorization: Bearer &lt;token&gt;</Mono>. All list/search endpoints accept <Mono>workspace</Mono> and <Mono>project</Mono>.</P>
           <Table
             headers={['Endpoint', 'Does']}
             rows={[
@@ -229,7 +229,7 @@ magpie mcp                   # stdio MCP server for local agents`}
               ['POST /api/entries/:id/attachments', 'Upload (multipart)'],
               ['GET /api/attachments/:id[/download]', 'Metadata + inline text / file bytes'],
               ['GET /public/assets/:id', 'Stable public URL for opted-in browser-safe images'],
-              ['POST|GET /api/keys', 'Scoped API keys'],
+              ['POST|GET /api/tokens', 'Scoped access tokens'],
               ['POST|GET /api/orgs', 'Orgs, members, workspaces'],
             ]}
           />

@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 
 from magpie.server.auth import AuthMiddleware
 from magpie.server.context import AuthContext
-from magpie.server.routes import attachments, entries, keys, kv, orgs
+from magpie.server.routes import attachments, entries, kv, orgs, tokens
 
 
 def _hash(token: str) -> str:
@@ -31,7 +31,7 @@ class FakeSettings:
 class FakeDatabase:
     def __init__(self):
         self.entries: dict[str, dict] = {}
-        self.api_keys: dict[str, dict] = {}  # key_hash -> record
+        self.tokens: dict[str, dict] = {}  # token_hash -> record
         self.org_roles: dict[tuple[str, str], str] = {}  # (org_id, user_id) -> role
         self.workspaces: dict[str, dict] = {}
         self.projects: dict[str, dict] = {}
@@ -45,41 +45,41 @@ class FakeDatabase:
         self.sessions: dict[str, dict] = {}  # session_id -> {user_id}
         self.user_default_org: dict[str, str | None] = {}  # user_id -> org_id
 
-    # -- keys --
+    # -- tokens --
 
-    async def get_api_key_by_hash(self, key_hash):
-        return self.api_keys.get(key_hash)
+    async def get_token_by_hash(self, token_hash):
+        return self.tokens.get(token_hash)
 
-    async def touch_api_key(self, key_id):
+    async def touch_token(self, token_id):
         pass
 
-    async def create_api_key(self, name, key_hash, key_prefix, user_id=None,
-                             org_id=None, workspace=None, project=None, role="editor"):
-        key_id = uuid4().hex
-        self.api_keys[key_hash] = {
-            "id": key_id, "name": name, "key_prefix": key_prefix,
+    async def create_token(self, name, token_hash, token_prefix, user_id=None,
+                           org_id=None, workspace=None, project=None, role="editor"):
+        token_id = uuid4().hex
+        self.tokens[token_hash] = {
+            "id": token_id, "name": name, "token_prefix": token_prefix,
             "user_id": user_id, "org_id": org_id, "workspace": workspace,
             "project": project, "role": role,
             "created_at": datetime.now(UTC), "last_used_at": None,
         }
-        return key_id
+        return token_id
 
-    async def get_api_key(self, key_id):
-        for rec in self.api_keys.values():
-            if rec["id"] == key_id:
+    async def get_token(self, token_id):
+        for rec in self.tokens.values():
+            if rec["id"] == token_id:
                 return rec
         return None
 
-    async def list_api_keys(self):
-        return list(self.api_keys.values())
+    async def list_tokens(self):
+        return list(self.tokens.values())
 
-    async def list_api_keys_for_user(self, user_id):
-        return [r for r in self.api_keys.values() if r["user_id"] == user_id]
+    async def list_tokens_for_user(self, user_id):
+        return [r for r in self.tokens.values() if r["user_id"] == user_id]
 
-    async def delete_api_key(self, key_id):
-        for h, rec in list(self.api_keys.items()):
-            if rec["id"] == key_id:
-                del self.api_keys[h]
+    async def delete_token(self, token_id):
+        for h, rec in list(self.tokens.items()):
+            if rec["id"] == token_id:
+                del self.tokens[h]
                 return True
         return False
 
@@ -393,7 +393,7 @@ def make_client(db: FakeDatabase, storage=None) -> TestClient:
     app.include_router(entries.router)
     app.include_router(kv.router)
     app.include_router(attachments.router)
-    app.include_router(keys.router)
+    app.include_router(tokens.router)
     app.include_router(orgs.router)
     app.add_middleware(AuthMiddleware)
     app.state.settings = FakeSettings()
@@ -403,10 +403,10 @@ def make_client(db: FakeDatabase, storage=None) -> TestClient:
     return TestClient(app)
 
 
-def add_key(db: FakeDatabase, token: str, *, user_id=None, org_id=None,
-            workspace=None, project=None, role="editor") -> None:
-    db.api_keys[_hash(token)] = {
-        "id": uuid4().hex, "name": token, "key_prefix": token[:12],
+def add_token(db: FakeDatabase, token: str, *, user_id=None, org_id=None,
+              workspace=None, project=None, role="editor") -> None:
+    db.tokens[_hash(token)] = {
+        "id": uuid4().hex, "name": token, "token_prefix": token[:12],
         "user_id": user_id, "org_id": org_id, "workspace": workspace,
         "project": project, "role": role,
         "created_at": datetime.now(UTC), "last_used_at": None,
@@ -422,7 +422,7 @@ def auth(token: str) -> dict:
 
 def test_cannot_read_other_orgs_entry():
     db = FakeDatabase()
-    add_key(db, "key-a", user_id="ua", org_id="org-a")
+    add_token(db, "key-a", user_id="ua", org_id="org-a")
     entry_id = db.add_entry(org_id="org-b", user_id="ub")
     client = make_client(db)
 
@@ -431,7 +431,7 @@ def test_cannot_read_other_orgs_entry():
 
 def test_cannot_update_or_delete_other_orgs_entry():
     db = FakeDatabase()
-    add_key(db, "key-a", user_id="ua", org_id="org-a")
+    add_token(db, "key-a", user_id="ua", org_id="org-a")
     entry_id = db.add_entry(org_id="org-b", user_id="ub", title="original")
     client = make_client(db)
 
@@ -451,7 +451,7 @@ def test_cannot_update_or_delete_other_orgs_entry():
 
 def test_can_read_own_org_and_global_entries():
     db = FakeDatabase()
-    add_key(db, "key-a", user_id="ua", org_id="org-a")
+    add_token(db, "key-a", user_id="ua", org_id="org-a")
     own = db.add_entry(org_id="org-a", user_id="other-user-same-org")
     global_entry = db.add_entry()  # no user, no org
     client = make_client(db)
@@ -462,7 +462,7 @@ def test_can_read_own_org_and_global_entries():
 
 def test_cannot_merge_entries_from_other_org():
     db = FakeDatabase()
-    add_key(db, "key-a", user_id="ua", org_id="org-a")
+    add_token(db, "key-a", user_id="ua", org_id="org-a")
     mine = db.add_entry(org_id="org-a")
     theirs = db.add_entry(org_id="org-b")
     client = make_client(db)
@@ -478,9 +478,9 @@ def test_cannot_merge_entries_from_other_org():
 # -- Roles --
 
 
-def test_viewer_key_cannot_write():
+def test_viewer_token_cannot_write():
     db = FakeDatabase()
-    add_key(db, "viewer-key", user_id="ua", org_id="org-a", role="viewer")
+    add_token(db, "viewer-key", user_id="ua", org_id="org-a", role="viewer")
     entry_id = db.add_entry(org_id="org-a")
     client = make_client(db)
 
@@ -499,9 +499,9 @@ def test_viewer_key_cannot_write():
     ).status_code == 403
 
 
-def test_editor_key_can_write():
+def test_editor_token_can_write():
     db = FakeDatabase()
-    add_key(db, "editor-key", user_id="ua", org_id="org-a", role="editor")
+    add_token(db, "editor-key", user_id="ua", org_id="org-a", role="editor")
     client = make_client(db)
 
     res = client.post(
@@ -511,12 +511,12 @@ def test_editor_key_can_write():
     assert res.json()["org_id"] == "org-a"
 
 
-# -- Scoped keys --
+# -- Scoped tokens --
 
 
-def test_workspace_scoped_key_clamps_writes_and_reads():
+def test_workspace_scoped_token_clamps_writes_and_reads():
     db = FakeDatabase()
-    add_key(db, "scoped-key", user_id="ua", org_id="org-a",
+    add_token(db, "scoped-key", user_id="ua", org_id="org-a",
             workspace="reach", project="alertee")
     client = make_client(db)
 
@@ -533,7 +533,7 @@ def test_workspace_scoped_key_clamps_writes_and_reads():
 
 def test_search_passes_workspace_and_project_to_db():
     db = FakeDatabase()
-    add_key(db, "key-a", user_id="ua", org_id="org-a")
+    add_token(db, "key-a", user_id="ua", org_id="org-a")
     client = make_client(db)
 
     res = client.post(
@@ -549,44 +549,44 @@ def test_search_passes_workspace_and_project_to_db():
     assert call["org_id"] == "org-a"
 
 
-# -- API key management --
+# -- Token management --
 
 
-def test_keys_are_bound_to_caller_and_listed_per_user():
+def test_tokens_are_bound_to_caller_and_listed_per_user():
     db = FakeDatabase()
-    add_key(db, "key-a", user_id="ua", org_id="org-a")
-    add_key(db, "key-b", user_id="ub", org_id="org-b")
+    add_token(db, "key-a", user_id="ua", org_id="org-a")
+    add_token(db, "key-b", user_id="ub", org_id="org-b")
     client = make_client(db)
 
-    res = client.post("/api/keys", headers=auth("key-a"), json={"name": "new"})
+    res = client.post("/api/tokens", headers=auth("key-a"), json={"name": "new"})
     assert res.status_code == 200
     assert res.json()["user_id"] == "ua"
     assert res.json()["org_id"] == "org-a"
 
-    listed = client.get("/api/keys", headers=auth("key-a")).json()
+    listed = client.get("/api/tokens", headers=auth("key-a")).json()
     assert {k["user_id"] for k in listed} == {"ua"}
 
 
-def test_key_cannot_escalate_role():
+def test_token_cannot_escalate_role():
     db = FakeDatabase()
-    add_key(db, "editor-key", user_id="ua", org_id="org-a", role="editor")
+    add_token(db, "editor-key", user_id="ua", org_id="org-a", role="editor")
     client = make_client(db)
 
     res = client.post(
-        "/api/keys", headers=auth("editor-key"), json={"name": "boss", "role": "owner"}
+        "/api/tokens", headers=auth("editor-key"), json={"name": "boss", "role": "owner"}
     )
     assert res.status_code == 403
 
 
-def test_cannot_delete_other_users_key():
+def test_cannot_delete_other_users_token():
     db = FakeDatabase()
-    add_key(db, "key-a", user_id="ua", org_id="org-a")
-    add_key(db, "key-b", user_id="ub", org_id="org-b")
-    target_id = db.api_keys[_hash("key-b")]["id"]
+    add_token(db, "key-a", user_id="ua", org_id="org-a")
+    add_token(db, "key-b", user_id="ub", org_id="org-b")
+    target_id = db.tokens[_hash("key-b")]["id"]
     client = make_client(db)
 
-    assert client.delete(f"/api/keys/{target_id}", headers=auth("key-a")).status_code == 404
-    assert _hash("key-b") in db.api_keys
+    assert client.delete(f"/api/tokens/{target_id}", headers=auth("key-a")).status_code == 404
+    assert _hash("key-b") in db.tokens
 
 
 # -- Org management --
@@ -594,7 +594,7 @@ def test_cannot_delete_other_users_key():
 
 def test_non_member_cannot_list_members():
     db = FakeDatabase()
-    add_key(db, "key-a", user_id="ua", org_id="org-a")
+    add_token(db, "key-a", user_id="ua", org_id="org-a")
     db.org_roles[("org-b", "ub")] = "owner"
     client = make_client(db)
 
@@ -603,8 +603,8 @@ def test_non_member_cannot_list_members():
 
 def test_editor_cannot_invite_admin_can():
     db = FakeDatabase()
-    add_key(db, "editor-key", user_id="ua", org_id="org-a", role="editor")
-    add_key(db, "admin-key", user_id="ub", org_id="org-a", role="admin")
+    add_token(db, "editor-key", user_id="ua", org_id="org-a", role="editor")
+    add_token(db, "admin-key", user_id="ub", org_id="org-a", role="admin")
     db.org_roles[("org-a", "ua")] = "editor"
     db.org_roles[("org-a", "ub")] = "admin"
     client = make_client(db)
@@ -623,7 +623,7 @@ def test_editor_cannot_invite_admin_can():
 
 def test_member_can_remove_self_but_not_others():
     db = FakeDatabase()
-    add_key(db, "editor-key", user_id="ua", org_id="org-a", role="editor")
+    add_token(db, "editor-key", user_id="ua", org_id="org-a", role="editor")
     db.org_roles[("org-a", "ua")] = "editor"
     db.org_roles[("org-a", "ub")] = "editor"
     client = make_client(db)
@@ -638,8 +638,8 @@ def test_member_can_remove_self_but_not_others():
 
 def test_workspace_delete_requires_admin():
     db = FakeDatabase()
-    add_key(db, "editor-key", user_id="ua", org_id="org-a", role="editor")
-    add_key(db, "admin-key", user_id="ub", org_id="org-a", role="admin")
+    add_token(db, "editor-key", user_id="ua", org_id="org-a", role="editor")
+    add_token(db, "admin-key", user_id="ub", org_id="org-a", role="admin")
     db.org_roles[("org-a", "ua")] = "editor"
     db.org_roles[("org-a", "ub")] = "admin"
     ws_id = uuid4().hex
@@ -652,9 +652,9 @@ def test_workspace_delete_requires_admin():
 
 def test_project_create_list_delete_roles():
     db = FakeDatabase()
-    add_key(db, "viewer-key", user_id="uv", org_id="org-a", role="viewer")
-    add_key(db, "editor-key", user_id="ue", org_id="org-a", role="editor")
-    add_key(db, "admin-key", user_id="ua", org_id="org-a", role="admin")
+    add_token(db, "viewer-key", user_id="uv", org_id="org-a", role="viewer")
+    add_token(db, "editor-key", user_id="ue", org_id="org-a", role="editor")
+    add_token(db, "admin-key", user_id="ua", org_id="org-a", role="admin")
     db.org_roles[("org-a", "uv")] = "viewer"
     db.org_roles[("org-a", "ue")] = "editor"
     db.org_roles[("org-a", "ua")] = "admin"
@@ -691,7 +691,7 @@ def test_project_create_list_delete_roles():
 
 def test_project_endpoints_404_on_unknown_workspace():
     db = FakeDatabase()
-    add_key(db, "admin-key", user_id="ua", org_id="org-a", role="admin")
+    add_token(db, "admin-key", user_id="ua", org_id="org-a", role="admin")
     db.org_roles[("org-a", "ua")] = "admin"
     client = make_client(db)
     assert client.get(
@@ -772,19 +772,19 @@ def test_stale_default_org_self_heals():
     assert db.user_default_org["ua"] is None
 
 
-# -- API key org switching (X-Organization-ID on a user key) --
+# -- Token org switching (X-Organization-ID on a user token) --
 
 
-def test_key_can_switch_org_via_header():
+def test_token_can_switch_org_via_header():
     db = FakeDatabase()
-    # Key pinned to org-a, but the user is also a member of org-b.
-    add_key(db, "key-a", user_id="ua", org_id="org-a")
+    # Token pinned to org-a, but the user is also a member of org-b.
+    add_token(db, "key-a", user_id="ua", org_id="org-a")
     db.org_roles[("org-a", "ua")] = "editor"
     db.org_roles[("org-b", "ua")] = "admin"
     in_b = db.add_entry(org_id="org-b", user_id="ub")
     client = make_client(db)
 
-    # Without the header the key stays on org-a -> org-b hidden.
+    # Without the header the token stays on org-a -> org-b hidden.
     assert client.get(f"/api/entries/{in_b}", headers=auth("key-a")).status_code == 404
     # With the header it switches to org-b.
     res = client.get(
@@ -794,10 +794,10 @@ def test_key_can_switch_org_via_header():
     assert res.status_code == 200
 
 
-def test_key_org_switch_is_role_capped():
+def test_token_org_switch_is_role_capped():
     db = FakeDatabase()
-    # Viewer key; user is admin in org-b. Switching must not escalate to admin.
-    add_key(db, "key-a", user_id="ua", org_id="org-a", role="viewer")
+    # Viewer token; user is admin in org-b. Switching must not escalate to admin.
+    add_token(db, "key-a", user_id="ua", org_id="org-a", role="viewer")
     db.org_roles[("org-b", "ua")] = "admin"
     client = make_client(db)
 
@@ -809,9 +809,9 @@ def test_key_org_switch_is_role_capped():
     assert res.status_code == 403  # still a viewer despite org-b admin membership
 
 
-def test_key_org_switch_rejected_when_not_member():
+def test_token_org_switch_rejected_when_not_member():
     db = FakeDatabase()
-    add_key(db, "key-a", user_id="ua", org_id="org-a")
+    add_token(db, "key-a", user_id="ua", org_id="org-a")
     client = make_client(db)
 
     res = client.get(

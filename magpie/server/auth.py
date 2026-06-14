@@ -1,4 +1,4 @@
-"""Auth middleware — supports API keys (bearer token) + session cookies."""
+"""Auth middleware — supports access tokens (bearer) + session cookies."""
 
 import hashlib
 import logging
@@ -21,8 +21,8 @@ PUBLIC_PATHS = {"/health", "/docs", "/openapi.json", "/redoc"}
 AUTH_PATHS = {"/api/auth/send-code", "/api/auth/verify-code", "/api/auth/me"}
 
 
-def hash_key(key: str) -> str:
-    return hashlib.sha256(key.encode()).hexdigest()
+def hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
@@ -50,44 +50,44 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         # Try to authenticate via bearer token or session cookie
 
-        # 1. Bearer token (API keys)
+        # 1. Bearer token (access tokens)
         auth_header = request.headers.get("authorization", "")
         if auth_header.startswith("Bearer "):
             token = auth_header[7:]
 
-            # Static API key — unrestricted, single-tenant mode
+            # Static API key (env) — unrestricted, single-tenant mode
             if settings.api_key and token == settings.api_key:
                 request.state.user_id = None
                 request.state.org_id = None
                 request.state.role = None
                 return await call_next(request)
 
-            # Per-user API key — carries org/workspace/project scope and role
+            # Per-user token — carries org/workspace/project scope and role
             db = request.app.state.db
-            key_record = await db.get_api_key_by_hash(hash_key(token))
-            if key_record:
-                await db.touch_api_key(key_record["id"])
-                key_user = key_record.get("user_id")
-                key_role = key_record.get("role") or "editor"
-                request.state.user_id = key_user
-                request.state.role = key_role
-                request.state.auth_workspace = key_record.get("workspace")
-                request.state.auth_project = key_record.get("project")
-                # A user key can switch active org via X-Organization-ID to any
-                # org the user belongs to; the key's role caps the result so a
-                # switch never escalates. No header -> the key's pinned org.
+            token_record = await db.get_token_by_hash(hash_token(token))
+            if token_record:
+                await db.touch_token(token_record["id"])
+                token_user = token_record.get("user_id")
+                token_role = token_record.get("role") or "editor"
+                request.state.user_id = token_user
+                request.state.role = token_role
+                request.state.auth_workspace = token_record.get("workspace")
+                request.state.auth_project = token_record.get("project")
+                # A user token can switch active org via X-Organization-ID to any
+                # org the user belongs to; the token's role caps the result so a
+                # switch never escalates. No header -> the token's pinned org.
                 requested = request.headers.get(ORG_HEADER) or None
-                if requested and key_user:
-                    role = await db.get_org_role(requested, key_user)
+                if requested and token_user:
+                    role = await db.get_org_role(requested, token_user)
                     if role is None:
                         return JSONResponse(
                             status_code=403,
                             content={"error": "Not a member of the requested organization"},
                         )
                     request.state.org_id = requested
-                    request.state.role = cap_role(key_role, role)
+                    request.state.role = cap_role(token_role, role)
                 else:
-                    request.state.org_id = key_record.get("org_id")
+                    request.state.org_id = token_record.get("org_id")
                 return await call_next(request)
 
         # 2. Session cookie

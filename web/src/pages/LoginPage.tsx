@@ -5,11 +5,11 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 export function LoginPage({ onLogin }: { onLogin: () => void }) {
-  const [mode, setMode] = useState<'email' | 'api-key'>('email');
+  const [mode, setMode] = useState<'email' | 'token'>('email');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [step, setStep] = useState<'email' | 'code'>('email');
-  const [apiKey, setApiKey] = useState('');
+  const [token, setToken] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -41,18 +41,18 @@ export function LoginPage({ onLogin }: { onLogin: () => void }) {
     setLoading(false);
   };
 
-  const handleApiKey = async (e: React.FormEvent) => {
+  const handleToken = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!apiKey.trim()) return;
+    if (!token.trim()) return;
     setLoading(true);
     setError('');
-    localStorage.setItem('magpie_api_key', apiKey.trim());
+    localStorage.setItem('magpie_api_key', token.trim());
     const valid = await api.checkAuth();
     if (valid) {
       onLogin();
     } else {
       localStorage.removeItem('magpie_api_key');
-      setError('Invalid API key.');
+      setError('Invalid token.');
     }
     setLoading(false);
   };
@@ -63,7 +63,7 @@ export function LoginPage({ onLogin }: { onLogin: () => void }) {
         <CardHeader>
           <CardTitle className="text-2xl">magpie</CardTitle>
           <CardDescription>
-            {mode === 'email' ? 'Sign in with your email.' : 'Sign in with an API key.'}
+            {mode === 'email' ? 'Sign in with your email.' : 'Sign in with a token.'}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -107,11 +107,11 @@ export function LoginPage({ onLogin }: { onLogin: () => void }) {
               </form>
             )
           ) : (
-            <form onSubmit={handleApiKey} className="flex flex-col gap-3">
+            <form onSubmit={handleToken} className="flex flex-col gap-3">
               <Input
                 type="password"
-                value={apiKey}
-                onChange={e => setApiKey(e.target.value)}
+                value={token}
+                onChange={e => setToken(e.target.value)}
                 placeholder="mgp_... or static API key"
                 autoFocus
               />
@@ -126,11 +126,11 @@ export function LoginPage({ onLogin }: { onLogin: () => void }) {
             <Button
               variant="link" size="sm" className="text-xs text-muted-foreground"
               onClick={() => {
-                setMode(mode === 'email' ? 'api-key' : 'email');
+                setMode(mode === 'email' ? 'token' : 'email');
                 setError('');
               }}
             >
-              {mode === 'email' ? 'Use API key instead' : 'Use email instead'}
+              {mode === 'email' ? 'Use token instead' : 'Use email instead'}
             </Button>
           </div>
         </CardContent>

@@ -921,63 +921,63 @@ class Database:
 
     # -- API Keys --
 
-    async def create_api_key(
+    async def create_token(
         self,
         name: str,
-        key_hash: str,
-        key_prefix: str,
+        token_hash: str,
+        token_prefix: str,
         user_id: str | None = None,
         org_id: str | None = None,
         workspace: str | None = None,
         project: str | None = None,
         role: str = "editor",
     ) -> str:
-        key_id = uuid4().hex
+        token_id = uuid4().hex
         await self._pool.execute(
-            "INSERT INTO api_keys"
-            " (id, name, key_hash, key_prefix, user_id, org_id, workspace, project, role)"
+            "INSERT INTO tokens"
+            " (id, name, token_hash, token_prefix, user_id, org_id, workspace, project, role)"
             " VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
-            key_id, name, key_hash, key_prefix, user_id, org_id, workspace, project, role,
+            token_id, name, token_hash, token_prefix, user_id, org_id, workspace, project, role,
         )
-        return key_id
+        return token_id
 
-    async def get_api_key(self, key_id: str) -> dict | None:
+    async def get_token(self, token_id: str) -> dict | None:
         row = await self._pool.fetchrow(
-            "SELECT id, name, key_prefix, user_id, org_id, workspace, project, role,"
-            " created_at, last_used_at FROM api_keys WHERE id = $1",
-            key_id,
+            "SELECT id, name, token_prefix, user_id, org_id, workspace, project, role,"
+            " created_at, last_used_at FROM tokens WHERE id = $1",
+            token_id,
         )
         return dict(row) if row else None
 
-    async def get_api_key_by_hash(self, key_hash: str) -> dict | None:
+    async def get_token_by_hash(self, token_hash: str) -> dict | None:
         row = await self._pool.fetchrow(
-            "SELECT id, name, key_prefix, user_id, org_id, workspace, project, role,"
-            " created_at, last_used_at FROM api_keys WHERE key_hash = $1",
-            key_hash,
+            "SELECT id, name, token_prefix, user_id, org_id, workspace, project, role,"
+            " created_at, last_used_at FROM tokens WHERE token_hash = $1",
+            token_hash,
         )
         return dict(row) if row else None
 
-    async def touch_api_key(self, key_id: str) -> None:
+    async def touch_token(self, token_id: str) -> None:
         await self._pool.execute(
-            "UPDATE api_keys SET last_used_at = $1 WHERE id = $2",
-            datetime.now(UTC), key_id,
+            "UPDATE tokens SET last_used_at = $1 WHERE id = $2",
+            datetime.now(UTC), token_id,
         )
 
-    async def list_api_keys(self) -> list[dict]:
+    async def list_tokens(self) -> list[dict]:
         rows = await self._pool.fetch(
-            "SELECT id, name, key_prefix, user_id, org_id, workspace, project, role,"
-            " created_at, last_used_at FROM api_keys ORDER BY created_at DESC"
+            "SELECT id, name, token_prefix, user_id, org_id, workspace, project, role,"
+            " created_at, last_used_at FROM tokens ORDER BY created_at DESC"
         )
         return [dict(r) for r in rows]
 
-    async def delete_api_key(self, key_id: str) -> bool:
-        result = await self._pool.execute("DELETE FROM api_keys WHERE id = $1", key_id)
+    async def delete_token(self, token_id: str) -> bool:
+        result = await self._pool.execute("DELETE FROM tokens WHERE id = $1", token_id)
         return result == "DELETE 1"
 
-    async def list_api_keys_for_user(self, user_id: str) -> list[dict]:
+    async def list_tokens_for_user(self, user_id: str) -> list[dict]:
         rows = await self._pool.fetch(
-            "SELECT id, name, key_prefix, user_id, org_id, workspace, project, role,"
-            " created_at, last_used_at FROM api_keys WHERE user_id = $1"
+            "SELECT id, name, token_prefix, user_id, org_id, workspace, project, role,"
+            " created_at, last_used_at FROM tokens WHERE user_id = $1"
             " ORDER BY created_at DESC",
             user_id,
         )

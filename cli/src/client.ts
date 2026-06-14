@@ -24,7 +24,7 @@ export async function api<T = unknown>(path: string, opts: RequestOptions = {}):
   if (!opts.noAuth) {
     const token = resolveToken();
     if (token) headers['Authorization'] = `Bearer ${token}`;
-    // Active org override (no-op server-side for org-pinned keys). Let an
+    // Active org override (no-op server-side for org-pinned tokens). Let an
     // explicit per-call header win.
     const org = resolveOrg();
     if (org && !headers['X-Organization-ID']) headers['X-Organization-ID'] = org;
@@ -55,7 +55,7 @@ export async function api<T = unknown>(path: string, opts: RequestOptions = {}):
 export function requireToken(): void {
   if (!resolveToken()) {
     console.error(
-      'Not authenticated. Run `magpie login`, or set MAGPIE_TOKEN to an API key.'
+      'Not authenticated. Run `magpie login`, or set MAGPIE_TOKEN to an access token.'
     );
     process.exit(1);
   }

@@ -22,10 +22,10 @@ from magpie.server.routes import (
     bundle,
     entries,
     health,
-    keys,
     kv,
     oauth,
     orgs,
+    tokens,
 )
 from magpie.storage import create_storage
 
@@ -113,7 +113,7 @@ def _create_inner_app() -> FastAPI:
     app.include_router(kv.router)
     app.include_router(bundle.router)
     app.include_router(attachments.router)
-    app.include_router(keys.router)
+    app.include_router(tokens.router)
     app.include_router(orgs.router)
     app.include_router(oauth.router)
 
@@ -198,16 +198,16 @@ async def _check_auth(scope, app) -> bool:
     token = auth_header[7:]
     settings = app.state.settings
 
-    # Static key
+    # Static key (env)
     if settings.api_key and token == settings.api_key:
         return True
 
-    # Per-user key
+    # Per-user token
     db = app.state.db
-    key_hash = hashlib.sha256(token.encode()).hexdigest()
-    key_record = await db.get_api_key_by_hash(key_hash)
-    if key_record:
-        await db.touch_api_key(key_record["id"])
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+    token_record = await db.get_token_by_hash(token_hash)
+    if token_record:
+        await db.touch_token(token_record["id"])
         return True
 
     return False

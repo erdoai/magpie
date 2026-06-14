@@ -3,7 +3,7 @@ title: REST API
 description: HTTP endpoints for entries, search, KV stores, attachments, and bundles.
 ---
 
-All endpoints are under `/api`. Authenticate with `Authorization: Bearer <key>` or a session cookie. Where relevant, requests accept `workspace` and `project` to scope. Interactive docs are served at `/docs` on a running server.
+All endpoints are under `/api`. Authenticate with `Authorization: Bearer <token>` or a session cookie. Where relevant, requests accept `workspace` and `project` to scope. Interactive docs are served at `/docs` on a running server.
 
 Multi-org users select their **active org** with the `X-Organization-ID` header — validated against membership, so naming an org you don't belong to returns `403`. See [Authentication & multi-tenancy](/reference/auth).
 
@@ -56,9 +56,9 @@ Writes to a `repo`-canonical KV store are rejected (the bundle is the source of 
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/api/keys` | Create an API key |
-| `GET` | `/api/keys` | List keys |
-| `DELETE` | `/api/keys/{id}` | Revoke a key |
+| `POST` | `/api/tokens` | Create an access token |
+| `GET` | `/api/tokens` | List tokens |
+| `DELETE` | `/api/tokens/{id}` | Revoke a token |
 | `POST` | `/api/orgs` | Create an org |
 | `GET` | `/api/orgs` | List your orgs |
 | `POST` | `/api/orgs/{id}/select` | Set this org as your default active org |

@@ -2,7 +2,7 @@
 
 from magpie.links import normalize_target, parse_wikilinks
 
-from .test_isolation import FakeDatabase, add_key, auth, make_client
+from .test_isolation import FakeDatabase, add_token, auth, make_client
 
 # -- Parser --
 
@@ -51,7 +51,7 @@ def test_parse_ignores_empty_and_normalizes_whitespace():
 
 def test_create_entry_syncs_resolved_and_unresolved_links():
     db = FakeDatabase()
-    add_key(db, "key-a", user_id="ua", org_id="org-a")
+    add_token(db, "key-a", user_id="ua", org_id="org-a")
     target = db.add_entry(org_id="org-a", title="Alertee Positioning")
     client = make_client(db)
 
@@ -72,7 +72,7 @@ def test_create_entry_syncs_resolved_and_unresolved_links():
 
 def test_links_do_not_resolve_across_orgs():
     db = FakeDatabase()
-    add_key(db, "key-a", user_id="ua", org_id="org-a")
+    add_token(db, "key-a", user_id="ua", org_id="org-a")
     db.add_entry(org_id="org-b", title="Secret Doc")
     client = make_client(db)
 
@@ -89,7 +89,7 @@ def test_links_do_not_resolve_across_orgs():
 
 def test_update_content_resyncs_links():
     db = FakeDatabase()
-    add_key(db, "key-a", user_id="ua", org_id="org-a")
+    add_token(db, "key-a", user_id="ua", org_id="org-a")
     client = make_client(db)
 
     res = client.post(
@@ -108,7 +108,7 @@ def test_update_content_resyncs_links():
 
 def test_links_endpoint_returns_outgoing_and_backlinks():
     db = FakeDatabase()
-    add_key(db, "key-a", user_id="ua", org_id="org-a")
+    add_token(db, "key-a", user_id="ua", org_id="org-a")
     client = make_client(db)
 
     res = client.post(
@@ -138,7 +138,7 @@ def test_links_endpoint_returns_outgoing_and_backlinks():
 def test_unresolved_backlinks_match_by_title():
     """An entry created after being referenced still shows the backlink."""
     db = FakeDatabase()
-    add_key(db, "key-a", user_id="ua", org_id="org-a")
+    add_token(db, "key-a", user_id="ua", org_id="org-a")
     client = make_client(db)
 
     res = client.post(
@@ -161,8 +161,8 @@ def test_unresolved_backlinks_match_by_title():
 
 def test_backlinks_do_not_leak_across_orgs():
     db = FakeDatabase()
-    add_key(db, "key-a", user_id="ua", org_id="org-a")
-    add_key(db, "key-b", user_id="ub", org_id="org-b")
+    add_token(db, "key-a", user_id="ua", org_id="org-a")
+    add_token(db, "key-b", user_id="ub", org_id="org-b")
     client = make_client(db)
 
     # org-b references a title that also exists in org-a
@@ -186,7 +186,7 @@ def test_backlinks_do_not_leak_across_orgs():
 
 def test_links_endpoint_respects_entry_visibility():
     db = FakeDatabase()
-    add_key(db, "key-a", user_id="ua", org_id="org-a")
+    add_token(db, "key-a", user_id="ua", org_id="org-a")
     other = db.add_entry(org_id="org-b", title="Other")
     client = make_client(db)
 

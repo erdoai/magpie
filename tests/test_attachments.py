@@ -5,7 +5,7 @@ import pytest
 from magpie.attachments import infer_kind, is_browser_safe
 from magpie.storage.local import LocalStorage
 
-from .test_isolation import FakeDatabase, add_key, auth, make_client
+from .test_isolation import FakeDatabase, add_token, auth, make_client
 
 # -- Helpers --
 
@@ -51,7 +51,7 @@ async def test_local_storage_rejects_traversal(tmp_path):
 
 def _setup(tmp_path):
     db = FakeDatabase()
-    add_key(db, "key-a", user_id="ua", org_id="org-a")
+    add_token(db, "key-a", user_id="ua", org_id="org-a")
     storage = LocalStorage(str(tmp_path))
     client = make_client(db, storage=storage)
     entry_id = db.add_entry(org_id="org-a", title="Brand style")
@@ -129,7 +129,7 @@ def test_delete_attachment_removes_blob(tmp_path):
 
 def test_viewer_cannot_upload_or_delete(tmp_path):
     db, client, entry_id = _setup(tmp_path)
-    add_key(db, "viewer-key", user_id="uv", org_id="org-a", role="viewer")
+    add_token(db, "viewer-key", user_id="uv", org_id="org-a", role="viewer")
 
     res = client.post(
         f"/api/entries/{entry_id}/attachments",
@@ -141,7 +141,7 @@ def test_viewer_cannot_upload_or_delete(tmp_path):
 
 def test_attachments_isolated_across_orgs(tmp_path):
     db, client, entry_id = _setup(tmp_path)
-    add_key(db, "key-b", user_id="ub", org_id="org-b")
+    add_token(db, "key-b", user_id="ub", org_id="org-b")
 
     res = client.post(
         f"/api/entries/{entry_id}/attachments",

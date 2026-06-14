@@ -29,20 +29,20 @@ class FakeSettings:
 
 class FakeDB:
     def __init__(self):
-        self.api_keys = {}
+        self.tokens = {}
         self.entries = {}  # path -> record
         self.kv_stores = {}  # slug -> record
         self.kv_pairs = {}  # (store_id, key) -> value
 
     # auth / roles
-    async def get_api_key_by_hash(self, h):
-        return self.api_keys.get(h)
+    async def get_token_by_hash(self, h):
+        return self.tokens.get(h)
 
-    async def touch_api_key(self, kid):
+    async def touch_token(self, kid):
         pass
 
     async def get_org_role(self, org_id, user_id):
-        return self.api_keys and "editor"
+        return self.tokens and "editor"
 
     # entries
     async def upsert_entry_by_path(self, source_path, title, content, category="resource",  # noqa: E501
@@ -109,9 +109,9 @@ def make_client(db):
     return TestClient(app)
 
 
-def add_key(db, token, *, role="editor", org_id="org-a", user_id="ua"):
-    db.api_keys[_hash(token)] = {
-        "id": uuid4().hex, "name": token, "key_prefix": token[:12],
+def add_token(db, token, *, role="editor", org_id="org-a", user_id="ua"):
+    db.tokens[_hash(token)] = {
+        "id": uuid4().hex, "name": token, "token_prefix": token[:12],
         "user_id": user_id, "org_id": org_id, "workspace": None,
         "project": None, "role": role,
         "created_at": datetime.now(UTC), "last_used_at": None,
@@ -130,7 +130,7 @@ ENTRY = {
 
 def test_push_creates_entries_and_repo_store():
     db = FakeDB()
-    add_key(db, "k")
+    add_token(db, "k")
     client = make_client(db)
     res = client.post("/api/bundle/push", headers=auth("k"), json={
         "entries": [ENTRY],
@@ -144,7 +144,7 @@ def test_push_creates_entries_and_repo_store():
 
 def test_push_is_idempotent():
     db = FakeDB()
-    add_key(db, "k")
+    add_token(db, "k")
     client = make_client(db)
     client.post("/api/bundle/push", headers=auth("k"), json={"entries": [ENTRY]})
     res = client.post("/api/bundle/push", headers=auth("k"), json={"entries": [ENTRY]})
@@ -154,7 +154,7 @@ def test_push_is_idempotent():
 
 def test_push_rejects_off_spec_file():
     db = FakeDB()
-    add_key(db, "k")
+    add_token(db, "k")
     client = make_client(db)
     res = client.post("/api/bundle/push", headers=auth("k"), json={
         "entries": [{"path": "bad.md", "text": "no frontmatter here"}],
@@ -165,7 +165,7 @@ def test_push_rejects_off_spec_file():
 
 def test_push_rejects_undeclared_store_with_manifest():
     db = FakeDB()
-    add_key(db, "k")
+    add_token(db, "k")
     client = make_client(db)
     res = client.post("/api/bundle/push", headers=auth("k"), json={
         "kv": [{"slug": "stratagy", "text": "{}"}],
@@ -177,7 +177,7 @@ def test_push_rejects_undeclared_store_with_manifest():
 
 def test_push_conflict_on_server_canonical_store():
     db = FakeDB()
-    add_key(db, "k")
+    add_token(db, "k")
     # Pre-existing live store with the same slug.
     db.kv_stores["strategy"] = {
         "id": "c1", "slug": "strategy", "org_id": "org-a", "source": "server",
@@ -193,7 +193,7 @@ def test_push_conflict_on_server_canonical_store():
 
 def test_push_requires_editor_role():
     db = FakeDB()
-    add_key(db, "v", role="viewer")
+    add_token(db, "v", role="viewer")
     client = make_client(db)
     res = client.post("/api/bundle/push", headers=auth("v"), json={"entries": [ENTRY]})
     assert res.status_code == 403
@@ -201,7 +201,7 @@ def test_push_requires_editor_role():
 
 def test_export_returns_rendered_files():
     db = FakeDB()
-    add_key(db, "k")
+    add_token(db, "k")
     client = make_client(db)
     client.post("/api/bundle/push", headers=auth("k"), json={
         "entries": [ENTRY],

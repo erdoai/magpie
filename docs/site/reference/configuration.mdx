@@ -42,6 +42,6 @@ When both `API_KEY` and `RESEND_API_KEY` are empty, auth is disabled — conveni
 
 Magpie accepts three, in this order of precedence per request:
 
-1. **API keys** — `Authorization: Bearer <key>`. For agents and programmatic access. Keys can be scoped to a workspace/project/role.
+1. **Access tokens** — `Authorization: Bearer <token>`. For agents and programmatic access. Tokens can be scoped to a workspace/project/role.
 2. **Email one-time code** — for human users; sets a session cookie (30-day TTL).
 3. **OAuth** — used by the remote [MCP server](/mcp/setup).

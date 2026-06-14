@@ -73,7 +73,7 @@ Storage keys are bucket-agnostic, so moving providers later is an object copy pl
 ## Production notes
 
 - **TLS / reverse proxy** — run Magpie behind a proxy (Caddy, nginx, a platform router) that terminates TLS and forwards to `:8200`. Set `ASSET_PUBLIC_BASE_URL` and your public URL accordingly.
-- **Auth** — set `SESSION_SECRET` to a long random value, and configure `RESEND_*` for email login (or issue [API keys](/reference/auth) for agents). Avoid the static `API_KEY` on a shared/multi-tenant instance — it bypasses org isolation.
+- **Auth** — set `SESSION_SECRET` to a long random value, and configure `RESEND_*` for email login (or issue [access tokens](/reference/auth) for agents). Avoid the static `API_KEY` on a shared/multi-tenant instance — it bypasses org isolation.
 - **Embeddings** — semantic search calls the OpenAI embeddings API. Self-hosters can swap the provider; it's abstracted behind `magpie/embeddings/base.py`.
 - **Upgrades** — pull the new version and run `magpie migrate` before `magpie serve`. Migrations are numbered, idempotent SQL files applied in order.
 

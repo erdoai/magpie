@@ -3,7 +3,7 @@
 from magpie.resolve import resolve_entry
 from magpie.server.context import AuthContext
 
-from .test_isolation import FakeDatabase, FakeSettings, add_key, auth, make_client
+from .test_isolation import FakeDatabase, FakeSettings, add_token, auth, make_client
 
 
 def _ctx():
@@ -118,7 +118,7 @@ async def test_code_blocks_are_not_resolved():
 
 def test_resolve_endpoint():
     db = FakeDatabase()
-    add_key(db, "key-a", user_id="ua", org_id="org-a")
+    add_token(db, "key-a", user_id="ua", org_id="org-a")
     client = make_client(db)
 
     client.post(
@@ -144,7 +144,7 @@ def test_resolve_endpoint():
 
 def test_resolve_endpoint_visibility():
     db = FakeDatabase()
-    add_key(db, "key-a", user_id="ua", org_id="org-a")
+    add_token(db, "key-a", user_id="ua", org_id="org-a")
     other = db.add_entry(org_id="org-b", content="x")
     client = make_client(db)
 

@@ -3,7 +3,7 @@
 CLI and MCP stdio server for [Magpie](../README.md) — the knowledge and context store for agents and teams.
 
 ```bash
-npx @erdo/magpie login                 # email OTP → API key stored in ~/.config/magpie/
+npx @erdo/magpie login                 # email OTP → access token stored in ~/.config/magpie/
 magpie link --workspace reach --project alertee
 
 magpie search "landing page brand assets"
@@ -22,7 +22,7 @@ magpie import ./docs --workspace erdo --project magpie
 magpie mcp                            # MCP stdio server for local agents
 ```
 
-Config: `MAGPIE_API_URL` (default `https://magpie.erdo.ai`), `MAGPIE_TOKEN` (overrides stored key), `~/.config/magpie/config.json` for linked workspace/project.
+Config: `MAGPIE_API_URL` (default `https://magpie.erdo.ai`), `MAGPIE_TOKEN` (overrides stored token), `~/.config/magpie/config.json` for linked workspace/project.
 
 ## Claude Code
 

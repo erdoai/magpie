@@ -52,7 +52,7 @@ function Root() {
       }
     } catch {}
 
-    // No session — try API key
+    // No session — try token
     const key = localStorage.getItem('magpie_api_key');
     if (key) {
       const ok = await api.checkAuth();

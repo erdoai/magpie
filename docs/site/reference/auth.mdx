@@ -1,6 +1,6 @@
 ---
 title: Authentication & multi-tenancy
-description: API keys, sessions, the active org, roles, and how to connect a new project securely.
+description: Access tokens, sessions, the active org, roles, and how to connect a new project securely.
 ---
 
 This page is the integration reference: how a request proves who it is, how the **active org** is chosen, and how to connect a new project so its knowledge lands in the right place.
@@ -13,7 +13,7 @@ A request identifies itself one of two ways:
 
 | Method | Header / cookie | Used by |
 |--------|-----------------|---------|
-| **API key** | `Authorization: Bearer <key>` | CLIs, MCP, scripts, services |
+| **Access token** | `Authorization: Bearer <token>` | CLIs, MCP, scripts, services |
 | **Session** | `magpie_session` cookie | the web app (email one-time-code login) |
 
 The **user** is always derived from the trusted token or session — never from a client-supplied value. You cannot impersonate another user or org by setting a header.
@@ -35,12 +35,12 @@ curl -H "Authorization: Bearer $MAGPIE_TOKEN" \
      https://magpie.example.com/api/entries
 ```
 
-### API keys and the active org
+### Access tokens and the active org
 
-- A key **pinned to an org** (the default when you create one) acts in that org. `X-Organization-ID` can still switch it to **another org you're a member of** — but the key's role is a **ceiling**: switching never grants more than the key was issued with.
-- A key with **no pinned org** falls back to your saved default / first org, or honours `X-Organization-ID`.
+- A token **pinned to an org** (the default when you create one) acts in that org. `X-Organization-ID` can still switch it to **another org you're a member of** — but the token's role is a **ceiling**: switching never grants more than the token was issued with.
+- A token with **no pinned org** falls back to your saved default / first org, or honours `X-Organization-ID`.
 
-This means one personal key can serve several orgs — point it with the header rather than minting a key per org.
+This means one personal token can serve several orgs — point it with the header rather than minting a token per org.
 
 ## Roles
 
@@ -53,7 +53,7 @@ Roles are hierarchical: `viewer` < `editor` < `admin` < `owner`. Enforcement liv
 | Manage members & workspaces | `admin` |
 | Delete the org | `owner` |
 
-A key can never be created with a role higher than the caller's own.
+A token can never be created with a role higher than the caller's own.
 
 ## Security model
 
@@ -62,12 +62,12 @@ A key can never be created with a role higher than the caller's own.
 - **Identity is trusted, org hints are validated.** `X-Organization-ID` is a hint checked against membership on every request.
 
 <Warning>
-**Static-key mode is single-tenant.** A request authenticated with the static `API_KEY` is unrestricted and sees everything. Do not use static-key mode on an instance that holds more than one org's data — issue per-user keys (or use session login) instead.
+**Static-key mode is single-tenant.** A request authenticated with the static `API_KEY` is unrestricted and sees everything. Do not use static-key mode on an instance that holds more than one org's data — issue per-user access tokens (or use session login) instead.
 </Warning>
 
 ## Connect a new project
 
-1. **Get a key.** `magpie login` (email one-time-code) mints a personal API key and stores it in `~/.config/magpie/`. Or create one with `POST /api/keys`.
+1. **Get a token.** `magpie login` (email one-time-code) mints a personal access token and stores it in `~/.config/magpie/`. Or create one with `POST /api/tokens`.
 2. **Pick the org.** `magpie org list`, then `magpie org use <org>` to set the active org for this machine (sent as `X-Organization-ID` and saved as your default). The active org is marked in `magpie whoami`.
 3. **Pick the workspace/project.** `magpie link --workspace <ws> --project <proj>` sets defaults so this repo's knowledge is filed consistently.
 4. **Use it.** CLI commands, the [stdio MCP server](/mcp/setup), and direct REST calls all run in that org/workspace/project.
