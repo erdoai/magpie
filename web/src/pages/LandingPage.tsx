@@ -296,7 +296,7 @@ export function LandingPage() {
       <section className="mx-auto max-w-5xl px-6 pb-20">
         <div className="grid items-center gap-8 rounded-2xl border border-border bg-card/40 p-6 sm:p-8 lg:grid-cols-2 [&>*]:min-w-0">
           <div>
-            <Eyebrow>New · Typed KV stores</Eyebrow>
+            <Eyebrow>Typed KV stores</Eyebrow>
             <h2 className="text-2xl font-semibold">Not all knowledge is prose</h2>
             <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
               Some context is a <span className="text-foreground">value</span> — a trial length,
