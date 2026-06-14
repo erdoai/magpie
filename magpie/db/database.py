@@ -1321,6 +1321,44 @@ class Database:
         )
         return result == "DELETE 1"
 
+    async def list_recent_kv_pairs(
+        self,
+        org_id: str | None = None,
+        workspace: str | None = None,
+        project: str | None = None,
+        limit: int = 50,
+    ) -> list[dict]:
+        """Recently written kv pairs (with their store's slug + scope) for the
+        activity feed, newest first. Org-visible (own org + global)."""
+        conditions = []
+        params: list = []
+        idx = 0
+
+        if org_id:
+            idx += 1
+            conditions.append(f"(s.org_id = ${idx} OR s.org_id IS NULL)")
+            params.append(org_id)
+        if workspace:
+            idx += 1
+            conditions.append(f"s.workspace = ${idx}")
+            params.append(workspace)
+        if project:
+            idx += 1
+            conditions.append(f"s.project = ${idx}")
+            params.append(project)
+
+        where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        idx += 1
+        params.append(limit)
+        rows = await self._pool.fetch(
+            f"SELECT p.id, p.key, p.value_type, p.created_at, p.updated_at,"
+            f" s.slug AS store_slug, s.workspace, s.project"
+            f" FROM kv_pairs p JOIN kv_stores s ON s.id = p.store_id"
+            f" {where} ORDER BY p.updated_at DESC LIMIT ${idx}",
+            *params,
+        )
+        return [dict(r) for r in rows]
+
     # -- Attachments --
 
     async def create_attachment(

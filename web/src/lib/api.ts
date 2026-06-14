@@ -153,6 +153,19 @@ export interface Project {
   created_at?: string;
 }
 
+export interface Update {
+  kind: 'entry' | 'kv';
+  action: 'created' | 'updated' | 'archived';
+  title: string;
+  entry_id: string | null;
+  store: string | null;
+  key: string | null;
+  value_type: string | null;
+  workspace: string | null;
+  project: string | null;
+  at: string;
+}
+
 export const api = {
   // Auth
   sendCode: (email: string) =>
@@ -292,6 +305,12 @@ export const api = {
     }),
   deleteWorkspace: (wsId: string) =>
     request<{ ok: boolean }>(`/api/workspaces/${wsId}`, { method: 'DELETE' }),
+
+  // Updates (activity feed)
+  listUpdates: (params?: Record<string, string>) => {
+    const qs = params ? '?' + new URLSearchParams(params).toString() : '';
+    return request<Update[]>(`/api/updates${qs}`);
+  },
 
   // Projects (managed children of workspaces)
   listProjects: (wsId: string) =>

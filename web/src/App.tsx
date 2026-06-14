@@ -1,11 +1,12 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
-import { Search, FileText, Plus, Settings, LogOut, LayoutDashboard, Database, FolderGit2 } from 'lucide-react';
+import { Search, FileText, Plus, Settings, LogOut, LayoutDashboard, Database, FolderGit2, Activity } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 
 const NAV = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { path: '/updates', label: 'Updates', icon: Activity },
   { path: '/browse', label: 'Notes', icon: FileText },
   { path: '/kv', label: 'KV', icon: Database },
   { path: '/projects', label: 'Projects', icon: FolderGit2 },

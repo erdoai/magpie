@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import {
   ArrowRight,
   BookOpen,
+  Activity,
   Boxes,
   CopyCheck,
   FileText,
@@ -176,7 +177,12 @@ const FEATURES = [
   {
     icon: Users,
     title: 'Shared by a team',
-    body: 'Org is the security boundary: membership and roles (owner → admin → editor → viewer). One key, many orgs, one active org at a time. Reads fail closed.',
+    body: 'Org is the security boundary: membership and roles (owner → admin → editor → viewer). One token, many orgs, one active org at a time. Reads fail closed.',
+  },
+  {
+    icon: Activity,
+    title: 'Activity feed',
+    body: 'A chronological view of what changed — entries and KV writes, newest first — so you can see what your agents and teammates have been doing.',
   },
   {
     icon: Terminal,

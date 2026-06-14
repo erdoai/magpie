@@ -6,6 +6,7 @@ import { DashboardPage } from '@/pages/DashboardPage';
 import { BrowsePage } from '@/pages/BrowsePage';
 import { KvPage } from '@/pages/KvPage';
 import { ProjectsPage } from '@/pages/ProjectsPage';
+import { UpdatesPage } from '@/pages/UpdatesPage';
 import { SearchPage } from '@/pages/SearchPage';
 import { EntryPage } from '@/pages/EntryPage';
 import { NewEntryPage } from '@/pages/NewEntryPage';
@@ -90,6 +91,7 @@ function Root() {
           <Route path="browse" element={<BrowsePage />} />
           <Route path="kv" element={<KvPage />} />
           <Route path="projects" element={<ProjectsPage />} />
+          <Route path="updates" element={<UpdatesPage />} />
           <Route path="search" element={<SearchPage />} />
           <Route path="entries/:id" element={<EntryPage />} />
           <Route path="new" element={<NewEntryPage />} />

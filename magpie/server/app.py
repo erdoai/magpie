@@ -26,6 +26,7 @@ from magpie.server.routes import (
     oauth,
     orgs,
     tokens,
+    updates,
 )
 from magpie.storage import create_storage
 
@@ -111,6 +112,7 @@ def _create_inner_app() -> FastAPI:
     app.include_router(auth.router)
     app.include_router(entries.router)
     app.include_router(kv.router)
+    app.include_router(updates.router)
     app.include_router(bundle.router)
     app.include_router(attachments.router)
     app.include_router(tokens.router)
