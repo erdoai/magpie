@@ -45,6 +45,49 @@ class FakeDatabase:
         self.attachments: dict[str, dict] = {}
         self.sessions: dict[str, dict] = {}  # session_id -> {user_id}
         self.user_default_org: dict[str, str | None] = {}  # user_id -> org_id
+        self.activity_events: list[dict] = []  # append-only activity log
+
+    # -- activity log --
+
+    async def record_activity(self, **kwargs):
+        event = {
+            "id": f"evt{len(self.activity_events)}",
+            "org_id": kwargs.get("org_id"),
+            "workspace": kwargs.get("workspace"),
+            "project": kwargs.get("project"),
+            "actor_user_id": kwargs.get("actor_user_id"),
+            "actor_type": kwargs.get("actor_type", "unknown"),
+            "actor_ref": kwargs.get("actor_ref"),
+            "action": kwargs["action"],
+            "subject_type": kwargs["subject_type"],
+            "subject_id": kwargs.get("subject_id"),
+            "subject_title": kwargs.get("subject_title"),
+            "metadata_json": kwargs.get("metadata") or {},
+            "created_at": datetime.now(UTC),
+        }
+        self.activity_events.append(event)
+        return event["id"]
+
+    async def list_activity(
+        self, *, org_id=None, user_id=None, workspace=None, project=None,
+        limit=50, trusted=False,
+    ):
+        out = []
+        for e in reversed(self.activity_events):
+            if not trusted:
+                visible = (
+                    (org_id is not None and e["org_id"] == org_id)
+                    or (user_id is not None and e["actor_user_id"] == user_id)
+                    or (e["org_id"] is None and e["actor_user_id"] is None)
+                )
+                if not visible:
+                    continue
+            if workspace is not None and e["workspace"] != workspace:
+                continue
+            if project is not None and e["project"] != project:
+                continue
+            out.append(e)
+        return out[:limit]
 
     # -- tokens --
 

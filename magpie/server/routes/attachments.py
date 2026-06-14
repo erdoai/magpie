@@ -6,6 +6,7 @@ from uuid import uuid4
 from fastapi import APIRouter, File, Form, Request, UploadFile
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 
+from magpie import activity
 from magpie.attachments import (
     attachment_payload,
     infer_kind,
@@ -101,6 +102,7 @@ async def upload_attachment(
     )
 
     att = await db.get_attachment(att_id)
+    await activity.attachment_added(db, ctx, att, entry)
     return await attachment_payload(att, storage, settings)
 
 
@@ -182,6 +184,8 @@ async def delete_attachment(att_id: str, request: Request):
             logger.exception("Failed to delete attachment blob %s", att["storage_key"])
 
     await db.delete_attachment(att_id)
+    entry = await db.get_entry(att["entry_id"], trusted=True)  # scope for the event
+    await activity.attachment_deleted(db, ctx, att, entry or {})
     return {"ok": True}
 
 

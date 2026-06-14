@@ -46,6 +46,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         # No auth configured at all — allow everything (unrestricted context)
         if not settings.api_key and not settings.resend_api_key:
+            request.state.actor_type = "system"
             return await call_next(request)
 
         # Try to authenticate via bearer token or session cookie
@@ -60,6 +61,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 request.state.user_id = None
                 request.state.org_id = None
                 request.state.role = None
+                request.state.actor_type = "system"
                 return await call_next(request)
 
             # Per-user token — carries org/workspace/project scope and role
@@ -73,6 +75,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 request.state.role = token_role
                 request.state.auth_workspace = token_record.get("workspace")
                 request.state.auth_project = token_record.get("project")
+                request.state.actor_type = "token"
+                request.state.actor_ref = token_record["id"]
                 # A user token can switch active org via X-Organization-ID to any
                 # org the user belongs to; the token's role caps the result so a
                 # switch never escalates. No header -> the token's pinned org.
@@ -97,6 +101,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             session = await db.get_session(session_id)
             if session:
                 request.state.user_id = session["user_id"]
+                request.state.actor_type = "user"
                 # Active org: X-Organization-ID header (validated) > saved
                 # default > first membership. A header naming an org the user
                 # isn't in is rejected, not silently downgraded.

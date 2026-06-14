@@ -59,6 +59,14 @@ Writes to a `repo`-canonical KV store are rejected (the bundle is the source of 
 | `POST` | `/api/bundle/push` | Validate and apply a bundle. Aborts (422) on off-spec files or drift |
 | `GET` | `/api/bundle/export` | Return a rendered bundle as `{ files: [{ path, content }] }` |
 
+## Activity
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/updates` | Recent activity across the store, newest first (`workspace`, `project`, `limit` ≤ 100) |
+
+Each event records what changed, when, and by whom. The log is **durable**: it survives overwrites and deletes, and covers entries, KV, attachments, merges, bulk edits, and bundle pushes — not just current row state. Events are visibility-filtered to the caller's active org plus the events they performed. Each item carries a back-compatible projection (`kind`, `action`, `title`, `entry_id`, `store`, `key`, `value_type`, `workspace`, `project`, `at`) alongside the full event shape (`id`, `subject_type`, `subject_id`, `subject_title`, `actor_user_id`, `actor_type`, `metadata`). See [Activity log](/concepts/activity).
+
 ## Account
 
 | Method | Path | Description |

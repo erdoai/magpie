@@ -154,9 +154,11 @@ export interface Project {
 }
 
 export interface Update {
-  kind: 'entry' | 'kv';
-  action: 'created' | 'updated' | 'archived';
-  title: string;
+  kind: 'entry' | 'kv' | 'attachment' | 'bundle';
+  // Verb from the namespaced action — created/updated/archived/unarchived/
+  // deleted/merged/bulk_updated/set/added/pushed.
+  action: string;
+  title: string | null;
   entry_id: string | null;
   store: string | null;
   key: string | null;
@@ -164,6 +166,14 @@ export interface Update {
   workspace: string | null;
   project: string | null;
   at: string;
+  // Richer event shape (from the activity log).
+  id: string;
+  subject_type: string;
+  subject_id: string | null;
+  subject_title: string | null;
+  actor_user_id: string | null;
+  actor_type: string | null;
+  metadata: Record<string, unknown>;
 }
 
 export const api = {

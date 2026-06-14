@@ -16,6 +16,7 @@ from mcp.server.auth.settings import (
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
+from magpie import activity
 from magpie.attachments import (
     attachment_payload,
     handle_for,
@@ -106,11 +107,15 @@ async def _tool_context() -> AuthContext:
     token = get_access_token()
     user_id = getattr(token, "user_id", None) if token else None
     if not user_id or not _db:
-        return AuthContext()
+        # No token: static-key / auth-disabled deployment acts as the system.
+        return AuthContext(actor_type="system")
     # No per-request header over MCP — use the saved default org (falling back
     # to first membership), consistent with the REST session path.
     org_id, role = await resolve_active_org(_db, user_id, None)
-    return AuthContext(user_id=user_id, org_id=org_id, role=role)
+    return AuthContext(
+        user_id=user_id, org_id=org_id, role=role,
+        actor_type="user", actor_ref="mcp",
+    )
 
 
 def _format_link(link: dict) -> str:
@@ -243,8 +248,11 @@ def _register_tools(server: FastMCP) -> None:
                 project=project,
             )
             await sync_entry_links(_db, entry_id)
+            entry = await _db.get_entry(entry_id, trusted=True)  # just written above
             if was_updated:
+                await activity.entry_updated(_db, ctx, entry, changed=[])
                 return f"Updated existing entry {entry_id} in [{scope}]: {title}"
+            await activity.entry_created(_db, ctx, entry)
             return f"Created entry {entry_id} in [{scope}]: {title}"
 
         entry_id = await _db.create_entry(
@@ -259,6 +267,8 @@ def _register_tools(server: FastMCP) -> None:
             project=project,
         )
         await sync_entry_links(_db, entry_id)
+        entry = await _db.get_entry(entry_id, trusted=True)  # just created above
+        await activity.entry_created(_db, ctx, entry)
         return f"Created entry {entry_id} in [{scope}]: {title}"
 
     @server.tool()
@@ -372,6 +382,48 @@ def _register_tools(server: FastMCP) -> None:
         return "\n".join(lines)
 
     @server.tool()
+    async def list_updates(
+        workspace: str | None = None,
+        project: str | None = None,
+        limit: int = 20,
+    ) -> str:
+        """Recent activity across the store, newest first — what changed, when,
+        and by whom. Durable: survives overwrites and deletes, and covers
+        entries, KV, attachments, merges, bulk edits, and bundle pushes. Use it
+        to catch up on what's happened since you last looked.
+
+        Args:
+            workspace: Filter to a workspace. Omit to see all.
+            project: Filter to a project within the workspace.
+            limit: Max events (default 20, capped at 100).
+        """
+        if not _db:
+            return "Error: database not initialized"
+
+        ctx = await _tool_context()
+        events = await _db.list_activity(
+            org_id=ctx.org_id,
+            user_id=ctx.user_id,
+            workspace=workspace,
+            project=project,
+            limit=max(1, min(limit, 100)),
+            trusted=ctx.is_unrestricted,
+        )
+        if not events:
+            return "No recent activity."
+
+        lines = []
+        for e in events:
+            scope = e.get("workspace") or "general"
+            if e.get("project"):
+                scope = f"{scope}/{e['project']}"
+            title = e.get("subject_title") or e.get("subject_id") or ""
+            actor = e.get("actor_type") or "unknown"
+            when = e["created_at"].isoformat()
+            lines.append(f"- {when} · {e['action']} {title} [{scope}] (by {actor})")
+        return "\n".join(lines)
+
+    @server.tool()
     async def resolve_knowledge(id: str) -> str:
         """Resolve an entry's references and return rendered Markdown plus
         a dependency report. References: {{kv.key.path}} values,
@@ -461,6 +513,7 @@ def _register_tools(server: FastMCP) -> None:
         ok = await _db.archive_entry(id)
         if not ok:
             return f"Entry {id} not found."
+        await activity.entry_archived(_db, ctx, entry, archived=True)
         return f"Archived entry {id}."
 
     @server.tool()
@@ -528,6 +581,14 @@ def _register_tools(server: FastMCP) -> None:
             role=role,
             public=public,
             created_by_user_id=ctx.user_id,
+        )
+        await activity.attachment_added(
+            _db, ctx,
+            {
+                "id": att_id, "filename": filename, "role": role,
+                "media_type": media_type, "byte_size": len(data),
+            },
+            entry,
         )
         return (
             f"Attached {filename} ({kind}, {len(data)} bytes) to entry {entry_id}.\n"
@@ -755,7 +816,9 @@ def _register_tools(server: FastMCP) -> None:
                 created_by_user_id=ctx.user_id,
             )
             kv = await _db.get_kv_store(store_id, trusted=True)  # just created above
+            await activity.kv_store_created(_db, ctx, kv)
 
+        existed = await _db.get_kv_pair(kv["id"], key, trusted=True) is not None
         await _db.set_kv_pair(
             store_id=kv["id"],
             key=key,
@@ -765,6 +828,7 @@ def _register_tools(server: FastMCP) -> None:
             org_id=kv.get("org_id"),
             created_by_user_id=ctx.user_id,
         )
+        await activity.kv_pair_set(_db, ctx, kv, key, value_type, created=not existed)
         return f"Set {store}/{key} ({value_type})."
 
     @server.tool()
@@ -803,6 +867,7 @@ def _register_tools(server: FastMCP) -> None:
         ok = await _db.delete_kv_pair(kv["id"], key)
         if not ok:
             return f"Key {key} not found in {store}."
+        await activity.kv_pair_deleted(_db, ctx, kv, key)
         return f"Deleted {store}/{key}."
 
     @server.tool()
@@ -919,6 +984,8 @@ def _register_tools(server: FastMCP) -> None:
             project=project,
         )
         await sync_entry_links(_db, new_id)
+        entry = await _db.get_entry(new_id, trusted=True)  # just created above
+        await activity.entry_merged(_db, ctx, entry, source_ids)
         return (
             f"Merged {len(source_ids)} entries into {new_id}: {title}\n"
             f"Archived: {', '.join(source_ids)}"

@@ -8,6 +8,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from magpie import activity
 from magpie.kv import VALUE_TYPES, validate_value
 from magpie.manifest import normalize_slug
 from magpie.server.context import AuthContext, auth_context
@@ -127,7 +128,9 @@ async def create_kv_store(body: KvStoreCreate, request: Request):
         project=project,
         created_by_user_id=ctx.user_id,
     )
-    return await db.get_kv_store(store_id, trusted=True)  # just created by caller
+    store = await db.get_kv_store(store_id, trusted=True)  # just created by caller
+    await activity.kv_store_created(db, ctx, store)
+    return store
 
 
 @router.get("/kv")
@@ -158,6 +161,7 @@ async def delete_kv_store(store_id: str, request: Request):
         return _not_found()
 
     await db.delete_kv_store(store_id)
+    await activity.kv_store_deleted(db, ctx, store)
     return {"ok": True}
 
 
@@ -230,6 +234,7 @@ async def set_kv_pair(
     if locked:
         return locked
 
+    existed = await db.get_kv_pair(store["id"], key, trusted=True) is not None
     await db.set_kv_pair(
         store_id=store["id"],
         key=key,
@@ -238,6 +243,9 @@ async def set_kv_pair(
         summary=body.summary,
         org_id=store.get("org_id"),
         created_by_user_id=ctx.user_id,
+    )
+    await activity.kv_pair_set(
+        db, ctx, store, key, body.value_type, created=not existed
     )
     return await db.get_kv_pair(store["id"], key, trusted=True)  # just written by caller
 
@@ -266,4 +274,5 @@ async def delete_kv_pair(
     ok = await db.delete_kv_pair(store["id"], key)
     if not ok:
         return _not_found()
+    await activity.kv_pair_deleted(db, ctx, store, key)
     return {"ok": True}

@@ -37,6 +37,9 @@ Find clusters of near-duplicate entries by semantic similarity. **Key params:** 
 ### `bulk_edit`
 Rescope or retag many entries at once, in place (ids, links, embeddings preserved). Selects with `match_*` filters (at least one required) and applies `set_workspace`/`set_project`, `add_tags`/`remove_tags`/`rename_tag_from`+`rename_tag_to`, or `clear_project`. **Always preview with `dry_run` (default true) first; applying requires `admin`.** See [Reorganizing in bulk](/concepts/bulk-operations).
 
+### `list_updates`
+Recent activity across the store, newest first — what changed, when, and by whom. Durable: covers entries, KV, attachments, merges, bulk edits, and bundle pushes, and survives overwrites and deletes. **Key params:** `workspace`, `project`, `limit`. See [Activity log](/concepts/activity).
+
 ## Links & references
 
 ### `list_links`

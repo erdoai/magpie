@@ -292,6 +292,41 @@ export async function runMcpServer(): Promise<void> {
   );
 
   server.tool(
+    'list_updates',
+    'Recent activity across the store, newest first — what changed, when, and by whom. Durable: covers entries, KV, attachments, merges, bulk edits, and bundle pushes, and survives overwrites and deletes. Use to catch up since you last looked.',
+    {
+      ...scopeArgs,
+      limit: z.number().optional().describe('Max events (default 20, capped at 100)'),
+    },
+    async (args) =>
+      guarded(async () => {
+        const s = applyScope(args);
+        const events = await api<{
+          action: string; subject_title: string | null; subject_id: string | null;
+          workspace: string | null; project: string | null; at: string;
+          actor_type: string | null;
+        }[]>(
+          `/api/updates${qs({
+            workspace: s.workspace,
+            project: s.project,
+            limit: String(args.limit ?? 20),
+          })}`
+        );
+        if (!events.length) return text('No recent activity.');
+        return text(
+          events
+            .map((e) => {
+              const ws = e.workspace || 'general';
+              const scope = e.project ? `${ws}/${e.project}` : ws;
+              const title = e.subject_title || e.subject_id || '';
+              return `- ${e.at} · ${e.action} ${title} [${scope}] (by ${e.actor_type || 'unknown'})`;
+            })
+            .join('\n')
+        );
+      })
+  );
+
+  server.tool(
     'kv_list',
     'List KV stores — named typed key→value stores for structured context (config, brand tokens, metrics).',
     { ...scopeArgs },

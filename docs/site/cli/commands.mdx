@@ -53,6 +53,15 @@ magpie archive <entry-id>
 
 `write` takes `--file <path>` or `--content <text>`. Pass `--dedupe` to update the closest existing entry instead of creating a near-duplicate.
 
+### Recent activity
+
+```bash
+magpie updates                          # what changed across the store, newest first
+magpie updates --workspace support --limit 50
+```
+
+`updates` reads the durable [activity log](/concepts/activity) — entries, KV, attachments, merges, bulk edits, and bundle pushes — showing what changed, when, and by whom. It survives overwrites and deletes.
+
 ### Staying coherent
 
 ```bash

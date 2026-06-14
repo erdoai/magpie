@@ -1,5 +1,19 @@
 # Magpie History Log Plan
 
+## Status (2026-06-14)
+
+**v1 shipped** — Phases 1–4 plus full parity (rollout steps 1–10): the
+`activity_events` table + migration, `db.record_activity`/`list_activity`, a
+shared `magpie/activity.py` emit layer called by both REST routes and the hosted
+MCP server, events on every write path (entries, KV, attachments, merge, bulk,
+bundle push), and `/api/updates` rewritten to read the durable log. Parity
+landed across the Updates page, the `list_updates` MCP tool (both servers),
+`magpie updates` (TS CLI), and docs (`concepts/activity`, API/MCP/CLI refs).
+
+**Still to do** — Phases 5–6: `entry_revisions` (+ `GET /api/entries/{id}/history`
+and the entry-page History tab), then optionally `kv_revisions`. These were
+always sequenced *after* events land.
+
 ## Positioning
 
 Magpie needs boring, useful history: what changed, when, by whom, and enough

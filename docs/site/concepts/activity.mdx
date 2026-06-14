@@ -1,0 +1,36 @@
+---
+title: Activity log
+description: A durable, append-only record of what changed in the store, when, and by whom.
+---
+
+A shared knowledge store needs boring, useful history: what changed recently, who or what changed it, and enough detail to inspect or trust the result. Magpie keeps an **append-only activity log** for exactly that.
+
+The log is durable in a way a "recent rows" view can't be. It is written as events happen, so it survives the things that erase derived feeds:
+
+- **Repeated edits stay distinct** — each write is its own event, not one collapsed "last updated" row.
+- **Deletes leave a trace** — a deleted entry still has its `entry.deleted` event.
+- **Coverage is broad** — entries (create/update/archive/unarchive/delete/merge/bulk), KV stores and pairs, attachments, and bundle pushes all emit events.
+
+## What an event records
+
+Each event captures the action, the subject it touched, the actor, and a small amount of practical metadata — never full content blobs.
+
+- **Action** — namespaced, e.g. `entry.created`, `kv_pair.set`, `attachment.added`, `bundle.pushed`. Namespacing keeps the feed scannable and the set safe to extend.
+- **Subject** — type, id, and a denormalized title, so the feed renders even after the underlying row is gone.
+- **Actor** — the authenticated user when known, plus an `actor_type` of `user`, `token`, `system`, or `unknown`.
+- **Scope** — `org_id`, `workspace`, `project`, for filtering.
+- **Metadata** — small, practical detail: the changed field names on an update, `source_ids` on a merge, matched/updated counts on a bulk edit, the store/key on a KV write.
+
+## Reading the log
+
+`GET /api/updates` returns recent events newest first, scoped to the caller's active org (plus events they performed). It accepts `workspace`, `project`, and `limit` (capped at 100). Every surface exposes it:
+
+- **Web** — the Updates page.
+- **MCP** — the `list_updates` tool, for agents catching up on what changed.
+- **CLI** — `magpie updates`.
+
+Events are server-recorded on every write path, so all clients — REST, MCP, and the CLIs — inherit the history automatically; there is nothing to opt into.
+
+<Note>
+Activity events are the event spine. Per-entry and per-KV **revision history** (previous content of a changed entry) builds on top of this and lands in a later iteration.
+</Note>

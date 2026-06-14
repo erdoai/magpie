@@ -1600,3 +1600,95 @@ class Database:
 
     async def delete_session(self, session_id: str) -> None:
         await self._pool.execute("DELETE FROM sessions WHERE id = $1", session_id)
+
+    # -- Activity log --
+
+    async def record_activity(
+        self,
+        *,
+        action: str,
+        subject_type: str,
+        subject_id: str | None = None,
+        subject_title: str | None = None,
+        org_id: str | None = None,
+        workspace: str | None = None,
+        project: str | None = None,
+        actor_user_id: str | None = None,
+        actor_type: str = "unknown",
+        actor_ref: str | None = None,
+        metadata: dict | None = None,
+    ) -> str | None:
+        """Append one event to the activity log.
+
+        Best-effort by design: a logging failure must never turn a write that
+        already succeeded into a failed request, so this swallows and logs its
+        own errors rather than propagating. (When revision tables land they'll
+        be written inside the mutation's own transaction; the activity feed is
+        a denormalized read model on top.) Returns the event id, or None if
+        recording failed.
+        """
+        event_id = uuid4().hex
+        try:
+            await self._pool.execute(
+                """INSERT INTO activity_events
+                   (id, org_id, workspace, project, actor_user_id, actor_type,
+                    actor_ref, action, subject_type, subject_id, subject_title,
+                    metadata_json, created_at)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)""",
+                event_id, org_id, workspace, project, actor_user_id, actor_type,
+                actor_ref, action, subject_type, subject_id, subject_title,
+                metadata or {}, datetime.now(UTC),
+            )
+        except Exception:
+            logger.exception("Failed to record activity event %s", action)
+            return None
+        return event_id
+
+    async def list_activity(
+        self,
+        *,
+        org_id: str | None = None,
+        user_id: str | None = None,
+        workspace: str | None = None,
+        project: str | None = None,
+        limit: int = 50,
+        trusted: bool = False,
+    ) -> list[dict]:
+        """Recent activity events, newest first.
+
+        Fail-closed visibility mirrors the rest of the store: a tenant caller
+        sees their active-org events, events they performed, and truly-global
+        system events (org and actor both NULL). ``trusted`` (static key /
+        unrestricted) sees everything. workspace/project narrow the result.
+        """
+        conditions: list[str] = []
+        params: list = []
+
+        if not trusted:
+            # org events you're in, events you performed, or fully-global ones.
+            params.append(org_id)
+            oid = len(params)
+            params.append(user_id)
+            uid = len(params)
+            conditions.append(
+                f"((${oid}::text IS NOT NULL AND org_id = ${oid})"
+                f" OR (${uid}::text IS NOT NULL AND actor_user_id = ${uid})"
+                f" OR (org_id IS NULL AND actor_user_id IS NULL))"
+            )
+        if workspace is not None:
+            params.append(workspace)
+            conditions.append(f"workspace = ${len(params)}")
+        if project is not None:
+            params.append(project)
+            conditions.append(f"project = ${len(params)}")
+
+        where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        params.append(limit)
+        rows = await self._pool.fetch(
+            f"SELECT id, org_id, workspace, project, actor_user_id, actor_type,"
+            f" actor_ref, action, subject_type, subject_id, subject_title,"
+            f" metadata_json, created_at FROM activity_events"
+            f" {where} ORDER BY created_at DESC LIMIT ${len(params)}",
+            *params,
+        )
+        return [dict(r) for r in rows]

@@ -12,6 +12,7 @@ import typer
 import uvicorn
 from rich.console import Console
 
+from magpie import activity
 from magpie.__version__ import __version__
 from magpie.attachments import handle_for, infer_kind, storage_key_for
 from magpie.bulk import build_changes, build_match
@@ -23,6 +24,7 @@ from magpie.embeddings.openai import OpenAIEmbeddings
 from magpie.export import write_bundle
 from magpie.links import sync_entry_links
 from magpie.manifest import check_drift
+from magpie.server.context import AuthContext
 from magpie.storage import create_storage
 from magpie.sync import apply_push, gather_export
 
@@ -243,6 +245,15 @@ def push(
             db, embedder, result.entries, kv_result.stores,
             org_id=org_id, workspace=workspace, project=project,
         )
+
+        # Operator push from the repo — recorded as a system actor.
+        if outcome.ok:
+            await activity.bundle_pushed(
+                db, AuthContext(actor_type="system"),
+                org_id=org_id, workspace=workspace, project=project,
+                entries=outcome.created + outcome.updated,
+                stores=outcome.stores, pairs=outcome.pairs,
+            )
 
         if embedder:
             await embedder.close()

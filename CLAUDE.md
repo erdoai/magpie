@@ -6,9 +6,10 @@ Knowledge store with semantic + keyword search. Postgres + pgvector.
 
 Single FastAPI server exposing:
 - **REST API** at `/api/` — CRUD + search for knowledge entries
-- **MCP server** at `/mcp` — 17 tools for AI agents (search/read/write/list/archive,
-  find_duplicates/merge, bulk_edit, list_links/resolve_knowledge, kv list/get/set/delete,
-  attachment upload/list/get) — kept in lockstep across both MCP servers
+- **MCP server** at `/mcp` — 18 tools for AI agents (search/read/write/list/archive,
+  find_duplicates/merge, bulk_edit, list_updates, list_links/resolve_knowledge,
+  kv list/get/set/delete, attachment upload/list/get) — kept in lockstep across
+  both MCP servers
 
 Storage: Postgres with pgvector for embeddings and tsvector for full-text search.
 Search: Reciprocal Rank Fusion combining semantic (vector similarity) and keyword (full-text) results.
@@ -90,6 +91,14 @@ pytest
   `trusted=True` for server-internal reads (links, resolve, CLI, post-write
   round-trips). No scope + not trusted ⇒ only global rows. Don't add a raw
   by-id read that bypasses this.
+- **Activity log** (`magpie/activity.py` + `db.record_activity`/`list_activity`,
+  `activity_events` table): append-only event spine behind `/api/updates`. Both
+  write surfaces call the shared `activity.*` emit helpers — REST routes AND the
+  hosted MCP server (which writes the DB directly, so it can't inherit emission
+  from routes); bulk emits once inside shared `run_bulk`. Emission is
+  best-effort (record_activity swallows+logs its own errors — never fails a
+  committed write). Actor (`user`/`token`/`system`) comes from `ctx.actor`.
+  Add a new event type to `activity.py`, never inline a raw `record_activity`.
 - **Bulk rescope/retag** (`magpie/bulk.py` + `db.bulk_update_entries`): in-place
   transactional UPDATE — preserves ids/links/embeddings (never copy-delete).
   `match` is required (never the whole store); writes are confined to own +

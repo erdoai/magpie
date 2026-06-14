@@ -47,7 +47,8 @@
               "concepts/links",
               "concepts/attachments",
               "concepts/coherence",
-              "concepts/bulk-operations"
+              "concepts/bulk-operations",
+              "concepts/activity"
             ]
           },
           {

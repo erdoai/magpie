@@ -678,6 +678,41 @@ program
     }
   );
 
+interface ActivityEvent {
+  action: string;
+  subject_title: string | null;
+  subject_id: string | null;
+  workspace: string | null;
+  project: string | null;
+  at: string;
+  actor_type: string | null;
+}
+
+program
+  .command('updates')
+  .description('Recent activity across the store (newest first) — what changed, when, and by whom')
+  .option('--workspace <workspace>')
+  .option('--project <project>')
+  .option('--limit <n>', 'Max events (capped at 100)', '20')
+  .action(async (opts: { workspace?: string; project?: string; limit: string }) => {
+    requireToken();
+    try {
+      const s = scope(opts);
+      const events = await api<ActivityEvent[]>(
+        `/api/updates${qs({ workspace: s.workspace, project: s.project, limit: opts.limit })}`,
+      );
+      if (!events.length) return console.log('No recent activity.');
+      for (const e of events) {
+        const ws = e.workspace || 'general';
+        const scopeStr = e.project ? `${ws}/${e.project}` : ws;
+        const title = e.subject_title || e.subject_id || '';
+        console.log(`${e.at}  ${e.action}  ${title} [${scopeStr}] (by ${e.actor_type || 'unknown'})`);
+      }
+    } catch (err) {
+      fail(err);
+    }
+  });
+
 // -- KV stores --
 
 const kv = program.command('kv').description('KV store commands');

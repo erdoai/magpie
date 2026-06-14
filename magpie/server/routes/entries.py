@@ -7,6 +7,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from magpie import activity
 from magpie.bulk import BulkError, build_changes, build_match, run_bulk
 from magpie.links import normalize_target, sync_entry_links
 from magpie.resolve import resolve_entry
@@ -104,8 +105,9 @@ async def create_entry(body: EntryCreate, request: Request):
         except Exception:
             logger.exception("Failed to generate embedding, continuing without")
 
+    was_updated = False
     if body.dedupe:
-        entry_id, _was_updated = await db.upsert_entry(
+        entry_id, was_updated = await db.upsert_entry(
             title=body.title,
             content=body.content,
             tags=body.tags,
@@ -131,6 +133,11 @@ async def create_entry(body: EntryCreate, request: Request):
 
     await sync_entry_links(db, entry_id)
     entry = await db.get_entry(entry_id, trusted=True)  # just authored by caller
+    # dedupe folded into an existing entry counts as an update, not a create.
+    if was_updated:
+        await activity.entry_updated(db, ctx, entry, changed=[])
+    else:
+        await activity.entry_created(db, ctx, entry)
     return entry
 
 
@@ -234,7 +241,10 @@ async def update_entry(entry_id: str, body: EntryUpdate, request: Request):
     if "content" in fields:
         await sync_entry_links(db, entry_id)
 
-    return await db.get_entry(entry_id, trusted=True)  # caller just updated it
+    entry = await db.get_entry(entry_id, trusted=True)  # caller just updated it
+    changed = [k for k in fields if k != "embedding"]
+    await activity.entry_updated(db, ctx, entry, changed=changed)
+    return entry
 
 
 @router.delete("/entries/{entry_id}")
@@ -245,7 +255,8 @@ async def delete_entry(entry_id: str, request: Request):
     if not ctx.has_role("editor"):
         return _forbidden("Write access requires editor role")
 
-    if not await _get_accessible_entry(db, entry_id, ctx):
+    entry = await _get_accessible_entry(db, entry_id, ctx)
+    if not entry:
         return _not_found()
 
     # Delete attachment blobs before the rows cascade away
@@ -260,6 +271,7 @@ async def delete_entry(entry_id: str, request: Request):
     ok = await db.delete_entry(entry_id)
     if not ok:
         return _not_found()
+    await activity.entry_deleted(db, ctx, entry)
     return {"ok": True}
 
 
@@ -271,12 +283,14 @@ async def archive_entry(entry_id: str, request: Request):
     if not ctx.has_role("editor"):
         return _forbidden("Write access requires editor role")
 
-    if not await _get_accessible_entry(db, entry_id, ctx):
+    entry = await _get_accessible_entry(db, entry_id, ctx)
+    if not entry:
         return _not_found()
 
     ok = await db.archive_entry(entry_id)
     if not ok:
         return _not_found()
+    await activity.entry_archived(db, ctx, entry, archived=True)
     return {"ok": True}
 
 
@@ -288,12 +302,14 @@ async def unarchive_entry(entry_id: str, request: Request):
     if not ctx.has_role("editor"):
         return _forbidden("Write access requires editor role")
 
-    if not await _get_accessible_entry(db, entry_id, ctx):
+    entry = await _get_accessible_entry(db, entry_id, ctx)
+    if not entry:
         return _not_found()
 
     ok = await db.unarchive_entry(entry_id)
     if not ok:
         return _not_found()
+    await activity.entry_archived(db, ctx, entry, archived=False)
     return {"ok": True}
 
 
@@ -372,6 +388,7 @@ async def merge_entries(body: MergeRequest, request: Request):
 
     await sync_entry_links(db, new_id)
     entry = await db.get_entry(new_id, trusted=True)  # just created by caller
+    await activity.entry_merged(db, ctx, entry, body.source_ids)
     return entry
 
 

@@ -13,6 +13,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from magpie import activity
 from magpie.bundle import parse_entry_items, parse_kv_items
 from magpie.export import render_bundle
 from magpie.manifest import check_drift
@@ -86,6 +87,13 @@ async def push_bundle(body: PushRequest, request: Request):
                 "conflicts": outcome.conflicts,
             },
         )
+
+    await activity.bundle_pushed(
+        db, ctx,
+        org_id=ctx.org_id, workspace=workspace, project=project,
+        entries=outcome.created + outcome.updated,
+        stores=outcome.stores, pairs=outcome.pairs,
+    )
 
     return {
         "created": outcome.created,

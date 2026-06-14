@@ -36,6 +36,21 @@ class AuthContext:
     # through such a key are clamped to that scope.
     workspace: str | None = None
     project: str | None = None
+    # Who is acting, for the activity log. actor_type is one of
+    # user | token | system | unknown; actor_ref is an optional label (token
+    # id, client) — deliberately thin in v1.
+    actor_type: str = "unknown"
+    actor_ref: str | None = None
+
+    @property
+    def actor(self) -> dict:
+        """Actor kwargs for ``db.record_activity`` — spread into the call:
+        ``await db.record_activity(..., **ctx.actor)``."""
+        return {
+            "actor_user_id": self.user_id,
+            "actor_type": self.actor_type,
+            "actor_ref": self.actor_ref,
+        }
 
     @property
     def is_unrestricted(self) -> bool:
@@ -87,6 +102,8 @@ def auth_context(request: Request) -> AuthContext:
         role=getattr(request.state, "role", None),
         workspace=getattr(request.state, "auth_workspace", None),
         project=getattr(request.state, "auth_project", None),
+        actor_type=getattr(request.state, "actor_type", "unknown"),
+        actor_ref=getattr(request.state, "actor_ref", None),
     )
 
 

@@ -1,8 +1,11 @@
 """Activity feed — a chronological view of recent changes across the store.
 
-Merges recent entry writes and KV writes into one time-ordered timeline so you
-can see what's been happening. Derived from existing rows (no audit table):
-created vs. updated is inferred from created_at == updated_at.
+Reads the append-only ``activity_events`` log (see ``magpie/activity.py``), so
+the feed is durable: it survives overwrites and deletes, records who acted, and
+covers entries, KV, attachments, merges, bulk edits, and bundle pushes — not
+just current row state. Each event is returned in two shapes at once: a small
+back-compatible projection (``kind``/``action``/``title``/…) the existing UI
+already renders, plus the richer event fields (actor, subject, metadata).
 """
 
 from fastapi import APIRouter, Request
@@ -11,15 +14,45 @@ from magpie.server.context import auth_context
 
 router = APIRouter(prefix="/api")
 
+# Map an event's subject_type to the coarse `kind` the feed UI groups by.
+_KIND = {
+    "entry": "entry",
+    "kv_store": "kv",
+    "kv_pair": "kv",
+    "attachment": "attachment",
+    "bundle": "bundle",
+}
 
-def _action(created_at, updated_at, *, archived: bool = False) -> str:
-    if archived:
-        return "archived"
-    return "created" if created_at == updated_at else "updated"
 
-
-def _iso(dt) -> str | None:
-    return dt.isoformat() if dt else None
+def _project(event: dict) -> dict:
+    """Render one activity event as a feed item: back-compat fields plus the
+    full event shape. ``action`` is the verb (the part after the dot)."""
+    action = event["action"]
+    _, _, verb = action.partition(".")
+    subject_type = event["subject_type"]
+    metadata = event.get("metadata_json") or {}
+    created_at = event.get("created_at")
+    return {
+        # -- back-compatible projection (the original /api/updates shape) --
+        "kind": _KIND.get(subject_type, subject_type),
+        "action": verb or action,
+        "title": event.get("subject_title"),
+        "entry_id": event.get("subject_id") if subject_type == "entry" else None,
+        "store": metadata.get("store"),
+        "key": metadata.get("key"),
+        "value_type": metadata.get("value_type"),
+        "workspace": event.get("workspace"),
+        "project": event.get("project"),
+        "at": created_at.isoformat() if created_at else None,
+        # -- richer event shape --
+        "id": event["id"],
+        "subject_type": subject_type,
+        "subject_id": event.get("subject_id"),
+        "subject_title": event.get("subject_title"),
+        "actor_user_id": event.get("actor_user_id"),
+        "actor_type": event.get("actor_type"),
+        "metadata": metadata,
+    }
 
 
 @router.get("/updates")
@@ -29,7 +62,7 @@ async def list_updates(
     project: str | None = None,
     limit: int = 50,
 ):
-    """Recent activity across entries and KV stores, newest first.
+    """Recent activity across the store, newest first.
 
     Org-scoped via the caller's context; optional workspace/project narrow it.
     """
@@ -38,46 +71,12 @@ async def list_updates(
     workspace, project = ctx.clamp_scope(workspace, project)
     limit = max(1, min(limit, 100))
 
-    entries = await db.list_entries(
-        user_id=ctx.user_id,
+    events = await db.list_activity(
         org_id=ctx.org_id,
+        user_id=ctx.user_id,
         workspace=workspace,
         project=project,
         limit=limit,
+        trusted=ctx.is_unrestricted,
     )
-    pairs = await db.list_recent_kv_pairs(
-        org_id=ctx.org_id, workspace=workspace, project=project, limit=limit
-    )
-
-    items: list[dict] = []
-    for e in entries:
-        items.append({
-            "kind": "entry",
-            "action": _action(
-                e["created_at"], e["updated_at"], archived=e.get("archived_at") is not None
-            ),
-            "title": e["title"],
-            "entry_id": e["id"],
-            "store": None,
-            "key": None,
-            "value_type": None,
-            "workspace": e.get("workspace"),
-            "project": e.get("project"),
-            "at": _iso(e["updated_at"]),
-        })
-    for p in pairs:
-        items.append({
-            "kind": "kv",
-            "action": _action(p["created_at"], p["updated_at"]),
-            "title": f"{p['store_slug']}/{p['key']}",
-            "entry_id": None,
-            "store": p["store_slug"],
-            "key": p["key"],
-            "value_type": p["value_type"],
-            "workspace": p.get("workspace"),
-            "project": p.get("project"),
-            "at": _iso(p["updated_at"]),
-        })
-
-    items.sort(key=lambda i: i["at"] or "", reverse=True)
-    return items[:limit]
+    return [_project(e) for e in events]

@@ -9,6 +9,7 @@ refusing an empty match) are made here.
 
 from dataclasses import dataclass
 
+from magpie import activity
 from magpie.server.context import AuthContext
 
 # Only these fields may be nulled via ``clear`` — scope tags, never content.
@@ -107,7 +108,7 @@ async def run_bulk(
     if not changes:
         return BulkError(400, "changes must specify at least one mutation")
 
-    return await db.bulk_update_entries(
+    result = await db.bulk_update_entries(
         match=match,
         changes=changes,
         user_id=ctx.user_id,
@@ -115,3 +116,17 @@ async def run_bulk(
         trusted=ctx.is_unrestricted,
         dry_run=dry_run,
     )
+
+    # One event per applied bulk op (never for a dry-run preview). Emitted here,
+    # the shared chokepoint, so REST and the MCP bulk_edit tool stay in lockstep.
+    if result.get("applied"):
+        await activity.entry_bulk_updated(
+            db, ctx,
+            match=match, changes=changes,
+            matched=result["matched"], updated=result["updated"],
+            org_id=ctx.org_id,
+            workspace=match.get("workspace"),
+            project=match.get("project"),
+        )
+
+    return result

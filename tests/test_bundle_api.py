@@ -41,6 +41,9 @@ class FakeDB:
     async def touch_token(self, kid):
         pass
 
+    async def record_activity(self, **kwargs):
+        return "evt"
+
     async def get_org_role(self, org_id, user_id):
         return self.tokens and "editor"
 
