@@ -1,5 +1,9 @@
+# Base images come from the AWS ECR Public mirror of Docker's official library,
+# not Docker Hub — Docker Hub anonymous pull limits throttle shared CI/builder
+# IPs (e.g. Railway), which stalls `load metadata` for minutes per build.
+
 # Stage 1: build the web UI
-FROM node:24-slim AS web-builder
+FROM public.ecr.aws/docker/library/node:24-slim AS web-builder
 WORKDIR /web
 # Install from the lockfile first so this layer is cached until deps change —
 # and so the image matches the committed yarn.lock instead of re-resolving.
@@ -9,7 +13,7 @@ COPY web/ .
 RUN yarn build
 
 # Stage 2: Python runtime
-FROM python:3.14-slim
+FROM public.ecr.aws/docker/library/python:3.14-slim
 WORKDIR /app
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONUNBUFFERED=1
