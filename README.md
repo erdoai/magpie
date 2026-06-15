@@ -44,6 +44,8 @@ magpie migrate                        # apply schema (serve does NOT auto-migrat
 magpie serve                          # → http://localhost:8200
 ```
 
+**Or deploy to Railway:** the repo ships a `railway.json` — deploy the repo, add a pgvector Postgres, set `DATABASE_URL`, done. See [Deploy to Railway](docs/site/self-hosting.mdx#deploy-to-railway).
+
 See the [Self-hosting guide](docs/site/self-hosting.mdx) for storage, auth, backups, and production notes.
 
 ## Connect an agent (MCP)

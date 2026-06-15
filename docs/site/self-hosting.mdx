@@ -28,6 +28,26 @@ RESEND_FROM=magpie <hi@yourdomain.com>
 With neither `API_KEY` nor `RESEND_API_KEY` set, **auth is disabled** — convenient for a local single-user instance. Don't expose that to a network. See [Authentication](/reference/auth).
 </Note>
 
+## Deploy to Railway
+
+The repo ships a [`railway.json`](https://github.com/erdoai/magpie/blob/main/railway.json) so a [Railway](https://railway.com) deploy needs almost no configuration — it builds from the `Dockerfile`, runs `magpie migrate && magpie serve` on each release, and health-checks `/health`.
+
+1. **Create a service from the repo.** New project → *Deploy from GitHub repo* → pick your Magpie fork/clone. Railway reads `railway.json` and builds the Docker image.
+2. **Add Postgres with pgvector.** Add a database to the project using a **pgvector-enabled** Postgres (Railway's pgvector template, or any image where `CREATE EXTENSION vector` is available — `magpie migrate` creates the extension and schema on first boot).
+3. **Wire up the variables.** On the Magpie service, set:
+
+```bash
+DATABASE_URL=${{Postgres.DATABASE_URL}}   # reference the Postgres service
+PORT=8200
+OPENAI_API_KEY=sk-...                      # optional — keyword search works without it
+SESSION_SECRET=...                         # if you want email login / sessions
+```
+
+   For attachments on Railway, either attach a **volume** (`STORAGE_PROVIDER=local`, `STORAGE_DIR=/data/attachments`) or point at a Railway bucket / R2 with the `s3` provider — see [Attachment storage](#attachment-storage).
+4. **Generate a domain.** Add a public domain to the service; Railway routes it to `:8200`. The healthcheck on `/health` gates each deploy.
+
+Upgrades redeploy on push to your default branch; `magpie migrate` runs first via the start command, so schema changes apply automatically.
+
 ## Manual install
 
 If you'd rather run the Python package directly against your own Postgres:
