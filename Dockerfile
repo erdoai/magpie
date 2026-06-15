@@ -1,13 +1,10 @@
-# syntax=docker/dockerfile:1
-
 # Stage 1: build the web UI
 FROM node:24-slim AS web-builder
 WORKDIR /web
 # Install from the lockfile first so this layer is cached until deps change —
 # and so the image matches the committed yarn.lock instead of re-resolving.
 COPY web/package.json web/yarn.lock ./
-RUN --mount=type=cache,target=/root/.yarn-cache \
-    YARN_CACHE_FOLDER=/root/.yarn-cache yarn install --frozen-lockfile
+RUN yarn install --frozen-lockfile
 COPY web/ .
 RUN yarn build
 
@@ -21,7 +18,7 @@ COPY pyproject.toml README.md ./
 COPY magpie/ magpie/
 COPY --from=web-builder /web/dist web/dist/
 
-RUN --mount=type=cache,target=/root/.cache/pip pip install .
+RUN pip install .
 
 EXPOSE 8200
 
