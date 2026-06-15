@@ -26,6 +26,6 @@ RUN pip install .
 
 EXPOSE 8200
 
-# serve does NOT auto-migrate; platforms should run `magpie migrate` first
-# (see railway.json startCommand / docker-compose command).
+# `serve` connects via Database.connect(), which applies pending migrations on
+# startup — so a single-replica platform deploy needs no separate migrate step.
 CMD ["magpie", "serve"]
