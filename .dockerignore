@@ -1,12 +1,20 @@
-__pycache__
+# Dependencies & build output (rebuilt inside the image)
+**/node_modules
+**/dist
+**/.yarn
+**/.pnp.*
+**/tsconfig.tsbuildinfo
+
+# Python caches & local envs
+**/__pycache__
 *.egg-info
-.git
-.env
-.scaffold
+**/.venv
+.venv
 .ruff_cache
 .pytest_cache
-.venv
-web/node_modules
-web/.yarn
-web/.pnp.*
-web/tsconfig.tsbuildinfo
+
+# VCS, secrets, scratch
+.git
+**/.env
+.env
+.scaffold
